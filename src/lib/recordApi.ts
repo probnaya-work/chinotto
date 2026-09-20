@@ -27,6 +27,8 @@ interface DevStore {
   devLines: Record<string, string[]>;
   /** fragment id -> earlier wordings, oldest first. */
   devRevisions: Record<string, string[]>;
+  /** Removed but not destroyed, so `bring back` works here as it does in the app. */
+  devRemoved: Record<string, Fragment>;
 }
 let devState: DevStore | null = null;
 function devStore(): DevStore {
@@ -37,6 +39,7 @@ function devStore(): DevStore {
     held: dev.devHeld(),
     devLines: dev.devLines(),
     devRevisions: {},
+    devRemoved: {},
   };
   devState = created;
   return created;
@@ -495,8 +498,12 @@ export function recordReturnOutcome(id: number, outcome: string): Promise<void> 
 /** Soft in the Record, hard on the legacy row, tombstoned for sync. */
 export function removeFragment(id: string): Promise<void> {
   if (devOnly()) {
+    // Soft, exactly as the real one is: the material is set aside, not destroyed, or the
+    // dev browser would quietly contradict the eight seconds the product promises.
     const st = devStore();
-    st.fragments = st.fragments.filter((f) => f.id !== id);
+    const f = st.fragments.find((x) => x.id === id);
+    if (f) st.devRemoved[id] = f;
+    st.fragments = st.fragments.filter((x) => x.id !== id);
     st.held = st.held.filter((h) => h.fragment.id !== id);
     return Promise.resolve();
   }
@@ -505,7 +512,17 @@ export function removeFragment(id: string): Promise<void> {
 
 /** Undo, for a removal made on this device. */
 export function restoreFragment(id: string): Promise<void> {
-  if (devOnly()) return Promise.resolve();
+  if (devOnly()) {
+    const st = devStore();
+    const f = st.devRemoved[id];
+    if (f) {
+      delete st.devRemoved[id];
+      st.fragments = [...st.fragments, f].sort((a, b) =>
+        a.capturedAt < b.capturedAt ? 1 : -1,
+      );
+    }
+    return Promise.resolve();
+  }
   return invoke<void>("restore_fragment", { id });
 }
 
