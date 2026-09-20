@@ -328,6 +328,26 @@ impl Db {
         load_return(&conn, return_id).map(Some)
     }
 
+    /// Whether a Return is already waiting for an answer.
+    ///
+    /// Read-only on purpose, and that is the whole point of it existing next to
+    /// [`Db::select_return`]: selecting *surfaces* a Return, inserting a row and spending
+    /// the twenty-hour cooldown. The menu-bar glyph asks this question on every refresh and
+    /// must never be the thing that decides a Return happened — a modifier nobody was
+    /// present for would be the product telling you about a decision it made on your
+    /// behalf. The Record and the panel surface Returns; this only reports one.
+    pub fn return_waiting(&self) -> Result<bool, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let open: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM returns WHERE outcome IS NULL LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(open.is_some())
+    }
+
     /// Records what happened to a Return. Dismissing is an outcome, not a deletion.
     pub fn record_return_outcome(&self, id: i64, outcome: &str) -> Result<(), rusqlite::Error> {
         let conn = self.0.lock().unwrap();
@@ -556,6 +576,63 @@ mod tests {
     }
 
     const NOW: &str = "2026-09-19T17:00:00+00:00";
+
+    /// The property the menu-bar glyph depends on.
+    ///
+    /// The modifier is drawn from `return_waiting`, which is refreshed on every write and
+    /// every time the panel is toggled. If asking that question could surface a Return, the
+    /// menu bar would be deciding — on a timer, with nobody present — that older material
+    /// came back, and it would spend the cooldown doing it.
+    #[test]
+    fn asking_whether_a_return_waits_never_creates_one() {
+        let db = db();
+        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+
+        // A Return is genuinely available here — the same fixture the selecting test uses.
+        assert!(!db.return_waiting().unwrap());
+        assert!(!db.return_waiting().unwrap());
+        assert_eq!(count_returns(&db), 0);
+
+        // And selecting still finds it, so the fixture was not the reason for the silence.
+        assert!(db.select_return(NOW).unwrap().is_some());
+        assert_eq!(count_returns(&db), 1);
+    }
+
+    #[test]
+    fn a_return_waits_until_it_is_answered() {
+        let db = db();
+        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+
+        let surfaced = db.select_return(NOW).unwrap().expect("a return");
+        assert!(db.return_waiting().unwrap());
+
+        // Letting go is an outcome, not a deletion: the row stays and stops waiting.
+        db.record_return_outcome(surfaced.id, "let_go").unwrap();
+        assert!(!db.return_waiting().unwrap());
+        assert_eq!(count_returns(&db), 1);
+    }
+
+    /// The panel and the window answer the same row. Opening the panel while a Return is
+    /// already waiting must hand back that one rather than starting a second.
+    #[test]
+    fn both_surfaces_are_given_the_same_return() {
+        let db = db();
+        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+
+        let window = db.select_return(NOW).unwrap().expect("a return");
+        let panel = db.select_return(NOW).unwrap().expect("the same return");
+        assert_eq!(window.id, panel.id);
+        assert_eq!(count_returns(&db), 1);
+    }
+
+    fn count_returns(db: &Db) -> i64 {
+        let conn = db.0.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM returns", [], |r| r.get(0))
+            .unwrap()
+    }
 
     #[test]
     fn an_empty_record_returns_nothing() {

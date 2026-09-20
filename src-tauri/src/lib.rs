@@ -1342,9 +1342,13 @@ fn open_microphone_settings() -> Result<(), String> {
 }
 
 /// Shows the menu-bar capture panel, for settings' "try it".
+///
+/// It used to emit the capture shortcut, which focuses the window's own edge — so "try it"
+/// demonstrated the thing you were already looking at and never the panel it names. The
+/// panel is its own surface and this is the one place that says so from inside the app.
 #[tauri::command(async)]
 fn open_tray_capture(app: tauri::AppHandle) -> Result<(), String> {
-    let _ = app.emit("chinotto-capture-shortcut", ());
+    tray_capture::show_capture_popover(&app, None);
     Ok(())
 }
 
@@ -1811,7 +1815,7 @@ const CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+K";
 
 /// Show `main` or recreate it from config if the webview was torn down.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn ensure_main_window_focus(app: &tauri::AppHandle) {
+pub(crate) fn ensure_main_window_focus(app: &tauri::AppHandle) {
     use tauri::WebviewWindowBuilder;
 
     if let Some(main) = app.get_webview_window("main") {
@@ -1843,7 +1847,7 @@ fn ensure_main_window_focus(app: &tauri::AppHandle) {
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
-fn ensure_main_window_focus(_app: &tauri::AppHandle) {}
+pub(crate) fn ensure_main_window_focus(_app: &tauri::AppHandle) {}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -1862,10 +1866,21 @@ pub fn run() {
             let id = shortcut.id();
             // Hold is the model: press starts the recording, release ends it. There is no
             // press-to-start/press-to-stop variant, here or at the edge.
+            //
+            // Which surface speaks is decided by which one you are looking at. With the
+            // menu-bar panel open the chord belongs to the panel, and the main window is
+            // deliberately left where it is: dragging a window out in front of whatever you
+            // were doing is the opposite of what a menu-bar capture is for. The release
+            // goes to both, because only the surface that started is holding a recording
+            // and the other one's `stop` is a no-op.
             let _ = match (voice_hold_id, &event.state) {
                 (Some(hid), ShortcutState::Pressed) if id == hid => {
-                    ensure_main_window_focus(app);
-                    app.emit("chinotto-voice-hold-start", ())
+                    if tray_capture::popover_is_open(app) {
+                        app.emit_to("capture-popover", "chinotto-voice-hold-start", ())
+                    } else {
+                        ensure_main_window_focus(app);
+                        app.emit_to("main", "chinotto-voice-hold-start", ())
+                    }
                 }
                 (Some(hid), ShortcutState::Released) if id == hid => {
                     app.emit("chinotto-voice-hold-stop", ())
@@ -2036,6 +2051,7 @@ pub fn run() {
             open_microphone_settings,
             open_tray_capture,
             tray_capture::fit_capture_popover,
+            tray_capture::refresh_tray,
             create_share_thread,
             get_share_thread,
             list_share_threads,

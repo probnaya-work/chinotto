@@ -142,6 +142,75 @@ command can genuinely be unavailable in a stale build. Closing anyway would dest
 somebody typed, so the panel holds them and says what happened. It is still not a dialog and
 still not blocking: `esc` closes it and loses only what the person chooses to lose.
 
+### Newly open — speaking, the Return, and the menu (phase 9b)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 0.29 | Which surface the voice chord speaks into | the capture popover when it is open, the window otherwise; the window is never brought forward for the panel's sake | `lib.rs` `voice_handler` | invented |
+| 0.30 | What `esc` does to a recording | ends the hold and keeps nothing — the same branch a release under `DROP_UNDER_MS` takes | `useVoice.ts` `drop` | invented |
+| 0.31 | How the glyph knows a Return is waiting | `return_waiting`, a read-only query for an unanswered row; never `select_return` | `db/returns.rs` | **required by the Return's own rules** |
+| 0.32 | What draws the waiting modifier | the same template, in a box widened to hold a dot beside the glyph — monochrome, not periwinkle | `generate-identity.py` `tray_template_waiting` | **forced** |
+| 0.33 | When the panel asks for a Return | as it opens, never when the app launches | `TrayCapture.tsx` | invented |
+| 0.34 | What `continue` does in the panel | arms the field; `⏎` calls `continue_fragment`, a spoken one is linked with `link_continuation`, and either records the outcome `continued` | same | invented |
+| 0.35 | What the menu's lines are allowed to say | `today · n` from `count_between`, `sync on`/`sync off` from the webview's own `isFirebaseSyncConfigured()` | `tray_capture.rs` | **real state only** |
+| 0.36 | The menu's accelerators | none | same | **forced** |
+| 0.37 | When the menu's labels are recomputed | on every write and every toggle, not when the menu opens | same | **forced** |
+
+0.29 is the one rule the menu bar cannot break: a panel that hauls the main window in front
+of what you were doing is not a menu-bar capture. `⌥space` is emitted to the popover while it
+is open and to the window otherwise; the release goes to both, because only the surface that
+started is holding a recording and the other one's `stop` is a no-op. The panel's own gesture
+is a bare `⌥` on an empty field, which needs no chord because the panel already has focus.
+
+0.30 is not a deletion and does not touch the stance that a kept recording is the material.
+Nothing was kept: the native side is stopped and the result never becomes a fragment, exactly
+as a hold released inside 800ms already behaved. The file the recorder already wrote stays
+where it is, and `orphaned_recordings` is what finds it again if it mattered after all.
+*The edge draws `esc to drop` too and has never wired it; that gap is the window's, and is
+left where it is.*
+
+0.31 is the whole reason a second query exists next to `select_return`. Selecting *surfaces*
+a Return: it inserts a row and spends the twenty-hour cooldown. The glyph is refreshed on
+every write, so asking that question there would mean the menu bar deciding, on a timer and
+with nobody present, that older material came back. `return_waiting` only reports. The
+regression test for it is `asking_whether_a_return_waits_never_creates_one`.
+
+0.32 is forced by the asset, not chosen. The identity file draws the modifier in periwinkle
+and, two sections earlier, requires this glyph to be a real macOS template image with "no
+periwinkle" in it. A template is a mask: macOS keeps its alpha and throws its colour away, so
+the hue cannot survive and the dot is drawn in the same black as the glyph, tinting with the
+bar exactly as the glyph does. The box grows to the right rather than the dot moving inward,
+because a 22pt box holds a 17pt glyph with 2.5pt to spare and a badge laid over the ring at
+that size is a damaged mark rather than a marked one. The drawing supports this: its row is
+`[glyph][gap 14][dot]` with the dot pulled back 9, so the dot sits five points *beside* the
+glyph, not on it.
+
+0.33 follows from 0.31. This webview mounts when the app launches, so asking as it mounts
+would surface a Return nobody came for. A Return is something you arrive at, and opening the
+panel is arriving.
+
+0.35: `today · n` is counted in Rust because the menu has to be right while no window is
+open. Whether sync is configured is a build-time `VITE_` variable that only the webview can
+read, so it is carried across rather than guessed at — and until it has been, the line says
+`sync` rather than inventing an answer. The identity file draws `synced · just now` with a
+live dot; the product tracks no last-sync time and `sync on` is the wording it already uses
+for this fact in the quiet line, so that is what the menu says.
+
+0.36 is forced. The identity file draws `⌘⇧C` and `⌘,` beside two lines. This app has no menu
+bar of its own: `⌘⇧K` — not `⌘⇧C`, which is bound to nothing — belongs to the global-shortcut
+plugin, and `⌘,` is handled inside the webview. An `NSMenuItem` key equivalent would take
+either key away from its owner while the app is frontmost. The keys keep working and the menu
+does not claim them.
+
+0.37 is forced by Tauri, which proxies tray events through the event loop: a right-click
+handler runs *after* AppKit has already popped the menu, so there is no "about to open" to
+rebuild in. The labels are kept current as the state changes instead, which costs two counts.
+
+**`set_icon` un-templates the glyph.** `tray-icon` hands the status item a fresh `NSImage` and
+`NSImage.template` is a property of the image, so an icon set without re-asserting it is a
+mask drawn as artwork: pure black on a dark menu bar, and no longer inverting under a light
+one. `draw_glyph` is one function for exactly this reason.
+
 ---
 
 ## 1. Time and tiers

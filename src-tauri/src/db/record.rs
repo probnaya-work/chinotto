@@ -615,6 +615,21 @@ impl Db {
         Ok(out)
     }
 
+    /// How many fragments were captured inside a half-open range.
+    ///
+    /// The menu-bar menu says `today · n`, and it says it whether or not the window is
+    /// open, so the count is a count rather than the length of a list the tray would
+    /// otherwise have to load to throw away.
+    pub fn count_between(&self, from: &str, to: &str) -> Result<i64, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row(
+            "SELECT COUNT(*) FROM fragments \
+             WHERE removed_at IS NULL AND captured_at >= ?1 AND captured_at < ?2",
+            rusqlite::params![from, to],
+            |r| r.get(0),
+        )
+    }
+
     /// Exact textual retrieval. This is Find's primary answer; anything by meaning is a
     /// separate, separately-labelled call, because a guess must never look like a match.
     pub fn find_fragments(&self, query: &str, limit: i64) -> Result<Vec<FindHit>, rusqlite::Error> {
@@ -1152,6 +1167,42 @@ mod read_tests {
             .unwrap();
             super::sync_fts(&conn, id).unwrap();
         }
+    }
+
+    /// `today · n` in the menu-bar menu.
+    ///
+    /// It counts the same material the Record shows, which means removed fragments are not
+    /// in it: a number in the menu bar that disagrees with the record below it is worse
+    /// than no number.
+    #[test]
+    fn the_day_is_counted_without_loading_it() {
+        let db = db();
+        seed(
+            &db,
+            &[
+                ("yesterday", "2026-09-20T22:00:00Z"),
+                ("morning", "2026-09-21T08:30:00Z"),
+                ("noon", "2026-09-21T12:00:00Z"),
+                ("gone", "2026-09-21T13:00:00Z"),
+                ("tomorrow", "2026-09-22T00:30:00Z"),
+            ],
+        );
+        let (from, to) = ("2026-09-21T00:00:00Z", "2026-09-22T00:00:00Z");
+        assert_eq!(db.count_between(from, to).unwrap(), 3);
+
+        db.remove_fragment("gone").unwrap();
+        assert_eq!(db.count_between(from, to).unwrap(), 2);
+    }
+
+    #[test]
+    fn a_day_with_nothing_in_it_counts_zero() {
+        let db = db();
+        seed(&db, &[("only", "2026-09-20T22:00:00Z")]);
+        assert_eq!(
+            db.count_between("2026-09-21T00:00:00Z", "2026-09-22T00:00:00Z")
+                .unwrap(),
+            0
+        );
     }
 
     #[test]

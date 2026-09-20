@@ -14,12 +14,13 @@ import { useVoice } from "./useVoice";
 import * as api from "../../lib/recordApi";
 
 vi.mock("../../lib/recordApi", () => ({
-  // Never resolves: the recording is still running for the whole of each test, which is
-  // exactly the state a release has to be able to get out of.
+  // Never resolves by default: the recording is still running for the whole of each test,
+  // which is exactly the state a release has to be able to get out of.
   recordVoice: vi.fn(() => new Promise(() => {})),
   captureVoice: vi.fn(),
   recordTranscript: vi.fn(),
   stopVoiceCapture: vi.fn(() => Promise.resolve()),
+  linkContinuation: vi.fn(() => Promise.resolve()),
 }));
 
 const stopped = () => vi.mocked(api.stopVoiceCapture).mock.calls.length;
@@ -78,6 +79,137 @@ describe("ending a recording", () => {
       window.dispatchEvent(new MouseEvent("mouseup"));
     });
     expect(stopped()).toBe(0);
+    hook.unmount();
+  });
+});
+
+/**
+ * The menu-bar panel holds the same recorder the edge does, and the difference between them
+ * is three things: which key ends the hold, which origin the fragment carries, and what may
+ * happen to the fragment before the transcript is attached.
+ */
+describe("the same recorder, held from the menu bar", () => {
+  beforeEach(() => {
+    vi.mocked(api.stopVoiceCapture).mockClear();
+    vi.mocked(api.captureVoice).mockReset();
+    vi.mocked(api.recordTranscript).mockReset();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  /** A hold that really ends, so the capture runs to a fragment. */
+  function recorded(durationMs: number) {
+    vi.mocked(api.recordVoice).mockReturnValueOnce(
+      Promise.resolve({
+        audioPath: "/tmp/held.m4a",
+        durationMs,
+        transcript: "the tray keeps growing",
+        transcriptFailure: null,
+      }) as ReturnType<typeof api.recordVoice>,
+    );
+    // Each test queues its own `captureVoice`, so that the one test about ordering can
+    // watch it rather than inherit an answer queued here first.
+    vi.mocked(api.captureVoice).mockResolvedValue({
+      id: "spoken-1",
+    } as Awaited<ReturnType<typeof api.captureVoice>>);
+    vi.mocked(api.recordTranscript).mockResolvedValue(undefined);
+  }
+
+  it("ends on the key the surface says it ends on, and not on the edge's", () => {
+    const hook = renderHook(() =>
+      useVoice(() => {}, { origin: "menubar", releaseKey: "Alt" }),
+    );
+    act(() => hook.result.current.start());
+
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: " " })));
+    expect(stopped()).toBe(0);
+
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })));
+    expect(stopped()).toBe(1);
+    hook.unmount();
+  });
+
+  it("carries the menu bar into the fragment it makes", async () => {
+    recorded(4200);
+    const hook = renderHook(() =>
+      useVoice(() => {}, { origin: "menubar", releaseKey: "Alt" }),
+    );
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(vi.mocked(api.captureVoice)).toHaveBeenCalledWith("/tmp/held.m4a", 4200, "menubar");
+    hook.unmount();
+  });
+
+  it("makes the recording a fragment before it reaches for the words", async () => {
+    recorded(4200);
+    const order: string[] = [];
+    vi.mocked(api.captureVoice).mockImplementation(async () => {
+      order.push("fragment");
+      return { id: "spoken-1" } as Awaited<ReturnType<typeof api.captureVoice>>;
+    });
+    vi.mocked(api.recordTranscript).mockImplementation(async () => {
+      order.push("transcript");
+    });
+    const hook = renderHook(() => useVoice(() => {}, { origin: "menubar" }));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(order).toEqual(["fragment", "transcript"]);
+    hook.unmount();
+  });
+
+  it("keeps the recording when the transcript cannot be stored", async () => {
+    recorded(4200);
+    vi.mocked(api.recordTranscript).mockRejectedValue(new Error("no recogniser"));
+    const captured = vi.fn();
+    const hook = renderHook(() => useVoice(captured, { origin: "menubar" }));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(vi.mocked(api.captureVoice)).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveBeenCalledTimes(1);
+    hook.unmount();
+  });
+
+  it("gives the fragment to the surface before the transcript, so a line can be joined", async () => {
+    recorded(4200);
+    const seen: string[] = [];
+    const hook = renderHook(() =>
+      useVoice(() => {}, {
+        origin: "menubar",
+        onFragment: (id) => {
+          seen.push(id);
+        },
+      }),
+    );
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(seen).toEqual(["spoken-1"]);
+    hook.unmount();
+  });
+
+  it("keeps nothing when the hold is dropped", async () => {
+    recorded(4200);
+    const captured = vi.fn();
+    const hook = renderHook(() => useVoice(captured, { origin: "menubar" }));
+    act(() => hook.result.current.start());
+    await act(async () => {
+      hook.result.current.drop();
+    });
+    expect(stopped()).toBe(1);
+    expect(vi.mocked(api.captureVoice)).not.toHaveBeenCalled();
+    expect(captured).not.toHaveBeenCalled();
+    hook.unmount();
+  });
+
+  it("keeps the recording when the hold is merely released", async () => {
+    recorded(4200);
+    const hook = renderHook(() => useVoice(() => {}, { origin: "menubar" }));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(vi.mocked(api.captureVoice)).toHaveBeenCalledTimes(1);
     hook.unmount();
   });
 });

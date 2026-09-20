@@ -299,6 +299,9 @@ export function RecordApp() {
       );
       setError(null);
       setLoaded(true);
+      // The menu bar states `today · n` and wears its waiting modifier whether or not this
+      // window is open, so it is told whenever the Record has been re-read.
+      void api.refreshTray(isFirebaseSyncConfigured()).catch(() => {});
     } catch (e) {
       setLoaded(true);
       // Reading the Record can fail; capture cannot. Surfacing this quietly rather than
@@ -561,6 +564,20 @@ export function RecordApp() {
       void unlisten.then((f) => f());
     };
   }, [reload]);
+
+  /**
+   * `settings` in the menu-bar menu. The same surface `⌘,` opens, reached from the one
+   * place the product has that is not a window.
+   */
+  useEffect(() => {
+    const unlisten = listen("chinotto-open-settings", () => {
+      setSurface("settings");
+      setFocusId(null);
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, []);
 
   useEffect(() => {
     if (!notice) return;

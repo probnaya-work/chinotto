@@ -42,7 +42,7 @@ export interface ReturnBlockProps {
   onLetGo: (value: ReturnValue) => void;
 }
 
-function phraseOn(evidence: ReturnEvidence[], related: boolean): string | null {
+export function phraseOn(evidence: ReturnEvidence[], related: boolean): string | null {
   const hit = evidence.find(
     (e) => e.kind === "shared_phrase" && Boolean(e.relatedId) === related,
   );
@@ -52,8 +52,12 @@ function phraseOn(evidence: ReturnEvidence[], related: boolean): string | null {
 /**
  * The one because-sentence. Each surviving trigger has its own clause in the prototype's
  * shape; a trigger that cannot fill this in must not have become a Return.
+ *
+ * Exported because the menu-bar panel draws the same Return at its own scale. A Return that
+ * read one way in the window and another way under the glyph would be two Returns, and
+ * there is only ever one.
  */
-function becauseSentence(
+export function becauseSentence(
   r: ReturnValue,
   now: Date,
 ): { when: string; quote: string | null; mark: string | null } | { opened: string } | { added: string; quote: string; mark: string | null } | null {

@@ -138,6 +138,48 @@ def tray_template(box_pt: int, scale: int) -> Image.Image:
     return im
 
 
+# The modifier the identity file allows the glyph, and the only one: a dot when something
+# is waiting. In the drawing it sits beside the glyph, not on it — the row is
+# `[glyph][gap 14][dot]` with the dot pulled back 9, so five of the fourteen survive — and
+# it is 1/3 of the glyph's width.
+TRAY_DOT_RATIO = 5 / 15
+TRAY_DOT_GAP_RATIO = 5 / 15
+
+
+def tray_template_waiting(box_pt: int, scale: int) -> Image.Image:
+    """
+    The same glyph with the waiting modifier, in a box widened to hold it.
+
+    The identity file draws the dot in periwinkle. A template image is a mask — macOS keeps
+    its alpha and throws its colour away — and the file is equally clear that this asset is
+    a real template with no periwinkle in it, so the hue cannot survive and the dot is drawn
+    in the same black as the glyph. It then tints with the bar exactly as the glyph does,
+    which is what the modifier is for: the dot's presence carries the meaning.
+
+    The box grows to the right rather than the dot moving inward, because a 22pt box holds
+    a 17pt glyph with 2.5pt to spare and a badge laid over the ring at that size is not a
+    dot on a mark, it is a damaged mark.
+    """
+    glyph = round(17 * scale)
+    dot = round(17 * TRAY_DOT_RATIO * scale)
+    gap = round(17 * TRAY_DOT_GAP_RATIO * scale)
+    pad = round(((box_pt - 17) / 2) * scale)
+
+    box_w = pad + glyph + gap + dot + pad
+    box_h = box_pt * scale
+    im = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+
+    mark = draw_mark(glyph, "small", (0, 0, 0, 255))
+    top = (box_h - glyph) // 2
+    im.alpha_composite(mark, (pad, top))
+
+    # Top-aligned with the glyph, as the drawing aligns it to the row's start.
+    hi = Image.new("RGBA", (dot * SS, dot * SS), (0, 0, 0, 0))
+    ImageDraw.Draw(hi).ellipse((0, 0, dot * SS - 1, dot * SS - 1), fill=(0, 0, 0, 255))
+    im.alpha_composite(hi.resize((dot, dot), Image.LANCZOS), (pad + glyph + gap, top))
+    return im
+
+
 def favicon(size: int) -> Image.Image:
     """The <=20px rung on the ink field; the browser tab is a 16px surface."""
     hi = size * SS
@@ -218,6 +260,8 @@ def main() -> None:
     print("menu-bar template (17pt glyph in a 22pt box, black on transparent)")
     save(tray_template(22, 1), ICONS / "tray_menu_template.png")
     save(tray_template(22, 2), ICONS / "tray_menu_template@2x.png")
+    save(tray_template_waiting(22, 1), ICONS / "tray_menu_waiting_template.png")
+    save(tray_template_waiting(22, 2), ICONS / "tray_menu_waiting_template@2x.png")
 
     print("favicons")
     save(favicon(32), PUBLIC / "favicon-32.png")

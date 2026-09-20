@@ -28,12 +28,44 @@ export interface VoiceState {
   notice: "ask" | "denied" | "failed" | null;
 }
 
-export function useVoice(onCaptured: () => void) {
+export interface VoiceOptions {
+  /**
+   * Where the recording was made. `menubar` for the panel under the glyph, so a fragment
+   * spoken there is as honestly sourced as one typed there.
+   */
+  origin?: string;
+  /**
+   * The key whose release ends the hold. `space` at the edge, where the field is empty and
+   * the space bar is free; `Alt` in the menu-bar panel, which the identity file draws as
+   * `hold ⌥ to speak` and which needs no chord because the panel already has focus.
+   */
+  releaseKey?: string;
+  /**
+   * Called with the fragment the recording became, before the transcript is attached.
+   * The panel uses it to link a continuation: voice cannot be captured *as* a continuation
+   * — `capture_voice` takes a recording, not a parent — so the link is made after, with
+   * the same `link_continuation` the Record uses for "yes, that continues yesterday's".
+   */
+  onFragment?: (id: string) => Promise<void> | void;
+}
+
+export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
+  const { origin = "desktop", releaseKey = " ", onFragment } = options;
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [notice, setNotice] = useState<VoiceState["notice"]>(null);
   const startedAt = useRef(0);
   const inflight = useRef(false);
+  /**
+   * This hold was a mistake and must not be kept.
+   *
+   * The same branch a release under `DROP_UNDER_MS` takes: the native capture is stopped
+   * and the result never becomes a fragment. It is not a deletion and it does not touch the
+   * product's stance that a kept recording is the material — nothing was kept. The file the
+   * native side already wrote stays where it is, and `orphaned_recordings` is what finds it
+   * again if it mattered after all.
+   */
+  const dropped = useRef(false);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,6 +92,7 @@ export function useVoice(onCaptured: () => void) {
   const start = useCallback(() => {
     if (inflight.current) return;
     inflight.current = true;
+    dropped.current = false;
     startedAt.current = Date.now();
     setRecording(true);
     setSeconds(0);
@@ -72,11 +105,19 @@ export function useVoice(onCaptured: () => void) {
     void api
       .recordVoice()
       .then(async (capture) => {
-        if (capture.durationMs < DROP_UNDER_MS) return;
+        if (dropped.current || capture.durationMs < DROP_UNDER_MS) return;
 
         // The recording becomes a fragment first. If anything below fails, the audio is
         // already in the Record and can be transcribed or corrected later.
-        const fragment = await api.captureVoice(capture.audioPath, capture.durationMs);
+        const fragment = await api.captureVoice(capture.audioPath, capture.durationMs, origin);
+        // Before the transcript, because the link is about the recording and must survive a
+        // recogniser that fails.
+        try {
+          await onFragment?.(fragment.id);
+        } catch {
+          // A link that could not be made leaves an ordinary fragment in the Record, which
+          // is the material intact and only the relation lost.
+        }
         try {
           await api.recordTranscript(
             fragment.id,
@@ -112,7 +153,7 @@ export function useVoice(onCaptured: () => void) {
         setSeconds(0);
         if (tick.current) clearInterval(tick.current);
       });
-  }, [onCaptured, clearNoticeLater]);
+  }, [onCaptured, clearNoticeLater, origin, onFragment]);
 
   /**
    * Ends the recording.
@@ -145,7 +186,7 @@ export function useVoice(onCaptured: () => void) {
   useEffect(() => {
     if (!recording) return;
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === " ") stopRef.current();
+      if (e.key === releaseKey) stopRef.current();
     };
     const release = () => stopRef.current();
     window.addEventListener("keyup", onKeyUp);
@@ -156,7 +197,14 @@ export function useVoice(onCaptured: () => void) {
       window.removeEventListener("mouseup", release);
       window.removeEventListener("blur", release);
     };
-  }, [recording]);
+  }, [recording, releaseKey]);
+
+  /** `esc` while speaking. Ends the hold, and keeps nothing. */
+  const drop = useCallback(() => {
+    if (!inflight.current) return;
+    dropped.current = true;
+    void api.stopVoiceCapture().catch(() => {});
+  }, []);
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
@@ -164,7 +212,7 @@ export function useVoice(onCaptured: () => void) {
   // registers the ⌥space listeners against them, and a new pair every 100ms is a new pair of
   // native listeners every 100ms.
   return useMemo(
-    () => ({ recording, seconds, notice, start, stop, dismissNotice }),
-    [recording, seconds, notice, start, stop, dismissNotice],
+    () => ({ recording, seconds, notice, start, stop, drop, dismissNotice }),
+    [recording, seconds, notice, start, stop, drop, dismissNotice],
   );
 }

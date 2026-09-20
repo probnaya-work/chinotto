@@ -570,6 +570,18 @@ export function openMicrophoneSettings(): Promise<void> {
   return invoke<void>("open_microphone_settings");
 }
 
+/**
+ * The menu bar catches up with the Record.
+ *
+ * `today · n` and the glyph's waiting modifier are read in Rust; whether sync is configured
+ * is a build-time frontend fact, so it is carried across rather than guessed at. Called
+ * after every write, from whichever surface made it.
+ */
+export function refreshTray(syncOn?: boolean): Promise<void> {
+  if (devOnly()) return Promise.resolve();
+  return invoke<void>("refresh_tray", { syncOn: syncOn ?? null });
+}
+
 /** Shows the menu-bar panel, for settings' "try it". */
 export function openTrayCapture(): Promise<void> {
   return invoke<void>("open_tray_capture");
