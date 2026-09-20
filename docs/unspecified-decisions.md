@@ -59,6 +59,29 @@ standing re-measures from where you stand, so the surface cannot work from a rec
 0.8 is the one place the prototype's prose and its code disagree about behaviour rather than
 about numbers, and neither is obviously right. Left unwritten rather than guessed.
 
+### Newly open — settings (phase 6)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 0.10 | What "lift contrast in bright light" actually changes | raises `--ink-far`, `--ink-dim`, `--meta`, `--faint`, `--faint-text` only | `tokens.css` | invented |
+| 0.11 | Text-size range and step | `80–140%`, step `10` | `appearance.ts` | from the prototype's own knob |
+| 0.12 | How the whole column scales | `zoom` on `:root`, one number | `tokens.css` | invented |
+| 0.13 | Export layout inside the zip | `chinotto-record/record.txt` + `chinotto-record/audio/<id>.<ext>` | `lib.rs` `export_record` | invented |
+| 0.14 | What a fragment's line in `record.txt` carries | timestamp · method · origin · "wording corrected", then the body | same | invented |
+| 0.15 | The backup line with no backup yet | `never` | `RecordApp.tsx` `backupLine` | invented |
+| 0.16 | Which sections the quiet line silences on a utility surface | sync state and the offline notice; undo and update still speak | `QuietLine.tsx` | inferred |
+
+0.10 is the consequential one. The prototype names the behaviour and draws its control but
+never states a palette for it, so the values are chosen to raise only the quiet end of the
+ladder: ink, the rules and the washes are untouched, and the ordering between tiers — the
+thing that carries distance — survives. If it is meant to be a full second ramp rather than
+a lift, this is the entry to revisit.
+
+0.13/0.14 are a format the product will be judged on for as long as anyone keeps an export.
+Plain text and one file per record rather than one per fragment, because the argument for
+the export is that the record outlives the program; a directory of thousands of files is
+harder to read with anything else, not easier.
+
 ---
 
 ## 1. Time and tiers
