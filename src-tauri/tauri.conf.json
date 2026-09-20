@@ -52,6 +52,8 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "PROBNAYA",
+    "copyright": "© 2026–present Aleksandr Malinin",
     "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
@@ -76,7 +78,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCNTczRTU1RDM0OTMyREEKUldUYU1rblRWVDVYV3dkOHZrcXlIRHVPNTdxQ3ZreGNNanJKalJWS2dNU0pSOTU5WGIycktsVm0K",
       "endpoints": [
-        "https://github.com/AleksandrMalinin/chinotto/releases/latest/download/latest.json"
+        "https://github.com/probnaya-work/chinotto/releases/latest/download/latest.json"
       ]
     }
   }

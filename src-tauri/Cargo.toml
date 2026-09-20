@@ -2,9 +2,9 @@
 name = "Chinotto"
 version = "3.0.0"
 description = "Minimal desktop thinking tool for capturing thoughts instantly and revisiting them later."
-authors = ["you"]
-license = ""
-repository = "https://github.com/AleksandrMalinin/chinotto"
+authors = ["Aleksandr Malinin"]
+license = "SEE LICENSE IN ../LICENSE"
+repository = "https://github.com/probnaya-work/chinotto"
 edition = "2021"
 rust-version = "1.77.2"
 

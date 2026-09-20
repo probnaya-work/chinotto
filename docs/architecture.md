@@ -40,4 +40,4 @@ The UI calls Rust via Tauri `invoke()`. Core flows: create and list entries, ful
 
 ## Updates
 
-Production builds check [GitHub Releases](https://github.com/AleksandrMalinin/chinotto/releases/latest) for signed in-app updates.
+Production builds check [GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest) for signed in-app updates.

@@ -427,6 +427,8 @@ export function Settings(props: SettingsProps) {
               ) : null}
             </div>
             <div style={{ color: "var(--meta)" }}>the manifesto · on getchinotto.app</div>
+            {/* Secondary maker's mark. PROBNAYA is the laboratory; Chinotto keeps its own identity. */}
+            <div style={{ color: "var(--meta)" }}>PROBNAYA · Independent Computational Laboratory</div>
           </Stack>
         </Row>
       </div>

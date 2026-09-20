@@ -15,13 +15,16 @@ npm run tauri dev
 
 Use `npm run tauri dev` (not `npm run dev` alone) for the full desktop app including the Rust backend.
 
-## Test
+## Verify
 
 ```bash
+npm run typecheck
 npm test
 ```
 
-Runs Rust tests (`cargo test` in `src-tauri/`) and TypeScript tests (Vitest + Node test runner).
+`typecheck` is `tsc -b`. `test` runs Rust tests (`cargo test` in `src-tauri/`) and TypeScript tests
+(Vitest + Node test runner). Both are what CI runs on every push and pull request
+(`.github/workflows/ci.yml`).
 
 ## Build
 
@@ -35,4 +38,4 @@ When bumping app version for a release, update `package.json`, `src-tauri/tauri.
 
 ## Contributing
 
-- Product scope and agent contract: [`AGENTS.md`](../AGENTS.md)
+- Product scope, commit convention, and agent contract: [`AGENTS.md`](../AGENTS.md)

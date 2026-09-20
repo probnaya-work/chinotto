@@ -119,7 +119,7 @@ jobs:
             "Apple Silicon (aarch64)." \
             "" \
             "Feedback welcome:" \
-            "https://github.com/AleksandrMalinin/chinotto/issues")"
+            "https://github.com/probnaya-work/chinotto/issues")"
           if BODY="$(python3 scripts/extract-release-notes.py "$TAG" docs/github-release-notes.md 2>/dev/null)"; then
             {
               echo "body<<EOF"

@@ -1,3 +1,8 @@
+PROBNAYA / CHINOTTO
+INSTRUMENT
+
+Independent Computational Laboratory
+
 <p align="center">
   <img src="docs/logo.svg" width="80" alt="Chinotto" />
 </p>
@@ -16,7 +21,7 @@ Local-first. Desktop only. Optional device sync with the mobile app when you ena
 
 ## Download (macOS)
 
-[GitHub Releases](https://github.com/AleksandrMalinin/chinotto/releases/latest)
+[GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest)
 
 ## Features
 
@@ -40,7 +45,7 @@ See [Privacy](docs/privacy.md) for local storage, optional sync, sharing, and an
 
 ## Updates
 
-Installed builds check [GitHub Releases](https://github.com/AleksandrMalinin/chinotto/releases/latest) for updates.
+Installed builds check [GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest) for updates.
 
 ## Documentation
 
@@ -50,5 +55,5 @@ Installed builds check [GitHub Releases](https://github.com/AleksandrMalinin/chi
 
 ## Related
 
-- [Chinotto mobile](https://github.com/AleksandrMalinin/chinotto-mobile) — iOS companion for capture on the go
+- [Chinotto mobile](https://github.com/probnaya-work/chinotto-mobile) — iOS companion for capture on the go
 - [Chinotto web](https://github.com/AleksandrMalinin/chinotto-web) — web companion / info site

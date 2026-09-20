@@ -2,10 +2,22 @@
   "name": "chinotto",
   "private": true,
   "version": "3.0.0",
+  "description": "Minimal desktop thinking tool. Capture first. Continue later.",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Aleksandr Malinin",
+  "homepage": "https://getchinotto.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/probnaya-work/chinotto.git"
+  },
+  "bugs": {
+    "url": "https://github.com/probnaya-work/chinotto/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "test": "npm run test:rs && npm run test:ts",
     "test:rs": "cd src-tauri && cargo test",
     "test:ts": "node --import tsx --test src/lib/urlInText.test.ts && vitest run",

@@ -2,6 +2,10 @@
 node_modules/
 .pnpm-store/
 
+# Only npm is used here; ignore accidental pnpm/yarn lockfiles
+pnpm-lock.yaml
+yarn.lock
+
 # Build
 dist/
 /target/
