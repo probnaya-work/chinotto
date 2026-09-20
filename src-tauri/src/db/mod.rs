@@ -977,6 +977,17 @@ impl Db {
         rows.collect()
     }
 
+    /// Tombstones old enough to publish. Younger than `min_age_secs` are still inside the
+    /// undo window and must not reach other devices.
+    pub fn list_due_sync_tombstone_outbox(&self, min_age_secs: i64) -> Result<Vec<String>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let cutoff = (chrono::Utc::now() - chrono::Duration::seconds(min_age_secs)).to_rfc3339();
+        let mut stmt = conn.prepare(
+            "SELECT entry_id FROM sync_tombstone_outbox WHERE enqueued_at <= ?1 ORDER BY enqueued_at ASC",
+        )?;
+        let rows = stmt.query_map([cutoff], |r| r.get(0))?;
+        rows.collect()
+    }
 
     pub fn remove_sync_tombstone_outbox(&self, entry_id: &str) -> Result<(), rusqlite::Error> {
         let conn = self.0.lock().unwrap();
@@ -1899,7 +1910,30 @@ mod tests {
         assert_eq!(ids, vec!["same".to_string()]);
     }
 
+    #[test]
+    fn a_fresh_tombstone_is_not_due_for_eight_seconds() {
+        let db = Db::open(PathBuf::from(":memory:")).unwrap();
+        db.enqueue_sync_tombstone("fresh").unwrap();
+        assert!(
+            db.list_due_sync_tombstone_outbox(8).unwrap().is_empty(),
+            "publishing inside the undo window would destroy the fragment on other devices"
+        );
+        assert_eq!(db.list_sync_tombstone_outbox().unwrap(), vec!["fresh".to_string()]);
+    }
 
+    #[test]
+    fn an_old_enough_tombstone_is_due() {
+        let db = Db::open(PathBuf::from(":memory:")).unwrap();
+        {
+            let conn = db.0.lock().unwrap();
+            conn.execute(
+                "INSERT INTO sync_tombstone_outbox (entry_id, enqueued_at) VALUES ('old', '2020-01-01T00:00:00+00:00')",
+                [],
+            )
+            .unwrap();
+        }
+        assert_eq!(db.list_due_sync_tombstone_outbox(8).unwrap(), vec!["old".to_string()]);
+    }
 
     #[test]
     fn delete_local_entries_for_sync_clears_suppression() {

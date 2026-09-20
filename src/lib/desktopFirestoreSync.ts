@@ -42,6 +42,7 @@ import {
   ingestFirestoreEntries,
   listEntries,
   listSyncTombstoneOutbox,
+  listDueSyncTombstoneOutbox,
   removeSyncTombstoneOutbox,
   type EntryTheme,
 } from "@/features/entries/entryApi";
@@ -654,9 +655,16 @@ export function startLocalEntriesFirestoreUploadOnAuth(): () => void {
   };
 }
 
+let tombstoneFlushRetry: ReturnType<typeof setTimeout> | undefined;
+
+const TOMBSTONE_UNDO_SECS = 8;
+
 /**
  * Flush pending `{ op: "tombstone", entryId }` rows to Firestore with `deletedAt: serverTimestamp()`.
  * Idempotent: `setDoc` + merge on an already-tombstoned doc is allowed.
+ *
+ * Tombstones younger than eight seconds are skipped so `bring back` can still reach other
+ * devices. Remaining young rows schedule another flush when they become due.
  */
 export async function flushSyncTombstoneOutbox(): Promise<void> {
   if (!isFirebaseSyncConfigured()) {
@@ -668,7 +676,7 @@ export async function flushSyncTombstoneOutbox(): Promise<void> {
     return;
   }
   const db = getOrInitFirestore();
-  const ids = await listSyncTombstoneOutbox();
+  const ids = await listDueSyncTombstoneOutbox(TOMBSTONE_UNDO_SECS);
   for (const entryId of ids) {
     const ref = doc(db, "users", user.uid, "entries", entryId);
     try {
@@ -684,6 +692,13 @@ export async function flushSyncTombstoneOutbox(): Promise<void> {
         console.warn("[chinotto sync] tombstone flush failed, will retry", entryId, e);
       }
     }
+  }
+  const stillWaiting = (await listSyncTombstoneOutbox()).filter((id) => !ids.includes(id));
+  if (stillWaiting.length > 0 && tombstoneFlushRetry == null) {
+    tombstoneFlushRetry = setTimeout(() => {
+      tombstoneFlushRetry = undefined;
+      void flushSyncTombstoneOutbox();
+    }, 1000);
   }
 }
 

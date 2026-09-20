@@ -177,6 +177,14 @@ fn list_sync_tombstone_outbox(db: tauri::State<Db>) -> Result<Vec<String>, Strin
     db.list_sync_tombstone_outbox().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn list_due_sync_tombstone_outbox(
+    db: tauri::State<Db>,
+    min_age_secs: i64,
+) -> Result<Vec<String>, String> {
+    db.list_due_sync_tombstone_outbox(min_age_secs)
+        .map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 fn remove_sync_tombstone_outbox(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
@@ -1745,6 +1753,7 @@ pub fn run() {
             ingest_firestore_entries,
             enqueue_sync_tombstone,
             list_sync_tombstone_outbox,
+            list_due_sync_tombstone_outbox,
             remove_sync_tombstone_outbox,
             clear_sync_tombstone_outbox_all,
             clear_firestore_ingest_suppression,

@@ -287,6 +287,11 @@ export async function listSyncTombstoneOutbox(): Promise<string[]> {
   return invoke<string[]>("list_sync_tombstone_outbox");
 }
 
+/** Tombstones that have waited out the undo window. */
+export async function listDueSyncTombstoneOutbox(minAgeSecs = 8): Promise<string[]> {
+  return invoke<string[]>("list_due_sync_tombstone_outbox", { minAgeSecs });
+}
+
 export async function removeSyncTombstoneOutbox(entryId: string): Promise<void> {
   return invoke("remove_sync_tombstone_outbox", { entryId });
 }

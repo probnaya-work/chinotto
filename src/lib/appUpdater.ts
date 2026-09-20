@@ -16,6 +16,7 @@ function logUpdater(context: string, err: unknown) {
 
 export function useAppUpdater() {
   const [phase, setPhase] = useState<AppUpdaterPhase>("idle");
+  const [version, setVersion] = useState<string | null>(null);
   const updateRef = useRef<Update | null>(null);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function useAppUpdater() {
           return;
         }
         updateRef.current = update;
+        setVersion(update.version);
         setPhase("available");
       } catch (e) {
         logUpdater("check failed", e);
@@ -90,6 +92,7 @@ export function useAppUpdater() {
 
   return {
     phase,
+    version,
     download,
     installAndRestart,
     retryAfterError,
