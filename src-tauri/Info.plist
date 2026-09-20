@@ -7,9 +7,7 @@
   <key>CFBundleDisplayName</key>
   <string>Chinotto</string>
   <key>CFBundleGetInfoString</key>
-  <string>Minimal desktop thinking tool.
-
-Capture first. Continue later.</string>
+  <string>A private record of thoughts, encounters, and what continues between them.</string>
   <key>NSHumanReadableCopyright</key>
   <string>© 2026–present Aleksandr Malinin</string>
   <key>CFBundleShortVersionString</key>

@@ -3,14 +3,9 @@ INSTRUMENT
 
 Independent Computational Laboratory
 
-<p align="center">
-  <img src="docs/logo.svg" width="80" alt="Chinotto" />
-</p>
-
 # Chinotto
 
-*Capture first.  
-Continue later.*
+A private record of thoughts, encounters, and what continues between them.
 
 Chinotto is a minimal desktop thinking tool built for the moment a thought appears.  
 Capture it instantly — without projects, folders, or workspaces.
