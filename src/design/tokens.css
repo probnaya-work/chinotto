@@ -92,7 +92,7 @@
     See docs/unspecified-decisions.md §9.
   */
   --faint: #5f5e5a;
-  /* The capture field's placeholder, and nothing else. Drawn at 44px. */
+  /* The capture field's placeholder, and nothing else. 44px at the edge, 21px in the tray. */
   --placeholder: #4a4a50;
 
   /*
@@ -637,7 +637,23 @@ input[aria-label="Find"]:focus-visible {
   A panel, not a window and not a system sheet: one hairline, a deep shadow so it reads as
   sitting above whatever you were doing, and the record's own field inside it. It settles in
   rather than appearing, because it arrived from somewhere.
+
+  The tray has its own scale and it is not the window's. The identity file draws the panel
+  at a narrower measure than it ships at — the padding, the caret, the field and the hint
+  row are literal there, and the width is the one number its caption gives (440pt) — so the
+  rung below is the drawn panel, not the edge's 44px capture scaled down.
 */
+:root {
+  --tray-width: 440px;       /* the caption's 440pt                                  */
+  --tray-pad: 18px 20px 14px;
+  --tray-caret-height: 26px; /* the edge's caret, at the panel's scale               */
+  --tray-field: 21px;        /* between D1 and D0: the tray's own capture size       */
+  --tray-row-gap: 12px;      /* caret to field                                       */
+  --tray-row-min: 34px;      /* the field row, so one line and two start alike       */
+  --tray-hint-gap: 18px;     /* between the hint words                               */
+  --tray-hint-top: 12px;     /* field row to hint row                                */
+}
+
 .tray-capture-root {
   min-height: 100%;
   width: 100%;
@@ -648,14 +664,24 @@ input[aria-label="Find"]:focus-visible {
 }
 
 .tray-capture-panel {
-  width: 440px;
+  width: var(--tray-width);
   max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--rule-dim);
-  padding: 18px 20px 14px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  padding: var(--tray-pad);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   box-sizing: border-box;
   animation: chinotto-settle 0.2s ease-out;
+}
+
+/*
+  The placeholder is the resting state, not a label: one word, in the placeholder step,
+  sitting where your first character will land. `opacity: 1` because WebKit dims a
+  placeholder on its own and the step is already chosen.
+*/
+.tray-capture-panel textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 /*

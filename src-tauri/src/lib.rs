@@ -2035,6 +2035,7 @@ pub fn run() {
             last_backup_at,
             open_microphone_settings,
             open_tray_capture,
+            tray_capture::fit_capture_popover,
             create_share_thread,
             get_share_thread,
             list_share_threads,

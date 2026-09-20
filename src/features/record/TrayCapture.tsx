@@ -1,10 +1,14 @@
 /**
  * Capture from the menu bar.
  *
- * `⌘⇧K` over whatever you are doing. The same 3px caret and the same field as the edge, at
- * a size that fits a panel rather than a window, and the same promise: the save is local
- * and instant, the field clears before anything else happens, and nothing about sync,
- * network or permission can be in the way.
+ * The identity file draws this surface directly: a 440pt panel under the glyph, one
+ * hairline and a deep shadow, the edge's own caret and field at the panel's scale, and a
+ * hint row of three. It is the app's edge moved to where the cursor already is — never a
+ * list, never a search field, never a settings tree. Anything that wants more room opens
+ * the window instead.
+ *
+ * The same promise as the edge: the save is local and instant, the field clears before
+ * anything else happens, and nothing about sync, network or permission can be in the way.
  *
  * It writes into the Record — a fragment with `menubar` as its origin — rather than into
  * the legacy `entries` table it used to own. That is the difference between "quick capture
@@ -15,7 +19,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { captureFragment } from "@/lib/recordApi";
+import { captureFragment, fitCapturePopover } from "@/lib/recordApi";
+import { metaStyle } from "../../design/tiers";
+import { applyAppearance, readAppearance, readLiftContrast } from "@/lib/appearance";
 import { applyStoredUiZoom } from "@/lib/uiZoom";
 import "../../design/tokens.css";
 
@@ -28,29 +34,50 @@ const BLUR_HIDE_MS = 280;
 /** Long enough to read "left.", short enough that it never feels like waiting. */
 const CLOSE_AFTER_SAVE_MS = 520;
 
+/**
+ * Where the field stops growing and starts scrolling. The panel is the edge, not a writing
+ * surface: past this the words belong in the window.
+ */
+const FIELD_MAX_HEIGHT = 200;
+
 export function TrayCapture() {
   const [text, setText] = useState("");
   const [note, setNote] = useState("lands in the record, dated now");
   const [failure, setFailure] = useState<string | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The webview's own zoom. The panel measures itself in CSS pixels, which browser zoom
+   * does not touch, so the window's logical size is that measurement times this.
+   */
+  const zoom = useRef(1);
 
   const hide = useCallback(() => {
     void getCurrentWindow().hide();
   }, []);
 
   useEffect(() => {
-    void applyStoredUiZoom();
+    // The panel is a second webview and reads none of the record's state, so the appearance
+    // has to be applied here too — otherwise the menu bar opens a dark panel over a light
+    // window, or the other way round.
+    applyAppearance(readAppearance(), readLiftContrast());
+    void applyStoredUiZoom().then((z) => {
+      zoom.current = z;
+    });
     document.documentElement.classList.add("tray-capture-page");
     const win = getCurrentWindow();
-    void win.setShadow(false).catch(() => {});
 
     // Focus loss closes the panel, but only once the spurious blur has passed and the
-    // window really is unfocused.
+    // window really is unfocused. Regaining focus puts the caret back in the field, so a
+    // second open is typed into exactly like the first.
     const unlisten = win.onFocusChanged(({ payload: focused }) => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
-      if (focused) return;
+      if (focused) {
+        fieldRef.current?.focus();
+        return;
+      }
       hideTimer.current = setTimeout(() => {
         void win.isFocused().then((still) => {
           if (!still) hide();
@@ -72,8 +99,41 @@ export function TrayCapture() {
     const el = fieldRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    el.style.height = `${Math.min(el.scrollHeight, FIELD_MAX_HEIGHT)}px`;
   }, [text]);
+
+  /**
+   * The window is a frame around the panel, and the panel is not a fixed size — a second
+   * line of words, a longer failure, the interface at 85%. Measuring what was drawn rather
+   * than predicting it is what keeps a two-line capture from being cut off at the window's
+   * edge, and the panel under the glyph rather than left of it.
+   */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const root = panel.parentElement;
+    if (!root) return;
+    const fit = () => {
+      const box = panel.getBoundingClientRect();
+      if (!box.height) return;
+      // The root's padding is the shadow's room; it is drawn, so it is measured too.
+      const style = getComputedStyle(root);
+      const x = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const y = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      // A window that would not resize costs a clipped line and nothing else — the words
+      // are in the field either way — and there is nothing the person could do about it,
+      // so it is not carried into the panel.
+      void fitCapturePopover((box.width + x) * zoom.current, (box.height + y) * zoom.current).catch(
+        () => {},
+      );
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(panel);
+    // The panel is measured again once the family has arrived: Archivo settles the hint
+    // row's line box, and a window sized before that is a window sized to a fallback.
+    void document.fonts?.ready.then(fit).catch(() => {});
+    return () => observer.disconnect();
+  }, []);
 
   const leave = useCallback(async () => {
     const body = text.trim();
@@ -95,6 +155,8 @@ export function TrayCapture() {
     }
   }, [text, hide]);
 
+  const empty = text.length === 0;
+
   return (
     <div
       className="tray-capture-root"
@@ -103,15 +165,28 @@ export function TrayCapture() {
         if (e.target === e.currentTarget) hide();
       }}
     >
-      <div className="tray-capture-panel">
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
-          {!text ? (
+      <div className="tray-capture-panel" ref={panelRef}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "var(--tray-row-gap)",
+            minHeight: "var(--tray-row-min)",
+          }}
+        >
+          {/*
+            The drawn bar is the caret's resting form, exactly as at the edge. The panel
+            opens focused, so the field's own caret would stand beside it and two carets
+            would be one too many: while the field is empty the system caret is held back
+            and this bar is the caret. The first character swaps them over.
+          */}
+          {empty ? (
             <span
               aria-hidden="true"
               style={{
                 display: "inline-block",
-                width: "3px",
-                height: "30px",
+                width: "var(--caret-width)",
+                height: "var(--tray-caret-height)",
                 background: "var(--ink)",
                 marginTop: "2px",
                 flex: "none",
@@ -135,6 +210,7 @@ export function TrayCapture() {
               }
             }}
             aria-label="Leave a fragment"
+            placeholder="anything"
             spellCheck={false}
             style={{
               flex: 1,
@@ -145,25 +221,24 @@ export function TrayCapture() {
               background: "transparent",
               color: "var(--ink)",
               font: "inherit",
-              fontSize: "24px",
+              fontSize: "var(--tray-field)",
               lineHeight: 1.25,
-              letterSpacing: "-0.015em",
-              caretColor: "var(--ink)",
+              letterSpacing: "-0.012em",
+              caretColor: empty ? "transparent" : "var(--ink)",
               padding: 0,
-              overflow: "hidden",
-              maxHeight: "200px",
+              overflowY: "auto",
+              maxHeight: `${FIELD_MAX_HEIGHT}px`,
             }}
           />
         </div>
 
         <div
           style={{
-            marginTop: "12px",
+            marginTop: "var(--tray-hint-top)",
             display: "flex",
-            gap: "22px",
-            fontSize: "12px",
+            gap: "var(--tray-hint-gap)",
+            ...metaStyle("var(--size-meta-sm)"),
             color: "var(--faint)",
-            fontVariationSettings: "'wdth' 90",
           }}
         >
           <span>⏎ leave it</span>

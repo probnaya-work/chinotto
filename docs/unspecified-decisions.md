@@ -116,9 +116,25 @@ resolve a CSS variable in any case.
 
 | # | Decision | Value | Where | Status |
 |---|---|---|---|---|
-| 0.24 | The popover window's size | `480 × 168` — the 440px panel plus room for its shadow | `tauri.conf.json` | invented |
+| 0.24 | The popover window's size | `480` wide — the 440px panel plus room for its shadow — and a height that follows the panel, `121` at rest | `tauri.conf.json`, `tray_capture.rs` | invented |
 | 0.25 | What happens when a menu-bar save fails | the panel stays open, keeps the words, and says so | `TrayCapture.tsx` | invented |
 | 0.26 | How the main window learns about a menu-bar capture | the existing `chinotto-tray-entry-saved` event | same | inherited |
+| 0.27 | The panel's type scale | the identity file's drawn panel read literally — caret `3 × 26`, field `21px / −0.012em`, hint `11px`, gaps `12` and `18` — with only the width taken from its caption | `tokens.css` `--tray-*` | **from the identity file** |
+| 0.28 | Which caret stands in the resting panel | the drawn bar, with the field's own caret held back while it is empty | `TrayCapture.tsx` | invented |
+
+0.24 was a fixed `480 × 168` and clipped the second line of anything longer than one: the
+field grows with the words and the window did not. The panel now measures itself and the
+window follows, clamped in `tray_capture.rs` against what is left of the screen below the
+menu bar. `121` is the resting height, so the first frame is already right.
+
+0.27: the identity file draws the panel at 340px and captions it "440pt of it". The inner
+values are literal, not a reduction — the padding is `18px 20px 14px` in both readings — so
+the caption gives the width and the drawing gives everything inside it.
+
+0.28 is the edge's own rule (`showBar = !hasText && !focused`) carried to a surface that is
+always focused. Applying it unchanged would mean the resting panel the identity file draws
+never appears; drawing the bar beside a live caret would mean two of them. The field's caret
+is transparent while it is empty, and the first character hands over.
 
 0.25 is the one exception to "capture never waits". Everywhere else the field clears and the
 panel closes because the save cannot fail; here it can — the panel is a second webview and a

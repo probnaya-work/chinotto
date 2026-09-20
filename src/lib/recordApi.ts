@@ -575,6 +575,18 @@ export function openTrayCapture(): Promise<void> {
   return invoke<void>("open_tray_capture");
 }
 
+/**
+ * The menu-bar panel has changed size; the window around it follows.
+ *
+ * Both numbers are logical points, measured from the drawn panel. The backend clamps the
+ * height against what is left of the screen below the menu bar, and re-centres the window
+ * so a width change does not walk it out from under the glyph.
+ */
+export function fitCapturePopover(width: number, height: number): Promise<void> {
+  if (devOnly()) return Promise.resolve();
+  return invoke<void>("fit_capture_popover", { width, height });
+}
+
 // ---- devices and two wordings -----------------------------------------------------------
 
 /** How many fragments have not reached the other devices yet. Read-only. */
