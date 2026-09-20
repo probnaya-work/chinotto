@@ -466,6 +466,7 @@ not mine to close.
 | 14.3 | The model's weights live in the app's data directory | `<app data>/models`, not `./.fastembed_cache` | `embeddings.rs`, `lib.rs` | correctness fix |
 | 14.4 | Fixed-position chrome sits outside the animated column | `QuietLine` and the error line are siblings of it | `RecordApp.tsx` | correctness fix |
 | 14.5 | Distance is measured from the record's own edge, not from the clock | `referenceFor()`, clamped to now | `tiers.ts`, `bands.ts` | decided by the owner |
+| 14.6 | Every hover rule is `!important`, and a `--ink-bright` register is added | the hover language works at all; row verbs reach white | `tokens.css`, `Verb.tsx` | correctness fix |
 
 **14.1.** `#[tauri::command]` without `(async)` runs on the app's main thread. All 106
 commands were plain, so reading the whole Record, selecting a Return, transcribing speech
@@ -531,3 +532,34 @@ windows (8 h / yesterday / 7 d / 60 d / 180 d) are sized for someone writing man
 day, and this record averages roughly one fragment every other day. Whether the windows
 should scale with how often a person actually writes is a separate open question, and a
 larger one.
+
+**14.6.** The product's only pointer feedback is ink brightening by a step, and none of it
+worked below D0. A row's resting colour comes from `tierStyle()` and a verb's from
+`metaStyle()` — both write `color` into the element's own `style` attribute, because the
+value is decided per tier at render time — and an inline declaration outranks any class
+rule. So `.chinotto-compact-row:hover`, `.chinotto-verb:hover` and
+`.chinotto-band-label:hover` were all computed and then discarded on every element they
+named. Hovering anything in the record did nothing at all.
+
+Fixed with `!important` on the hover rules rather than by moving every resting colour into
+CSS: the colours genuinely are per-tier render-time values, and a class per tier would put
+the same number in two files. `:not(:disabled)` carries the one exception — a disabled verb
+is a statement, not a control, and keeps its own colour.
+
+While the rules were dead their *values* had drifted from the prototype unnoticed, so they
+are re-transcribed here from `style-hover` on each element:
+
+| element | prototype | register |
+| ------- | --------- | -------- |
+| compact row, year label, `↓ N more paragraphs`, Return verbs, `release`, `not this`, `‹ back to the edge` | `#e6e6e3` | `--ink` |
+| a row's own verbs (`continue`, `hold`, `⋯`), the ⋯ menu, a moment's verbs in focus | `#fff` | `--ink-bright` *(new)* |
+| band label, quiet line, `wording corrected · show` | `#c9c9c6` | `--ink-verb` |
+| `◌ hold space to speak` | `#8f8e89` | `--meta` |
+
+`--ink-bright` is the one addition to the ink ladder: the design spends pure white on the
+controls that sit *on top of* material rather than beside it, and the existing ladder tops
+out at `--ink`. In the light appearance — which the prototype does not draw — it is `#000`,
+the same step past `--ink` in the other direction.
+
+Not carried over: the voice chip's `border-color:#8f8e89` on hover, which is a fifth
+register for one element.

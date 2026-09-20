@@ -527,7 +527,7 @@ export function FragmentFocus({
 
           {previous ? (
             <Verb
-              
+              quiet
               onClick={() =>
                 setShowEarlier((s) => {
                   const next = new Set(s);
@@ -552,7 +552,7 @@ export function FragmentFocus({
               }}
             >
               <Verb
-                
+                bright
                 onClick={() => {
                   setCorrectingId(f.id);
                   setDraft(f.body);
@@ -562,14 +562,14 @@ export function FragmentFocus({
                 correct
               </Verb>
               <Verb
-                
+                bright
                 onClick={() => (heldIds.has(f.id) ? onRelease(f) : onHold(f))}
                 style={{ cursor: "pointer" }}
               >
                 {heldIds.has(f.id) ? "release" : "hold"}
               </Verb>
               <Verb
-                
+                bright
                 onClick={async () => {
                   if (onRemove) await onRemove(f);
                   else await api.removeFragment(f.id);

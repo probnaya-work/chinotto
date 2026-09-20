@@ -375,13 +375,13 @@ export function FragmentRow(props: FragmentRowProps) {
                   marginTop: "10px",
                 }}
               >
-                <Verb onClick={() => props.onCorrect?.(fragment)}>correct</Verb>
-                <Verb onClick={() => props.onCopy?.(fragment)}>copy</Verb>
+                <Verb bright onClick={() => props.onCorrect?.(fragment)}>correct</Verb>
+                <Verb bright onClick={() => props.onCopy?.(fragment)}>copy</Verb>
                 {encounter ? (
-                  <Verb onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
+                  <Verb bright onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
                 ) : null}
-                <Verb onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
-                <Verb onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
+                <Verb bright onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
+                <Verb bright onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
               </div>
             ) : null}
 
@@ -407,9 +407,9 @@ export function FragmentRow(props: FragmentRowProps) {
           pointerEvents: showVerbs ? "auto" : "none",
         }}
       >
-        <Verb onClick={() => props.onContinue?.(fragment)}>continue</Verb>
-        <Verb onClick={() => props.onHold?.(fragment)}>{held ? "release" : "hold"}</Verb>
-        <Verb aria-label="more" onClick={() => props.onToggleMenu?.(fragment)}>⋯</Verb>
+        <Verb bright onClick={() => props.onContinue?.(fragment)}>continue</Verb>
+        <Verb bright onClick={() => props.onHold?.(fragment)}>{held ? "release" : "hold"}</Verb>
+        <Verb bright aria-label="more" onClick={() => props.onToggleMenu?.(fragment)}>⋯</Verb>
       </div>
     </div>
   );

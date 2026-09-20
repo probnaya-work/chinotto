@@ -229,7 +229,7 @@ export function Capture({
           <span
             onMouseDown={onStartSpeaking}
             onMouseUp={onStopSpeaking}
-            className="chinotto-affordance"
+            className="chinotto-hint"
             style={{
               ...metaStyle("var(--size-meta-lg)"),
               color: "var(--faint-text)",

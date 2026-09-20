@@ -93,7 +93,7 @@ export function QuietLine({
         {syncOn && !surfaceOpen ? (
           <span style={{ cursor: "default" }}>● sync on</span>
         ) : null}
-        <Verb  onClick={onSettings} style={{ cursor: "pointer" }}>
+        <Verb quiet onClick={onSettings} style={{ cursor: "pointer" }}>
           settings ⌘,
         </Verb>
       </span>

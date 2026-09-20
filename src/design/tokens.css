@@ -23,6 +23,7 @@
 
   /* ---- ink ladder ------------------------------------------------------- */
   --ink: #e6e6e3;        /* D0 material, active verbs, the caret, the mark          */
+  --ink-bright: #ffffff; /* a step past ink: a row's own verbs and the ⋯ menu        */
   --ink-near: #cfcfcc;   /* D1 (19px), utility body copy                            */
   --ink-verb: #c9c9c6;   /* hover verbs, voice chip, "unfold", secondary emphasis   */
   --ink-far: #b4b4b2;    /* D2 (14px), voice transcripts, quotations, warnings      */
@@ -64,6 +65,7 @@
   :root:not([data-theme="dark"]) {
     --surface: #f2f1ec;
     --ink: #1b1b1d;
+    --ink-bright: #000000;
     --ink-near: #2c2c2f;
     --ink-verb: #3f3f42;   /* light collapses verb and far ink to one value         */
     --ink-far: #3f3f42;
@@ -91,6 +93,7 @@
 :root[data-theme="light"] {
   --surface: #f2f1ec;
   --ink: #1b1b1d;
+  --ink-bright: #000000;
   --ink-near: #2c2c2f;
   --ink-verb: #3f3f42;
   --ink-far: #3f3f42;
@@ -338,16 +341,47 @@ input[aria-label="Find"]:focus-visible {
   Hover.
 
   There is no hover state in this product that changes a shape, only ones that brighten ink
-  by one step on the ladder. A verb reaching for --ink is the whole interaction language:
+  by a step on the ladder. A verb reaching for --ink is the whole interaction language:
   nothing grows, nothing boxes, nothing moves.
+
+  Every rule below carries `!important`, and that is structural rather than a preference. A
+  row's resting colour comes from `tierStyle()` and a verb's from `metaStyle()`, both of
+  which write `color` into the element's own `style` attribute, because the value is decided
+  per tier at render time. An inline declaration outranks any class rule — so these were all
+  computed correctly and then lost, on every element they name, which is every element that
+  has a hover state at all. The surface had no pointer feedback below D0 whatsoever.
+
+  `:not(:disabled)` is what keeps a disabled verb from brightening: it is a statement, not a
+  control, and it must not answer the pointer.
 */
-.chinotto-verb:hover,
+.chinotto-verb:hover:not(:disabled),
 .chinotto-affordance:hover {
-  color: var(--ink);
+  color: var(--ink) !important;
 }
 
-.chinotto-band-label:hover {
-  color: var(--ink-verb);
+/*
+  A step past ink, which the design spends in exactly two places: a row's own verbs
+  (`continue`, `hold`, `⋯`) and the menu that opens from them. Both sit on top of material
+  rather than beside it, and both are reached deliberately, so they are allowed to be the
+  brightest thing on the surface.
+*/
+.chinotto-verb--bright:hover:not(:disabled) {
+  color: var(--ink-bright) !important;
+}
+
+/*
+  The quieter register: words that are always on screen — a band's label, the quiet line,
+  "wording corrected" — and must not flare when the pointer merely crosses them on its way
+  somewhere else.
+*/
+.chinotto-band-label:hover,
+.chinotto-verb--quiet:hover:not(:disabled) {
+  color: var(--ink-verb) !important;
+}
+
+/* A capture hint rests below meta and comes up to it, never to ink. */
+.chinotto-hint:hover {
+  color: var(--meta) !important;
 }
 
 /*
@@ -355,7 +389,7 @@ input[aria-label="Find"]:focus-visible {
   13px a background band is a bigger gesture than the text it sits behind.
 */
 .chinotto-compact-row:hover {
-  color: var(--ink);
+  color: var(--ink) !important;
 }
 
 /*
@@ -465,11 +499,12 @@ input[aria-label="Find"]:focus-visible {
   border-radius: 1px;
 }
 
-/* A disabled verb is a statement, not a control: it does not take focus or brighten. */
+/*
+  A disabled verb is a statement, not a control: it does not take focus or brighten. The
+  brightening is held off by `:not(:disabled)` on the rules above rather than by a rule
+  here, because a rule here would have to win against the inline colour too, and the one
+  thing a disabled verb should keep is exactly that colour.
+*/
 .chinotto-verb:disabled {
   cursor: default;
-}
-
-.chinotto-verb:disabled:hover {
-  color: inherit;
 }

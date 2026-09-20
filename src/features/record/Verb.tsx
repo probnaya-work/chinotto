@@ -17,6 +17,20 @@ export interface VerbProps {
   onClick: () => void;
   /** An active verb, in full ink. The default is the quieter register around it. */
   ink?: boolean;
+  /**
+   * Hovers past ink, to white.
+   *
+   * The design spends this on a row's own verbs and on the ⋯ menu that opens from them —
+   * the two places where a control sits on top of material rather than beside it.
+   */
+  bright?: boolean;
+  /**
+   * Hovers to the verb register rather than to ink.
+   *
+   * For words that are always on screen — the quiet line, "wording corrected" — and should
+   * not flare when the pointer only crosses them.
+   */
+  quiet?: boolean;
   /** For the few places that want a specific step on the ladder. */
   tone?: string;
   style?: CSSProperties;
@@ -28,6 +42,8 @@ export function Verb({
   children,
   onClick,
   ink = false,
+  bright = false,
+  quiet = false,
   tone,
   style,
   disabled = false,
@@ -36,7 +52,11 @@ export function Verb({
   return (
     <button
       type="button"
-      className="chinotto-verb"
+      className={
+        "chinotto-verb" +
+        (bright ? " chinotto-verb--bright" : "") +
+        (quiet ? " chinotto-verb--quiet" : "")
+      }
       disabled={disabled}
       onClick={(e) => {
         // A verb inside a row must not also open the row.
