@@ -5,4 +5,4 @@ alwaysApply: true
 
 # Release versions
 
-When bumping the app semver for a macOS release, **`src-tauri/Info.plist`** must be updated together with `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`: set **`CFBundleShortVersionString`** and **`CFBundleVersion`** to the same version. Skipping the plist leaves wrong bundle metadata while other files show the new version. Follow `docs/internal/release-process.md`.
+When bumping the app semver for a macOS release, **`src-tauri/Info.plist`** must be updated together with `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`: set **`CFBundleShortVersionString`** and **`CFBundleVersion`** to the same version. Skipping the plist leaves wrong bundle metadata while other files show the new version. Follow `docs/release-process.md`.

@@ -7,6 +7,6 @@ alwaysApply: true
 
 - **In-code:** Comment only when the “why” or contract is not obvious. No restating the code. No long-lived TODOs without a clear next step or owner.
 - **Repo docs:** Public: `docs/privacy.md`, `docs/architecture.md`, `docs/development.md`, README. Internal: `docs/internal/`. Update public `docs/architecture.md` when stack or high-level design changes; update `docs/internal/product-spec.md` when scope or constraints change. Keep README aligned with run instructions and MVP scope.
-- **Release version bump:** When bumping app version for a ship, touch **all** locations in `docs/internal/release-process.md` (local-only; see `.gitignore`), including **`src-tauri/Info.plist`**: `CFBundleShortVersionString` and `CFBundleVersion`. Do not stop at `package.json` / Tauri / Cargo only.
+- **Release version bump:** When bumping app version for a ship, touch **all** locations in `docs/release-process.md` (local-only; see `.gitignore`), including **`src-tauri/Info.plist`**: `CFBundleShortVersionString` and `CFBundleVersion`. Do not stop at `package.json` / Tauri / Cargo only.
 - **Tone:** Factual. No marketing speak, no “awesome” or “simple but powerful”.
 - **Rule files and commit-convention:** Treat as binding. When editing them, keep them strict and practical; do not add generic advice or dilute.

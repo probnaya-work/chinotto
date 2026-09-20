@@ -1,4 +1,4 @@
--- Chinotto v2 — the Record.
+-- The Record model — schema v2.
 --
 -- Five objects the user must understand: Fragment, Line, Record, Trace, Return.
 -- Governing promise: capture without classification; return with evidence;
