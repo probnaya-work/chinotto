@@ -166,8 +166,12 @@ is a bare `⌥` on an empty field, which needs no chord because the panel alread
 Nothing was kept: the native side is stopped and the result never becomes a fragment, exactly
 as a hold released inside 800ms already behaved. The file the recorder already wrote stays
 where it is, and `orphaned_recordings` is what finds it again if it mattered after all.
-*The edge draws `esc to drop` too and has never wired it; that gap is the window's, and is
-left where it is.*
+
+The edge draws `esc to drop` in its own speaking row and had never wired it — the key did
+nothing there. It now takes the same `drop`, at the position the design's ladder gives it:
+`tray → recording → correcting → verb row → surface → focus → draft → standing`, so a
+recording is stepped out of before a correction is. The two surfaces word it differently
+(`esc to drop` at the edge, `esc drop it` in the panel) because each is drawn that way.
 
 0.31 is the whole reason a second query exists next to `select_return`. Selecting *surfaces*
 a Return: it inserts a row and spends the twenty-hour cooldown. The glyph is refreshed on

@@ -517,6 +517,12 @@ export function RecordApp() {
         return changeTextScale(-ZOOM_STEP);
       }
       if (e.key !== "Escape") return;
+      // A recording is the innermost thing you can be in the middle of, which is why the
+      // design's ladder puts it first: tray → recording → correcting → … It keeps nothing,
+      // exactly as a hold released inside `DROP_UNDER_MS` already kept nothing — the field
+      // has been offering `esc to drop` since the speaking surface was drawn, and this is
+      // the half that was missing.
+      if (voice.recording) return voice.drop();
       if (editing) return setEditing(null);
       // A utility surface is deeper than focus: sync steps back to settings, settings to
       // the edge, and only then does the edge's own ladder start.
@@ -532,7 +538,19 @@ export function RecordApp() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack, surface, changeTextScale]);
+  }, [
+    editing,
+    focusId,
+    input,
+    anchor,
+    keyboardInRecord,
+    undo,
+    bringBack,
+    surface,
+    changeTextScale,
+    voice.recording,
+    voice.drop,
+  ]);
 
   /**
    * `⌥space` anywhere on the mac. The window is brought forward by the Rust side before
