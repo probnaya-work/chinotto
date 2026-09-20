@@ -19,6 +19,7 @@ import { ReturnBlock } from "./ReturnBlock";
 import { QuietLine } from "./QuietLine";
 import { Settings, type MicrophoneState } from "./Settings";
 import { Sync, type SyncState } from "./Sync";
+import { Launch, useLaunch } from "./Launch";
 import { useNow } from "./useNow";
 import { useAppleSyncOAuth } from "@/lib/useAppleSyncOAuth";
 import { metaStyle } from "../../design/tiers";
@@ -223,6 +224,12 @@ export function RecordApp() {
     edgeScroll.current = document.scrollingElement?.scrollTop ?? 0;
     go();
   }, []);
+
+  /**
+   * Launch holds only for what is left of its window after the record has loaded, so a
+   * slow first read is never made slower. `loaded` is the real signal, not a timer.
+   */
+  const launch = useLaunch(loaded);
 
   const isFind = input.startsWith("/");
   const query = isFind ? input.slice(1).trim().toLowerCase() : "";
@@ -731,7 +738,16 @@ export function RecordApp() {
         paddingLeft: "var(--window-pad-left)",
       }}
     >
-      <div style={{ maxWidth: "var(--column-width)", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          maxWidth: "var(--column-width)",
+          display: "flex",
+          flexDirection: "column",
+          // The record rises into place underneath the lockup as it goes, rather than
+          // being revealed by it. One gesture, not two.
+          animation: launch === "mark" ? "none" : "chinotto-rise 0.6s ease-out both",
+        }}
+      >
         {surface === "sync" ? (
           <Sync
             state={syncState}
@@ -1084,6 +1100,7 @@ export function RecordApp() {
           />
         )}
 
+        {launch === "done" ? (
         <QuietLine
           undo={
             undo
@@ -1117,6 +1134,7 @@ export function RecordApp() {
           surfaceOpen={surface !== null}
           onSettings={() => setSurface("settings")}
         />
+        ) : null}
 
         {error ? (
           <div style={{ position: "fixed", right: "48px", bottom: "36px", ...metaStyle() }}>
@@ -1124,6 +1142,7 @@ export function RecordApp() {
           </div>
         ) : null}
       </div>
+      <Launch phase={launch} visible={loaded} />
     </div>
   );
 }
