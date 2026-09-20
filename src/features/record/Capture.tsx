@@ -17,6 +17,7 @@ import { SpeakingBars } from "./Caret";
 import { metaStyle } from "../../design/tiers";
 import { anchorHint, parseAnchor, type ParsedAnchor } from "./anchors";
 import { durationLabel } from "./format";
+import { Verb } from "./Verb";
 
 export interface CaptureProps {
   value: string;
@@ -251,13 +252,9 @@ export function Capture({
             }}
           >
             {findCount} in words ·{" "}
-            <span
-              onClick={onToggleMeaning}
-              className="chinotto-verb"
-              style={{ color: "var(--ink-verb)", cursor: "pointer" }}
-            >
+            <Verb onClick={() => onToggleMeaning?.()} tone="var(--ink-verb)">
               {meaningOn ? "in words only" : "also by meaning"}
-            </span>{" "}
+            </Verb>{" "}
             · esc
           </span>
         ) : null}

@@ -17,6 +17,7 @@ import {
   textScaleLabel,
   type Appearance,
 } from "../../lib/appearance";
+import { Verb } from "./Verb";
 
 export type MicrophoneState = "granted" | "ask" | "denied";
 
@@ -79,9 +80,9 @@ export function Settings(props: SettingsProps) {
   return (
     <div>
       <div style={{ ...metaStyle(), display: "flex", justifyContent: "space-between" }}>
-        <span className="chinotto-verb" onClick={props.onLeave} style={{ cursor: "pointer" }}>
+        <Verb  onClick={props.onLeave} style={{ cursor: "pointer" }}>
           ‹ back to the edge · esc
-        </span>
+        </Verb>
         <span>settings · this mac</span>
       </div>
 
@@ -134,19 +135,19 @@ export function Settings(props: SettingsProps) {
           <Stack>
             <div style={{ display: "flex", gap: "22px", alignItems: "baseline" }}>
               {(["system", "light", "dark"] as const).map((id) => (
-                <span
+                <Verb
                   key={id}
                   onClick={() => props.onAppearance(id)}
+                  aria-label={`appearance: ${id}`}
                   style={{
                     fontSize: "var(--size-utility)",
-                    cursor: "pointer",
                     color: props.appearance === id ? "var(--ink)" : "var(--meta)",
                     boxShadow: props.appearance === id ? "inset 0 -2px var(--ink)" : "none",
                     paddingBottom: "3px",
                   }}
                 >
                   {id}
-                </span>
+                </Verb>
               ))}
             </div>
             <Secondary>
@@ -181,15 +182,15 @@ export function Settings(props: SettingsProps) {
           <Stack gap="12px">
             <div style={{ display: "flex", gap: "20px", alignItems: "flex-end" }}>
               {(["dark", "light"] as const).map((id) => (
-                <div
+                <Verb
                   key={id}
                   onClick={() => props.onIconVariant(id)}
+                  aria-label={`dock icon: ${id}`}
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     gap: "9px",
                     alignItems: "center",
-                    cursor: "pointer",
                   }}
                 >
                   <span
@@ -218,7 +219,7 @@ export function Settings(props: SettingsProps) {
                   >
                     {id}
                   </span>
-                </div>
+                </Verb>
               ))}
 
               {/*
@@ -497,27 +498,6 @@ function Key({ children }: { children: ReactNode }) {
   return <span style={{ color: "var(--ink)" }}>{children}</span>;
 }
 
-function Verb({
-  children,
-  onClick,
-  ink = false,
-  tone,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  ink?: boolean;
-  tone?: string;
-}) {
-  return (
-    <span
-      className="chinotto-verb"
-      onClick={onClick}
-      style={{ color: tone ?? (ink ? "var(--ink)" : "var(--meta)"), cursor: "pointer" }}
-    >
-      {children}
-    </span>
-  );
-}
 
 /** Keys render as two grid cells, so they need a fragment with a key on it. */
 function Fragment2({ children }: { key: string; children: ReactNode }) {

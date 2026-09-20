@@ -72,6 +72,7 @@ import { setDesktopIcon } from "@/lib/setDesktopIcon";
 import { APP_VERSION } from "@/lib/appVersion";
 import { useAppUpdater } from "@/lib/appUpdater";
 import "../../design/tokens.css";
+import { Verb } from "./Verb";
 
 /**
  * How long a fragment stays "still yours to change" after it lands.
@@ -112,13 +113,13 @@ function micNotice(
       <>
         chinotto can’t hear — the mac isn’t allowing the microphone. system settings ›
         privacy › microphone, then hold space again.{" "}
-        <span
-          className="chinotto-verb"
+        <Verb
+          
           onClick={onOpenSettings}
           style={{ color: "var(--ink)", cursor: "pointer" }}
         >
           open system settings ›
-        </span>
+        </Verb>
       </>
     );
   }
@@ -977,14 +978,14 @@ export function RecordApp() {
                   marginBottom: "22px",
                 }}
               >
-                <span
-                  className="chinotto-verb"
+                <Verb
+                  
                   onClick={() => setAnchor(null)}
                   style={{ cursor: "pointer", whiteSpace: "nowrap" }}
                 >
                   ▲ today · {sinceYouLeft > 0 ? `${sinceYouLeft} new since you left` : "the edge"}{" "}
                   · esc
-                </span>
+                </Verb>
                 <span>
                   you are in {MONTHS[anchor.month]} {anchor.year}
                 </span>
@@ -1066,8 +1067,8 @@ export function RecordApp() {
                         >
                           {g.fragment.body}
                         </div>
-                        <span
-                          className="chinotto-verb"
+                        <Verb
+                          
                           onClick={() =>
                             setRejectedGuesses((s) => new Set(s).add(g.fragment.id))
                           }
@@ -1079,7 +1080,7 @@ export function RecordApp() {
                           }}
                         >
                           not this
-                        </span>
+                        </Verb>
                       </div>
                     ))}
                   </div>

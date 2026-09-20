@@ -253,16 +253,26 @@ export function Record(props: RecordProps) {
         }}
       >
         {label ? (
-          <div
+          <button
+            type="button"
             className="chinotto-band-label"
-            style={bandLabelStyle(band.tier)}
+            aria-label={`stand in ${label}`}
+            style={{
+              ...bandLabelStyle(band.tier),
+              background: "none",
+              border: "none",
+              padding: 0,
+              font: "inherit",
+              textAlign: "left",
+              alignSelf: "flex-start",
+            }}
             onClick={() => {
               const target = bandAnchor(band);
               if (target) props.onStandIn(target.year, target.month);
             }}
           >
             {label}
-          </div>
+          </button>
         ) : null}
 
         <Windowed

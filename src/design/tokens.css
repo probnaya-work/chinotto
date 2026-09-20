@@ -448,3 +448,28 @@ input[aria-label="Find"]:focus-visible {
   box-sizing: border-box;
   animation: chinotto-settle 0.2s ease-out;
 }
+
+/*
+  Focus.
+
+  The verbs are buttons with no box of their own, so the ring has to come from nowhere and
+  land on the word. It is drawn in ink at a 2px offset rather than as a filled box, which
+  reads like the caret rather than like a form control — and it is `:focus-visible`, so it
+  never appears on the pointer path.
+*/
+.chinotto-verb:focus-visible,
+.chinotto-affordance:focus-visible,
+.chinotto-band-label:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/* A disabled verb is a statement, not a control: it does not take focus or brighten. */
+.chinotto-verb:disabled {
+  cursor: default;
+}
+
+.chinotto-verb:disabled:hover {
+  color: inherit;
+}

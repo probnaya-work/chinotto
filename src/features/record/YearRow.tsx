@@ -79,14 +79,19 @@ export function YearRow({
         }}
       >
         {density.map((n, month) => (
-          <span
+          <button
             key={month}
+            type="button"
             title={`${MONTHS[month]} ${year} · ${n}`}
-            onClick={n > 0 ? () => onStandIn?.(year, month) : undefined}
+            aria-label={`${MONTHS[month]} ${year}, ${n}`}
+            disabled={n === 0}
+            onClick={() => onStandIn?.(year, month)}
             style={{
               display: "inline-block",
               width: "var(--year-bar-width)",
               height: `${yearBarHeight(n)}px`,
+              padding: 0,
+              border: "none",
               background: n > 0 ? "var(--year-bar-ink)" : "var(--year-bar-empty)",
               cursor: n > 0 ? "pointer" : "default",
             }}

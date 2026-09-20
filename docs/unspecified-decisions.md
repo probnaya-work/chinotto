@@ -425,3 +425,30 @@ file-input recognition path rather than the live-buffer one, which is a separate
 Speech-framework work. The audio is retained, so this can be added later against material
 that already exists — which is the point of keeping the source. Until it is, a failed
 transcript offers "type it" only.
+
+---
+
+## 13. Cleanup and accessibility (phase 12)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 13.1 | Every text verb is a real `<button>` | focus, Enter/Space, an accessible name | `Verb.tsx` | invented |
+| 13.2 | Focus ring | 2px ink, 2px offset, `:focus-visible` only | `tokens.css` | inferred |
+| 13.3 | Material itself stays a click target rather than a button | rows, bodies, trace snippets | various | inferred |
+| 13.4 | Tailwind and the v1 stylesheet are removed entirely | `index.css` 6 121 → 48 lines | `index.css` | invented |
+
+13.1 is a correctness fix, not a polish pass. The product's controls are words — `release`,
+`let go ↓`, `bring back`, `show this one instead` — and every one of them was a `<span
+onClick>`: unreachable by keyboard, unannounced by a screen reader, and invisible to the
+`esc`/tab model the rest of the product is built on. They are now buttons stripped of
+everything a button normally brings except the part that matters.
+
+13.3 is the deliberate exception. A fragment's own body is material, not a control, and
+making every row a button would flood the tab order with the record itself. Material is
+reached by `↓` into the record and opened with `⏎`, which is the keyboard path the design
+specifies; the buttons are for the verbs *around* it.
+
+13.4: nothing used a Tailwind class. The stylesheet was the v1 app shell — space lenses,
+the intro screen, the stream, the overlays — and went with the surfaces it styled, along
+with `tailwindcss`, `postcss`, `tailwind-merge` and `@fontsource/open-sauce-one`. The
+shipped CSS bundle is 7.8 kB.

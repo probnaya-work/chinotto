@@ -1,6 +1,4 @@
 import "@fontsource-variable/archivo/wdth.css";
-import "@fontsource/open-sauce-one/400.css";
-import "@fontsource/open-sauce-one/500.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { TrayCapture } from "./features/record/TrayCapture";

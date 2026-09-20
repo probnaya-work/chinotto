@@ -18,6 +18,7 @@ import type { Encounter, Fragment, VoiceCapture } from "../../lib/recordApi";
 import { metaStyle, tierStyle } from "../../design/tiers";
 import { clockLabel, durationLabel, fullDateLabel, gutterLabel } from "./format";
 import { Marked } from "./Marked";
+import { Verb } from "./Verb";
 
 export interface FragmentRowProps {
   fragment: Fragment;
@@ -229,13 +230,8 @@ export function FragmentRow(props: FragmentRowProps) {
               <span>
                 changes the wording only — the moment keeps its date and the earlier wording
               </span>
-              <Verb
-                label="⏎ save"
-                ink
-                onClick={() => props.onEditSave?.()}
-                style={{ marginLeft: "auto" }}
-              />
-              <Verb label="esc cancel" onClick={() => props.onEditCancel?.()} />
+              <Verb ink onClick={() => props.onEditSave?.()} style={{ marginLeft: "auto" }}>⏎ save</Verb>
+              <Verb onClick={() => props.onEditCancel?.()}>esc cancel</Verb>
             </div>
           </>
         ) : (
@@ -297,11 +293,18 @@ export function FragmentRow(props: FragmentRowProps) {
                 // is the whole point — the audio is safe either way, and a blank row would
                 // imply the opposite.
                 <span style={{ ...metaStyle("var(--size-voice-chip)"), fontStyle: "normal" }}>
-                  {voice.transcriptState === "failed"
-                    ? voice.audioMissing
-                      ? "couldn’t transcribe · the audio is not on this device"
-                      : "couldn’t transcribe · the audio is safe"
-                    : "listening back…"}
+                  {voice.transcriptState === "failed" ? (
+                    <>
+                      couldn’t transcribe ·{" "}
+                      {voice.audioMissing
+                        ? "the audio is not on this device"
+                        : "the audio is safe"}{" "}
+                      ·{" "}
+                      <Verb onClick={() => props.onCorrect?.(fragment)}>type it</Verb>
+                    </>
+                  ) : (
+                    "listening back…"
+                  )}
                 </span>
               ) : (
                 <Marked text={expanded ? displayText : paragraphs[0]} mark={mark} />
@@ -341,28 +344,22 @@ export function FragmentRow(props: FragmentRowProps) {
                   marginTop: "8px",
                 }}
               >
-                <span style={{ cursor: "pointer" }} onClick={() => props.onCorrect?.(fragment)}>
+                <Verb onClick={() => props.onCorrect?.(fragment)}>
                   still yours to change · {secondsLeft}s
-                </span>
+                </Verb>
                 {suggestion ? (
                   <span>
                     continues {suggestion.when}{" "}
                     <span style={{ color: "var(--ink-verb)" }}>“{suggestion.text}”</span>?{" "}
-                    <span
-                      onClick={props.onAcceptSuggestion}
-                      style={{
-                        color: "var(--ink)",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "4px",
-                        cursor: "pointer",
-                      }}
+                    <Verb
+                      onClick={() => props.onAcceptSuggestion?.()}
+                      ink
+                      style={{ textDecoration: "underline", textUnderlineOffset: "4px" }}
                     >
                       yes
-                    </span>{" "}
+                    </Verb>{" "}
                     ·{" "}
-                    <span onClick={props.onRejectSuggestion} style={{ cursor: "pointer" }}>
-                      no
-                    </span>
+                    <Verb onClick={() => props.onRejectSuggestion?.()}>no</Verb>
                   </span>
                 ) : null}
               </span>
@@ -378,20 +375,13 @@ export function FragmentRow(props: FragmentRowProps) {
                   marginTop: "10px",
                 }}
               >
-                <Verb label="correct" onClick={() => props.onCorrect?.(fragment)} />
-                <Verb label="copy" onClick={() => props.onCopy?.(fragment)} />
+                <Verb onClick={() => props.onCorrect?.(fragment)}>correct</Verb>
+                <Verb onClick={() => props.onCopy?.(fragment)}>copy</Verb>
                 {encounter ? (
-                  <Verb label="copy link" onClick={() => props.onCopyLink?.(fragment)} />
+                  <Verb onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
                 ) : null}
-                <Verb
-                  label="where it came from"
-                  onClick={() => props.onToggleProvenance?.(fragment)}
-                />
-                <Verb
-                  label="remove"
-                  onClick={() => props.onRemove?.(fragment)}
-                  style={{ marginLeft: "auto" }}
-                />
+                <Verb onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
+                <Verb onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
               </div>
             ) : null}
 
@@ -417,9 +407,9 @@ export function FragmentRow(props: FragmentRowProps) {
           pointerEvents: showVerbs ? "auto" : "none",
         }}
       >
-        <Verb label="continue" onClick={() => props.onContinue?.(fragment)} />
-        <Verb label={held ? "release" : "hold"} onClick={() => props.onHold?.(fragment)} />
-        <Verb label="⋯" aria-label="more" onClick={() => props.onToggleMenu?.(fragment)} />
+        <Verb onClick={() => props.onContinue?.(fragment)}>continue</Verb>
+        <Verb onClick={() => props.onHold?.(fragment)}>{held ? "release" : "hold"}</Verb>
+        <Verb aria-label="more" onClick={() => props.onToggleMenu?.(fragment)}>⋯</Verb>
       </div>
     </div>
   );
@@ -443,55 +433,29 @@ function Meta({ children, onClick }: { children: ReactNode; onClick?: () => void
 
 function Affordance({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
-    <span
-      onClick={onClick}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className="chinotto-affordance"
       style={{
         ...metaStyle("var(--size-meta-lg)"),
         display: "block",
         marginTop: "8px",
+        background: "none",
+        border: "none",
+        padding: 0,
+        textAlign: "left",
         cursor: "pointer",
       }}
     >
       {children}
-    </span>
-  );
-}
-
-function Verb({
-  label,
-  onClick,
-  ink = false,
-  style,
-  ...rest
-}: {
-  label: string;
-  ink?: boolean;
-  onClick?: () => void;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      className="chinotto-verb"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-      style={{
-        background: "none",
-        border: "none",
-        padding: 0,
-        font: "inherit",
-        color: ink ? "var(--ink)" : "inherit",
-        cursor: "pointer",
-        ...style,
-      }}
-      {...rest}
-    >
-      {label}
     </button>
   );
 }
+
 
 /** "theatlantic.com · Why Everyone Suddenly Wants a Second Brain" */
 function sourceLine(e: Encounter, hasOwnWords: boolean): string {

@@ -200,9 +200,9 @@ impl SpeechManager {
         if let Some(parent) = audio_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        let url = unsafe { NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+        let url = NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
             &audio_path.to_string_lossy(),
-        )) };
+        ));
         let settings = unsafe { format.settings() };
         let audio_file = unsafe {
             AVAudioFile::initForWriting_settings_error(AVAudioFile::alloc(), &url, &settings)

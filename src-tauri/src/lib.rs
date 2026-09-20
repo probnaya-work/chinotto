@@ -1318,7 +1318,7 @@ fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
     for e in entries.flatten() {
         let Ok(meta) = e.metadata() else { continue };
         let Ok(modified) = meta.modified() else { continue };
-        if newest.is_none_or(|n| modified > n) {
+        if newest.map_or(true, |n| modified > n) {
             newest = Some(modified);
         }
     }

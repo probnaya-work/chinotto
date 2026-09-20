@@ -25,6 +25,7 @@ import {
   fullDateLabel,
   monthLabel,
 } from "./format";
+import { Verb } from "./Verb";
 
 /** Moments kept at each end when a line folds. */
 const KEEP_HEAD = 2;
@@ -247,9 +248,9 @@ export function FragmentFocus({
           justifyContent: "space-between",
         }}
       >
-        <span className="chinotto-verb" onClick={onLeave} style={{ cursor: "pointer" }}>
+        <Verb  onClick={onLeave} style={{ cursor: "pointer" }}>
           ‹ back to the edge · esc
-        </span>
+        </Verb>
         <span>{head}</span>
       </div>
 
@@ -301,13 +302,13 @@ export function FragmentFocus({
               .filter((v, i, a) => a.indexOf(v) === i)
               .join(", ")}{" "}
             ·{" "}
-            <span
-              className="chinotto-verb"
+            <Verb
+              
               onClick={() => setUnfolded(true)}
               style={{ color: "var(--ink-verb)", cursor: "pointer" }}
             >
               unfold
-            </span>
+            </Verb>
           </div>
         ) : null}
 
@@ -439,21 +440,21 @@ export function FragmentFocus({
                         {" "}
                         · {t.why} ·{" "}
                       </span>
-                      <span
-                        className="chinotto-verb"
+                      <Verb
+                        
                         onClick={() => void acceptTrace(t.fragment)}
                         style={{ color: "var(--ink-verb)", fontStyle: "normal", cursor: "pointer" }}
                       >
                         yes
-                      </span>
+                      </Verb>
                       <span style={{ color: "var(--meta)", fontStyle: "normal" }}> · </span>
-                      <span
-                        className="chinotto-verb"
+                      <Verb
+                        
                         onClick={() => rejectTrace(t.fragment)}
                         style={{ color: "var(--ink-verb)", fontStyle: "normal", cursor: "pointer" }}
                       >
                         not this
-                      </span>
+                      </Verb>
                     </>
                   ) : null}
                 </div>
@@ -525,8 +526,8 @@ export function FragmentFocus({
           </span>
 
           {previous ? (
-            <span
-              className="chinotto-verb"
+            <Verb
+              
               onClick={() =>
                 setShowEarlier((s) => {
                   const next = new Set(s);
@@ -538,7 +539,7 @@ export function FragmentFocus({
               style={{ color: "var(--faint)", cursor: "pointer" }}
             >
               wording corrected · {showEarlier.has(f.id) ? "hide" : "show"}
-            </span>
+            </Verb>
           ) : null}
 
           {showVerbs ? (
@@ -550,8 +551,8 @@ export function FragmentFocus({
                 color: "var(--ink-verb)",
               }}
             >
-              <span
-                className="chinotto-verb"
+              <Verb
+                
                 onClick={() => {
                   setCorrectingId(f.id);
                   setDraft(f.body);
@@ -559,16 +560,16 @@ export function FragmentFocus({
                 style={{ cursor: "pointer" }}
               >
                 correct
-              </span>
-              <span
-                className="chinotto-verb"
+              </Verb>
+              <Verb
+                
                 onClick={() => (heldIds.has(f.id) ? onRelease(f) : onHold(f))}
                 style={{ cursor: "pointer" }}
               >
                 {heldIds.has(f.id) ? "release" : "hold"}
-              </span>
-              <span
-                className="chinotto-verb"
+              </Verb>
+              <Verb
+                
                 onClick={async () => {
                   if (onRemove) await onRemove(f);
                   else await api.removeFragment(f.id);
@@ -579,7 +580,7 @@ export function FragmentFocus({
                 style={{ cursor: "pointer" }}
               >
                 remove
-              </span>
+              </Verb>
             </span>
           ) : null}
         </div>
@@ -622,15 +623,15 @@ export function FragmentFocus({
                   ? "corrects the transcript only — the recording and its date are untouched"
                   : "changes the wording only — the moment keeps its date and the earlier wording"}
               </span>
-              <span
-                className="chinotto-verb"
+              <Verb
+                
                 onClick={() => void saveCorrection()}
                 style={{ marginLeft: "auto", color: "var(--ink)", cursor: "pointer" }}
               >
                 ⏎ save
-              </span>
-              <span
-                className="chinotto-verb"
+              </Verb>
+              <Verb
+                
                 onClick={() => {
                   setCorrectingId(null);
                   setDraft("");
@@ -638,7 +639,7 @@ export function FragmentFocus({
                 style={{ cursor: "pointer" }}
               >
                 esc cancel
-              </span>
+              </Verb>
             </div>
           </>
         ) : (

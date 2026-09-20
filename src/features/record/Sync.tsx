@@ -16,6 +16,7 @@ import { metaStyle } from "../../design/tiers";
 import { clockLabel, dayLabel } from "./format";
 import type { SyncDevice } from "../../lib/syncDevices";
 import type { WordingConflict } from "../../lib/recordApi";
+import { Verb } from "./Verb";
 
 export type SyncState = "off" | "connecting" | "on" | "error";
 
@@ -57,9 +58,9 @@ export function Sync(props: SyncProps) {
   return (
     <div>
       <div style={{ ...metaStyle(), display: "flex", justifyContent: "space-between" }}>
-        <span className="chinotto-verb" onClick={props.onLeave} style={{ cursor: "pointer" }}>
+        <Verb  onClick={props.onLeave} style={{ cursor: "pointer" }}>
           ‹ settings · esc
-        </span>
+        </Verb>
         <span>sync</span>
       </div>
 
@@ -111,8 +112,9 @@ export function Sync(props: SyncProps) {
                     account with nothing to sync to, which looks like it worked and is not
                     recoverable without explaining what happened.
                   */}
-                  <span
-                    onClick={props.phoneReady ? props.onContinueWithApple : undefined}
+                  <Verb
+                    onClick={props.onContinueWithApple}
+                    disabled={!props.phoneReady}
                     style={{
                       height: 44,
                       padding: "0 20px",
@@ -129,7 +131,7 @@ export function Sync(props: SyncProps) {
                     }}
                   >
                     continue with apple
-                  </span>
+                  </Verb>
                   {!props.phoneReady ? (
                     <Verb onClick={props.onAlreadyDone}>already done on the phone?</Verb>
                   ) : null}
@@ -313,7 +315,7 @@ export function Sync(props: SyncProps) {
               {pendingPhrase} waiting here, and the phone kept going.
             </div>
             <div style={{ display: "flex", gap: "22px", alignItems: "center" }}>
-              <span
+              <Verb
                 onClick={props.onContinueWithApple}
                 style={{
                   height: 44,
@@ -323,11 +325,10 @@ export function Sync(props: SyncProps) {
                   background: "var(--ink)",
                   color: "var(--surface)",
                   fontSize: "var(--size-utility-2)",
-                  cursor: "pointer",
                 }}
               >
                 sign in again
-              </span>
+              </Verb>
               <Verb onClick={props.onStopSyncing}>or stop syncing on this mac</Verb>
             </div>
           </>
@@ -508,27 +509,6 @@ function Step({ children }: { children: ReactNode }) {
   return <span style={{ color: "var(--meta)", marginRight: "14px" }}>{children}</span>;
 }
 
-function Verb({
-  children,
-  onClick,
-  ink = false,
-  tone,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  ink?: boolean;
-  tone?: string;
-}) {
-  return (
-    <span
-      className="chinotto-verb"
-      onClick={onClick}
-      style={{ color: tone ?? (ink ? "var(--ink)" : "var(--meta)"), cursor: "pointer" }}
-    >
-      {children}
-    </span>
-  );
-}
 
 /**
  * The pairing code, drawn locally.

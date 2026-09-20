@@ -7,6 +7,7 @@
  */
 
 import { metaStyle } from "../../design/tiers";
+import { Verb } from "./Verb";
 
 export interface QuietLineProps {
   undo: {
@@ -59,13 +60,13 @@ export function QuietLine({
       {undo ? (
         <span style={{ color: "var(--ink-verb)", pointerEvents: "auto" }}>
           removed “{undo.text}” ·{" "}
-          <span
-            className="chinotto-verb"
+          <Verb
+            
             onClick={undo.onBringBack}
             style={{ color: "var(--ink)", cursor: "pointer" }}
           >
             bring back
-          </span>{" "}
+          </Verb>{" "}
           · ⌘z · {undo.secondsLeft}s
         </span>
       ) : null}
@@ -79,22 +80,22 @@ export function QuietLine({
       ) : null}
 
       {update && !undo ? (
-        <span
-          className="chinotto-verb"
+        <Verb
+          
           onClick={update.onClick}
           style={{ color: "var(--ink-far)", pointerEvents: "auto", cursor: "pointer" }}
         >
           {update.text}
-        </span>
+        </Verb>
       ) : null}
 
       <span style={{ marginLeft: "auto", display: "flex", gap: "var(--quiet-gap)", pointerEvents: "auto" }}>
         {syncOn && !surfaceOpen ? (
           <span style={{ cursor: "default" }}>● sync on</span>
         ) : null}
-        <span className="chinotto-verb" onClick={onSettings} style={{ cursor: "pointer" }}>
+        <Verb  onClick={onSettings} style={{ cursor: "pointer" }}>
           settings ⌘,
-        </span>
+        </Verb>
       </span>
     </div>
   );
