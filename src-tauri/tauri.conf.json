@@ -14,13 +14,15 @@
       {
         "label": "main",
         "title": "Chinotto",
-        "width": 800,
-        "height": 600,
+        "width": 1200,
+        "height": 820,
         "resizable": true,
         "fullscreen": false,
         "theme": "Dark",
         "titleBarStyle": "Transparent",
-        "backgroundColor": "#0a0a0e"
+        "backgroundColor": "#0a0a0e",
+        "minWidth": 680,
+        "minHeight": 480
       },
       {
         "label": "capture-popover",

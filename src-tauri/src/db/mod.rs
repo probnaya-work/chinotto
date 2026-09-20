@@ -1,3 +1,8 @@
+pub mod bridge;
+pub mod material;
+pub mod meaning;
+pub mod migrate;
+pub mod record;
 mod schema;
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, Utc};
@@ -271,7 +276,15 @@ fn ensure_updated_at_column(conn: &Connection) -> Result<(), rusqlite::Error> {
 
 impl Db {
     pub fn open(path: PathBuf) -> Result<Self, rusqlite::Error> {
-        let conn = Connection::open(path)?;
+        // ":memory:" and bare filenames have no meaningful parent; writing the theme
+        // archive relative to the current working directory would litter wherever the app
+        // happened to be launched from.
+        let archive_dir = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf());
+        let mut conn = Connection::open(path)?;
+        conn.pragma_update(None, "foreign_keys", true)?;
         schema::run_migrations(&conn)?;
         ensure_importance_columns(&conn)?;
         ensure_updated_at_column(&conn)?;
@@ -279,6 +292,8 @@ impl Db {
         ensure_share_threads_table(&conn)?;
         ensure_user_themes_table(&conn)?;
         ensure_spaces(&conn)?;
+        // v1 ensure_* calls above must run first: the v2 migration reads the columns they add.
+        migrate::run(&mut conn, archive_dir.as_deref())?;
         Ok(Self(Mutex::new(conn)))
     }
 
@@ -960,6 +975,7 @@ impl Db {
         let rows = stmt.query_map([], |r| r.get(0))?;
         rows.collect()
     }
+
 
     pub fn remove_sync_tombstone_outbox(&self, entry_id: &str) -> Result<(), rusqlite::Error> {
         let conn = self.0.lock().unwrap();
@@ -1881,6 +1897,8 @@ mod tests {
         let ids = db.list_sync_tombstone_outbox().unwrap();
         assert_eq!(ids, vec!["same".to_string()]);
     }
+
+
 
     #[test]
     fn delete_local_entries_for_sync_clears_suppression() {

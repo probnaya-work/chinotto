@@ -1,4 +1,5 @@
 mod db;
+mod record_commands;
 mod embeddings;
 mod keywords;
 mod oauth_dev_bridge;
@@ -155,8 +156,15 @@ fn ingest_firestore_entries(
         .into_iter()
         .map(|e| (e.id, e.text, e.created_at))
         .collect();
-    db.ingest_firestore_entries(&batch)
-        .map_err(|e| e.to_string())
+    let inserted = db
+        .ingest_firestore_entries(&batch)
+        .map_err(|e| e.to_string())?;
+    // Anything that just arrived from mobile becomes a fragment, or the Record would
+    // silently diverge from the table sync writes into.
+    if let Err(e) = db.project_entries_into_record() {
+        eprintln!("[bridge] projecting ingested entries failed: {e}");
+    }
+    Ok(inserted)
 }
 
 #[tauri::command]
@@ -168,6 +176,7 @@ fn enqueue_sync_tombstone(db: tauri::State<Db>, entry_id: String) -> Result<(), 
 fn list_sync_tombstone_outbox(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_sync_tombstone_outbox().map_err(|e| e.to_string())
 }
+
 
 #[tauri::command]
 fn remove_sync_tombstone_outbox(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
@@ -191,8 +200,15 @@ fn delete_local_entries_for_sync(
     db: tauri::State<Db>,
     entry_ids: Vec<String>,
 ) -> Result<u32, String> {
-    db.delete_local_entries_for_sync(&entry_ids)
-        .map_err(|e| e.to_string())
+    let deleted = db
+        .delete_local_entries_for_sync(&entry_ids)
+        .map_err(|e| e.to_string())?;
+    // A delete made on another device reaches the Record as a soft removal: the material
+    // stays here, it just stops being present.
+    if let Err(e) = db.absorb_remote_deletes(&entry_ids) {
+        eprintln!("[bridge] absorbing remote deletes failed: {e}");
+    }
+    Ok(deleted)
 }
 
 #[derive(serde::Deserialize)]
@@ -1686,6 +1702,42 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // The Record
+            record_commands::capture_fragment,
+            record_commands::continue_fragment,
+            record_commands::link_continuation,
+            record_commands::correct_fragment,
+            record_commands::fragment_history,
+            record_commands::line_for,
+            record_commands::hold_fragment,
+            record_commands::max_held,
+            record_commands::release_fragment,
+            record_commands::held_fragments,
+            record_commands::recent_fragments,
+            record_commands::fragments_before,
+            record_commands::fragments_between,
+            record_commands::find_fragments,
+            record_commands::month_density,
+            record_commands::record_span,
+            record_commands::find_by_meaning,
+            record_commands::reject_guess,
+            record_commands::embed_pending,
+            record_commands::pending_embedding_count,
+            record_commands::capture_encounter,
+            record_commands::encounter_for,
+            record_commands::same_source_encounters,
+            record_commands::encounters_awaiting_enrichment,
+            record_commands::record_enrichment,
+            record_commands::capture_voice,
+            record_commands::record_transcript,
+            record_commands::voice_for,
+            record_commands::mark_audio_missing,
+            record_commands::materials_for,
+            record_commands::mirror_pending_fragments,
+            record_commands::absorb_remote_deletes,
+            record_commands::project_entries_into_record,
+            record_commands::restore_fragment,
+            record_commands::remove_fragment,
             native_apple_sign_in,
             oauth_dev_bridge::start_oauth_dev_bridge_listener,
             ingest_firestore_entries,
