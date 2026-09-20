@@ -18,7 +18,9 @@ import { FragmentFocus } from "./FragmentFocus";
 import { ReturnBlock } from "./ReturnBlock";
 import { QuietLine } from "./QuietLine";
 import { Settings, type MicrophoneState } from "./Settings";
+import { Sync, type SyncState } from "./Sync";
 import { useNow } from "./useNow";
+import { useAppleSyncOAuth } from "@/lib/useAppleSyncOAuth";
 import { metaStyle } from "../../design/tiers";
 import { suggestContinuation, type ContinuationOffer } from "./continuation";
 import { resolveAnchor, type ParsedAnchor } from "./anchors";
@@ -31,6 +33,14 @@ import {
 } from "@/lib/desktopFirestoreSync";
 import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
 import { deleteCloudAccount, isSignedInForSync } from "@/lib/desktopFirestoreSync";
+import {
+  HEARTBEAT_MS,
+  isThisDeviceRevoked,
+  registerThisDevice,
+  removeDevice,
+  subscribeDevices,
+  type SyncDevice,
+} from "@/lib/syncDevices";
 import { parseTextWithUrls } from "@/lib/urlInText";
 import {
   applyAppearance,
@@ -73,6 +83,29 @@ function backupLine(iso: string | null, now: Date): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "never";
   return `${dayLabel(at, now)} ${clockLabel(at)}`;
+}
+
+/**
+ * Settings' one-sentence summary of sync.
+ *
+ * It names what is actually known and nothing more. With no device list yet it says how
+ * many devices there are rather than inventing their names, and offline says how much is
+ * waiting rather than implying something is wrong — being offline is a fact, not an error.
+ */
+function settingsSyncLine(
+  state: SyncState,
+  offline: boolean,
+  devices: SyncDevice[] | null,
+  pending: number,
+): string {
+  if (state === "error") return "stopped · this mac’s sign-in expired.";
+  if (state === "off") return "off · the record is only on this mac.";
+  if (state === "connecting") return "connecting this mac…";
+  if (offline) return `on · offline, ${pending} waiting.`;
+  const others = devices?.filter((d) => !d.isThisDevice) ?? [];
+  if (others.length === 1) return `on · this mac and ${others[0].name}.`;
+  if (others.length > 1) return `on · this mac and ${others.length} other devices.`;
+  return "on · only this mac so far.";
 }
 
 /** Where you are standing, and what was here when you left the edge. */
@@ -133,6 +166,28 @@ export function RecordApp() {
   const [exportNote, setExportNote] = useState("");
   const [backupAt, setBackupAt] = useState<string | null>(null);
   const [microphone] = useState<MicrophoneState>("ask");
+
+  // ---- sync ------------------------------------------------------------------------------
+  const [devices, setDevices] = useState<SyncDevice[] | null>(null);
+  const [conflicts, setConflicts] = useState<api.WordingConflict[]>([]);
+  const [pendingToSync, setPendingToSync] = useState(0);
+  /** Set by "already done on the phone?", which is the manual way past step one. */
+  const [phoneReady, setPhoneReady] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  /** This mac was removed from the record by another device. */
+  const [revoked, setRevoked] = useState(false);
+
+  // The existing Apple/Firebase path, reused rather than rebuilt: this phase adds device
+  // identity to sync, it does not redesign how signing in works.
+  const appleAuth = useAppleSyncOAuth({ active: surface === "sync" || surface === "settings" });
+  const signedIn = appleAuth.user != null || isSignedInForSync();
+  const syncState: SyncState = signingIn || appleAuth.busy
+    ? "connecting"
+    : appleAuth.error
+      ? "error"
+      : revoked || !signedIn
+        ? "off"
+        : "on";
 
   // ---- what the record is doing --------------------------------------------------------
   const [justSaved, setJustSaved] = useState<{
@@ -219,6 +274,56 @@ export function RecordApp() {
   useEffect(() => {
     void api.lastBackupAt().then(setBackupAt).catch(() => setBackupAt(null));
   }, []);
+
+  /**
+   * This mac says it is here, and keeps saying so.
+   *
+   * Without a device row the sync surface has nothing truthful to list and `remove` has
+   * nothing to revoke — so registering is not a nicety, it is what makes the surface able
+   * to tell the truth at all.
+   */
+  useEffect(() => {
+    if (!signedIn) return;
+    let stopped = false;
+    const beat = () => {
+      void registerThisDevice().catch(() => {});
+      void isThisDeviceRevoked()
+        .then((r) => {
+          if (!stopped) setRevoked(r);
+        })
+        .catch(() => {});
+    };
+    beat();
+    const id = setInterval(beat, HEARTBEAT_MS);
+    const stopDevices = subscribeDevices((d) => {
+      if (!stopped) setDevices(d);
+    });
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      stopDevices();
+    };
+  }, [signedIn]);
+
+  /** What the bridge still owes the other devices, and what was worded twice. */
+  const refreshSyncFacts = useCallback(async () => {
+    try {
+      setConflicts(await api.openWordingConflicts());
+    } catch {
+      setConflicts([]);
+    }
+    try {
+      setPendingToSync(await api.fragmentsAwaitingMirror());
+    } catch {
+      setPendingToSync(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSyncFacts();
+    const id = setInterval(() => void refreshSyncFacts(), 30_000);
+    return () => clearInterval(id);
+  }, [refreshSyncFacts]);
 
   const bringBack = useCallback(async () => {
     const u = undo;
@@ -627,15 +732,57 @@ export function RecordApp() {
       }}
     >
       <div style={{ maxWidth: "var(--column-width)", display: "flex", flexDirection: "column" }}>
-        {surface === "settings" ? (
+        {surface === "sync" ? (
+          <Sync
+            state={syncState}
+            offline={!online}
+            pending={pendingToSync}
+            devices={devices}
+            conflicts={conflicts}
+            now={now}
+            phoneReady={phoneReady}
+            qrUrl="https://getchinotto.app/sync"
+            onAlreadyDone={() => setPhoneReady(true)}
+            onContinueWithApple={() => {
+              setSigningIn(true);
+              void appleAuth
+                .onContinueApple()
+                .then(() => registerThisDevice())
+                .catch(() => {})
+                .finally(() => setSigningIn(false));
+            }}
+            onRemoveDevice={(id) => {
+              void removeDevice(id).catch(() => {
+                setNotice("that device could not be removed · try again when online");
+              });
+            }}
+            onStopSyncing={() => {
+              void Promise.resolve(appleAuth.onSignOut())
+                .then(() => {
+                  setDevices(null);
+                  setSurface("settings");
+                })
+                .catch(() => {});
+            }}
+            onResolveConflict={(fragmentId, shows) => {
+              void api
+                .resolveWordingConflict(fragmentId, shows)
+                .then(() => refreshSyncFacts())
+                .then(() => reload())
+                .catch(() => {});
+            }}
+            onOpenFragment={(fragmentId) => {
+              setSurface(null);
+              setFocusId(fragmentId);
+            }}
+            expiredWhen={appleAuth.error ? "recently" : "recently"}
+            onLeave={() => setSurface("settings")}
+          />
+        ) : surface === "settings" ? (
           <Settings
             version={APP_VERSION}
-            syncLine={
-              isFirebaseSyncConfigured()
-                ? "on · this mac."
-                : "off · the record is only on this mac."
-            }
-            syncVerb={isFirebaseSyncConfigured() ? "manage" : "set up"}
+            syncLine={settingsSyncLine(syncState, !online, devices, pendingToSync)}
+            syncVerb={syncState === "off" ? "set up" : syncState === "error" ? "fix" : "manage"}
             onOpenSync={() => setSurface("sync")}
             hasAccount={isSignedInForSync()}
             microphone={microphone}

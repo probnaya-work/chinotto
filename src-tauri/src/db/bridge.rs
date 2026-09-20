@@ -26,6 +26,7 @@
 //! ingest only ever inserts rows that do not exist yet.
 
 use super::Db;
+use rusqlite::OptionalExtension;
 
 impl Db {
     /// Mirrors one fragment into `entries` so the existing sync can carry it to mobile.
@@ -89,6 +90,7 @@ impl Db {
     /// `{id, text, created_at}` and says nothing about how the thing was captured, so the
     /// Record records that it does not know rather than claiming `typed`.
     pub fn project_entries_into_record(&self) -> Result<usize, rusqlite::Error> {
+        self.notice_remote_wordings()?;
         let pending: Vec<(String, String, String)> = {
             let conn = self.0.lock().unwrap();
             let mut stmt = conn.prepare(
@@ -202,6 +204,134 @@ impl Db {
         Ok(removed)
     }
 
+    /// Notices that a moment now reads differently on the two sides of the bridge.
+    ///
+    /// The Record keeps showing its own wording. Nothing is overwritten and nothing is
+    /// discarded — adopting the remote text silently would be the product rewriting words
+    /// somebody wrote, and dropping it (which is what happened before) loses a correction
+    /// the person actually made on their phone.
+    ///
+    /// What the legacy contract can tell us is only that the two texts differ. It carries no
+    /// wording history and no edit clock, so which one came later is genuinely unknown here.
+    /// That is why this records a question rather than resolving one.
+    pub fn notice_remote_wordings(&self) -> Result<usize, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut stmt = conn.prepare(
+            "SELECT f.id, f.body, e.text FROM fragments f \
+             JOIN entries e ON e.id = f.id \
+             WHERE f.removed_at IS NULL AND TRIM(e.text) <> '' AND e.text <> f.body",
+        )?;
+        let rows: Vec<(String, String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        drop(stmt);
+
+        let mut noticed = 0usize;
+        for (id, local, remote) in rows {
+            // An unresolved conflict already asking about this exact pair is the same
+            // question; re-asking it on every pull would make the quiet line shout.
+            let already: Option<String> = conn
+                .query_row(
+                    "SELECT remote_text FROM wording_conflicts \
+                     WHERE fragment_id = ?1 AND resolved_at IS NULL",
+                    [&id],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            if already.as_deref() == Some(remote.as_str()) {
+                continue;
+            }
+            conn.execute(
+                "INSERT OR REPLACE INTO wording_conflicts \
+                   (fragment_id, remote_text, local_text, noticed_at, shows, resolved_at) \
+                 VALUES (?1, ?2, ?3, ?4, 'local', NULL)",
+                rusqlite::params![id, remote, local, now],
+            )?;
+            noticed += 1;
+        }
+        Ok(noticed)
+    }
+
+    /// Every moment that was worded twice and has not been settled yet.
+    pub fn open_wording_conflicts(&self) -> Result<Vec<WordingConflict>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT c.fragment_id, c.remote_text, c.local_text, c.noticed_at, c.shows \
+             FROM wording_conflicts c JOIN fragments f ON f.id = c.fragment_id \
+             WHERE c.resolved_at IS NULL AND f.removed_at IS NULL \
+             ORDER BY c.noticed_at DESC",
+        )?;
+        let out = stmt
+            .query_map([], |r| {
+                Ok(WordingConflict {
+                    fragment_id: r.get(0)?,
+                    remote_text: r.get(1)?,
+                    local_text: r.get(2)?,
+                    noticed_at: r.get(3)?,
+                    shows: r.get(4)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(out)
+    }
+
+    /// Chooses which wording the record shows. The other one stays, as earlier wording.
+    ///
+    /// Choosing the remote one goes through the ordinary correction path, so the wording it
+    /// replaces lands in `fragment_revisions` exactly like any other correction — which is
+    /// how "both are kept" stops being a promise and becomes a row you can read.
+    pub fn resolve_wording_conflict(
+        &self,
+        fragment_id: &str,
+        shows: &str,
+    ) -> Result<(), rusqlite::Error> {
+        if shows == "remote" {
+            let remote: Option<String> = {
+                let conn = self.0.lock().unwrap();
+                conn.query_row(
+                    "SELECT remote_text FROM wording_conflicts WHERE fragment_id = ?1",
+                    [fragment_id],
+                    |r| r.get(0),
+                )
+                .optional()?
+            };
+            if let Some(text) = remote {
+                self.correct_fragment(fragment_id, &text)?;
+            }
+        } else {
+            // Keeping the local wording still has to reach the phone, or the two devices
+            // stay disagreeing and the next pull asks again.
+            self.mirror_fragment_to_entry(fragment_id)?;
+        }
+        let conn = self.0.lock().unwrap();
+        conn.execute(
+            "UPDATE wording_conflicts SET shows = ?2, resolved_at = ?3 WHERE fragment_id = ?1",
+            rusqlite::params![fragment_id, shows, chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// This install's own id and name, created once on first use.
+    pub fn this_device(&self) -> Result<(String, String), rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let existing: Option<(String, String)> = conn
+            .query_row("SELECT id, name FROM this_device LIMIT 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?;
+        if let Some(row) = existing {
+            return Ok(row);
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let name = mac_name();
+        conn.execute(
+            "INSERT INTO this_device (id, name, created_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![id, name, chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok((id, name))
+    }
+
     /// Fragments that exist in the Record but have no legacy row yet.
     ///
     /// Lets the sync layer find everything the bridge still owes mobile — after an upgrade,
@@ -220,6 +350,30 @@ impl Db {
             .collect::<Result<_, _>>()?;
         Ok(out)
     }
+}
+
+/// What the mac calls itself, so the device list is the person's own name for it.
+fn mac_name() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(out) = std::process::Command::new("scutil").arg("--get").arg("ComputerName").output() {
+            let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !name.is_empty() {
+                return name;
+            }
+        }
+    }
+    "this mac".to_string()
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WordingConflict {
+    pub fragment_id: String,
+    pub remote_text: String,
+    pub local_text: String,
+    pub noticed_at: String,
+    pub shows: String,
 }
 
 #[cfg(test)]
@@ -244,6 +398,96 @@ mod tests {
     fn count(db: &Db, sql: &str) -> i64 {
         let conn = db.0.lock().unwrap();
         conn.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    // ------------------------------------------------------------ two wordings
+
+    fn set_entry_text(db: &Db, id: &str, text: &str) {
+        let conn = db.0.lock().unwrap();
+        conn.execute("UPDATE entries SET text = ?2 WHERE id = ?1", rusqlite::params![id, text])
+            .unwrap();
+    }
+
+    #[test]
+    fn a_remote_wording_is_noticed_rather_than_dropped() {
+        let db = db();
+        let f = db.capture_fragment("the return should only come back if it can show me why", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&f.id).unwrap();
+        // The phone corrected the same moment while the two were apart.
+        set_entry_text(&db, &f.id, "the return should only come back if it can show me the words it matched");
+
+        assert_eq!(db.notice_remote_wordings().unwrap(), 1);
+        let open = db.open_wording_conflicts().unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].fragment_id, f.id);
+        assert_eq!(open[0].shows, "local");
+
+        // Until the person chooses, the record still reads the way they left it here.
+        let still = db.fragment(&f.id).unwrap().unwrap();
+        assert_eq!(still.body, "the return should only come back if it can show me why");
+    }
+
+    #[test]
+    fn the_same_question_is_not_asked_twice() {
+        let db = db();
+        let f = db.capture_fragment("original", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&f.id).unwrap();
+        set_entry_text(&db, &f.id, "theirs");
+        assert_eq!(db.notice_remote_wordings().unwrap(), 1);
+        assert_eq!(db.notice_remote_wordings().unwrap(), 0, "a pull must not re-ask");
+        assert_eq!(db.open_wording_conflicts().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn choosing_the_remote_wording_keeps_the_local_one_underneath() {
+        let db = db();
+        let f = db.capture_fragment("mine", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&f.id).unwrap();
+        set_entry_text(&db, &f.id, "theirs");
+        db.notice_remote_wordings().unwrap();
+
+        db.resolve_wording_conflict(&f.id, "remote").unwrap();
+
+        let now = db.fragment(&f.id).unwrap().unwrap();
+        assert_eq!(now.body, "theirs");
+        let history = db.fragment_history(&f.id).unwrap();
+        assert!(
+            history.iter().any(|r| r.body == "mine"),
+            "the wording that was replaced has to stay readable — that is the whole promise"
+        );
+        assert!(db.open_wording_conflicts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn keeping_the_local_wording_pushes_it_back_to_the_phone() {
+        let db = db();
+        let f = db.capture_fragment("mine", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&f.id).unwrap();
+        set_entry_text(&db, &f.id, "theirs");
+        db.notice_remote_wordings().unwrap();
+
+        db.resolve_wording_conflict(&f.id, "local").unwrap();
+
+        assert_eq!(
+            entry(&db, &f.id).map(|(t, _)| t),
+            Some("mine".to_string()),
+            "leaving the two disagreeing would make the next pull ask the same question again"
+        );
+        assert!(db.open_wording_conflicts().unwrap().is_empty());
+        assert_eq!(db.notice_remote_wordings().unwrap(), 0);
+    }
+
+    #[test]
+    fn this_device_keeps_the_same_id_across_calls() {
+        let db = db();
+        let (id, name) = db.this_device().unwrap();
+        assert!(!id.is_empty());
+        assert!(!name.is_empty());
+        let (again, _) = db.this_device().unwrap();
+        assert_eq!(
+            id, again,
+            "a device that re-registers under a new id could never be removed from another one"
+        );
     }
 
     // ------------------------------------------------------------ outward

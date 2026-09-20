@@ -82,6 +82,31 @@ Plain text and one file per record rather than one per fragment, because the arg
 the export is that the record outlives the program; a directory of thousands of files is
 harder to read with anything else, not easier.
 
+### Newly open — sync and devices (phase 7)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 0.17 | Where devices live | `users/{uid}/devices/{deviceId}`, additive beside the legacy entries | `syncDevices.ts` | invented |
+| 0.18 | How often a device says it is here | `60s` | same, `HEARTBEAT_MS` | invented |
+| 0.19 | `remove` revokes rather than deletes the row | — | same | **product rule** |
+| 0.20 | What a conflict is detectable from | the two texts differ; which came first is unknown | `bridge.rs` `notice_remote_wordings` | forced by the legacy contract |
+| 0.21 | Which wording the record shows until asked | the local one | same | inferred |
+| 0.22 | Last-seen wording | `now` · `a moment ago` (<3 min) · `N minutes ago` (<1 h) · day + time | `Sync.tsx` `lastSeen` | invented |
+| 0.23 | QR colours | fixed `#141416` on `#e6e6e3` in both appearances | `Sync.tsx` | invented |
+
+0.19 is the one that looks like an implementation detail and is not. A deleted device row is
+indistinguishable from a device that never registered, so the removed device would re-register
+on its next heartbeat and reappear. Revoking leaves something for it to find.
+
+0.20 is the honest limit of this phase. The legacy contract carries `{id, text, created_at}`
+and no wording history, so the bridge can see that a moment now reads differently on the two
+sides but cannot know which wording is later. That is exactly why the surface asks rather than
+resolving, and why nothing is auto-discarded. Once mobile carries the earlier wording this
+becomes a real three-way comparison; until then it is a two-way question.
+
+0.23 because a camera has to read it, and `fill` is a presentation attribute that would not
+resolve a CSS variable in any case.
+
 ---
 
 ## 1. Time and tiers

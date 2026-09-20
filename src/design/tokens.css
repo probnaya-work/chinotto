@@ -48,6 +48,7 @@
 
   /* ---- lines and marks -------------------------------------------------- */
   --rule: #3a3a40;             /* line spine, voice chip border, folded-moment dot  */
+  --rule-dim: #2a2a2e;         /* separators, device chrome, the tray panel's edge  */
   --rule-present: var(--ink);  /* a Return's spine is ink, not rule: it is here now */
   --mark: rgba(230, 230, 227, 0.16); /* Find match                                  */
   --mark-trace: rgba(230, 230, 227, 0.14); /* shared words inside a Trace           */
@@ -80,6 +81,7 @@
                               prototype never states a light `faint`. Mapped to meta. */
     --faint-text: #686763;
     --rule: rgba(27, 27, 29, 0.12);
+    --rule-dim: rgba(27, 27, 29, 0.08);
     --mark: rgba(27, 27, 29, 0.12);
     --mark-trace: rgba(27, 27, 29, 0.12);
     --row-hover: rgba(27, 27, 29, 0.04); /* UNSPECIFIED: derived to match dark's 4% */
@@ -98,6 +100,7 @@
   --faint: #686763;
   --faint-text: #686763;
   --rule: rgba(27, 27, 29, 0.12);
+  --rule-dim: rgba(27, 27, 29, 0.08);
   --mark: rgba(27, 27, 29, 0.12);
   --mark-trace: rgba(27, 27, 29, 0.12);
   --row-hover: rgba(27, 27, 29, 0.04);

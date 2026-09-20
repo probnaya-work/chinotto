@@ -557,3 +557,38 @@ export function openMicrophoneSettings(): Promise<void> {
 export function openTrayCapture(): Promise<void> {
   return invoke<void>("open_tray_capture");
 }
+
+// ---- devices and two wordings -----------------------------------------------------------
+
+/** How many fragments have not reached the other devices yet. Read-only. */
+export function fragmentsAwaitingMirror(limit = 500): Promise<number> {
+  if (devOnly()) return Promise.resolve(0);
+  return invoke<number>("fragments_awaiting_mirror", { limit });
+}
+
+/** This install's own `[id, name]`, created once and stable thereafter. */
+export function thisDevice(): Promise<[string, string]> {
+  return invoke<[string, string]>("this_device");
+}
+
+export interface WordingConflict {
+  fragmentId: string;
+  remoteText: string;
+  localText: string;
+  noticedAt: string;
+  shows: "local" | "remote";
+}
+
+/** Moments worded in two places while the devices were apart, still unsettled. */
+export function openWordingConflicts(): Promise<WordingConflict[]> {
+  if (devOnly()) return Promise.resolve([]);
+  return invoke<WordingConflict[]>("open_wording_conflicts");
+}
+
+/** Chooses which wording shows. The other stays under the moment as earlier wording. */
+export function resolveWordingConflict(
+  fragmentId: string,
+  shows: "local" | "remote",
+): Promise<void> {
+  return invoke<void>("resolve_wording_conflict", { fragmentId, shows });
+}

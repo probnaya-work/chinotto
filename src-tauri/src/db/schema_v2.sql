@@ -229,3 +229,31 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fragments_fts USING fts5(
   fragment_id UNINDEXED,
   tokenize = 'unicode61 remove_diacritics 2'
 );
+
+-- This install's own identity, so the cloud can list devices rather than only a user.
+-- One row. The id is generated once and never changes: it is what a `remove` on another
+-- device revokes, and a device that could re-register under a new id could not be removed.
+CREATE TABLE IF NOT EXISTS this_device (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+
+-- The same moment, worded in two places while the devices were apart.
+--
+-- Neither wording is thrown away and neither is automatically chosen. The record keeps
+-- showing the local one until the person says otherwise, because silently adopting a remote
+-- wording would be the product overwriting words someone wrote.
+--
+-- The legacy sync contract carries `{id, text, created_at}` and no wording history, so what
+-- is detectable here is that the two texts differ — not which came first. That is precisely
+-- why the surface asks rather than resolves.
+CREATE TABLE IF NOT EXISTS wording_conflicts (
+  fragment_id    TEXT PRIMARY KEY REFERENCES fragments(id) ON DELETE CASCADE,
+  remote_text    TEXT NOT NULL,
+  local_text     TEXT NOT NULL,
+  noticed_at     TEXT NOT NULL,
+  -- 'local' until the person chooses otherwise.
+  shows          TEXT NOT NULL DEFAULT 'local' CHECK (shows IN ('local','remote')),
+  resolved_at    TEXT
+);

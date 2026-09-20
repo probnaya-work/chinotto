@@ -16,7 +16,7 @@ use rusqlite::{Connection, Transaction};
 use std::path::Path;
 
 /// Schema version this binary expects. Bump when adding a migration below.
-pub const TARGET_VERSION: i32 = 5;
+pub const TARGET_VERSION: i32 = 6;
 
 pub fn current_version(conn: &Connection) -> Result<i32, rusqlite::Error> {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -62,6 +62,13 @@ pub fn run(conn: &mut Connection, archive_dir: Option<&Path>) -> Result<(), rusq
         let tx = conn.transaction()?;
         migrate_to_v5(&tx)?;
         set_version(&tx, 5)?;
+        tx.commit()?;
+    }
+
+    if from < 6 {
+        let tx = conn.transaction()?;
+        migrate_to_v6(&tx)?;
+        set_version(&tx, 6)?;
         tx.commit()?;
     }
 
@@ -209,6 +216,31 @@ fn migrate_to_v5(tx: &Transaction) -> Result<(), rusqlite::Error> {
         )?;
     }
     Ok(())
+}
+
+/// v6: this device has a name, and a moment can be worded twice.
+///
+/// Both are additive tables. Sync knew a user and not a device, so `remove` had nothing to
+/// revoke; and a remote edit to an existing fragment was silently dropped, so a correction
+/// made on the phone never arrived at all.
+fn migrate_to_v6(tx: &Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS this_device (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          created_at  TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS wording_conflicts (
+          fragment_id    TEXT PRIMARY KEY REFERENCES fragments(id) ON DELETE CASCADE,
+          remote_text    TEXT NOT NULL,
+          local_text     TEXT NOT NULL,
+          noticed_at     TEXT NOT NULL,
+          shows          TEXT NOT NULL DEFAULT 'local' CHECK (shows IN ('local','remote')),
+          resolved_at    TEXT
+        );
+        "#,
+    )
 }
 
 fn table_exists(tx: &Transaction, name: &str) -> Result<bool, rusqlite::Error> {

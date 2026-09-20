@@ -4,6 +4,7 @@
 //! what capture, Continue and Correct mean lives in `db::record`, so the guarantees hold
 //! whether a call arrives from the window, the tray, or a test.
 
+use crate::db::bridge::WordingConflict;
 use crate::db::record::{Fragment, FindHit, HeldFragment, LineMoment, Revision};
 use crate::db::material::{Encounter, PageMaterials, VoiceCapture};
 use crate::db::meaning::Guess;
@@ -376,6 +377,17 @@ pub fn absorb_remote_deletes(db: tauri::State<Db>, ids: Vec<String>) -> Result<u
     db.absorb_remote_deletes(&ids).map_err(|e| e.to_string())
 }
 
+/// How many fragments the bridge still owes the legacy table, without mirroring them.
+///
+/// Read-only on purpose: the sync surface states a number, and a status read that also
+/// performs the work it is reporting on can never show a steady figure.
+#[tauri::command]
+pub fn fragments_awaiting_mirror(db: tauri::State<Db>, limit: Option<i64>) -> Result<usize, String> {
+    db.fragments_awaiting_mirror(limit.unwrap_or(500).clamp(1, 5000))
+        .map(|ids| ids.len())
+        .map_err(|e| e.to_string())
+}
+
 /// Fragments the bridge still owes the legacy table, e.g. after an upgrade or time offline.
 #[tauri::command]
 pub fn mirror_pending_fragments(db: tauri::State<Db>, limit: Option<i64>) -> Result<usize, String> {
@@ -389,4 +401,31 @@ pub fn mirror_pending_fragments(db: tauri::State<Db>, limit: Option<i64>) -> Res
         }
     }
     Ok(done)
+}
+
+
+/// This install's own id and name, for the cloud's device list.
+#[tauri::command]
+pub fn this_device(db: tauri::State<Db>) -> Result<(String, String), String> {
+    db.this_device().map_err(|e| e.to_string())
+}
+
+/// Moments that were worded in two places and have not been settled yet.
+#[tauri::command]
+pub fn open_wording_conflicts(db: tauri::State<Db>) -> Result<Vec<WordingConflict>, String> {
+    db.open_wording_conflicts().map_err(|e| e.to_string())
+}
+
+/// Chooses which wording shows. The other stays under the moment as earlier wording.
+#[tauri::command]
+pub fn resolve_wording_conflict(
+    db: tauri::State<Db>,
+    fragment_id: String,
+    shows: String,
+) -> Result<(), String> {
+    if shows != "local" && shows != "remote" {
+        return Err("a wording is either the local one or the remote one".into());
+    }
+    db.resolve_wording_conflict(&fragment_id, &shows)
+        .map_err(|e| e.to_string())
 }

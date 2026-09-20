@@ -147,7 +147,7 @@ let lastTombstoneGetDocsAt = 0;
 let appSingleton: FirebaseApp | null = null;
 let dbSingleton: Firestore | null = null;
 
-function getOrInitApp(): FirebaseApp {
+export function getOrInitApp(): FirebaseApp {
   if (appSingleton) {
     return appSingleton;
   }
@@ -159,7 +159,7 @@ function getOrInitApp(): FirebaseApp {
   return appSingleton;
 }
 
-function getOrInitFirestore(): Firestore {
+export function getOrInitFirestore(): Firestore {
   if (dbSingleton) {
     return dbSingleton;
   }
