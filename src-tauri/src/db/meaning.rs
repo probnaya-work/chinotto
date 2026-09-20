@@ -50,6 +50,13 @@ impl Db {
     /// the app on first launch after an upgrade; doing a slice at a time means Find by
     /// meaning simply gets better over the first few minutes instead of holding everything up.
     pub fn embed_pending(&self, limit: i64) -> Result<usize, String> {
+        // A mac that has already been told it cannot load the model is not asked again, and
+        // is not made to pay for the query either. This runs on a timer forever, so "nothing
+        // to do" has to actually cost nothing.
+        if matches!(crate::embeddings::availability(), Some(Err(_))) {
+            return Ok(0);
+        }
+
         let pending: Vec<(String, String)> = {
             let conn = self.0.lock().map_err(|e| e.to_string())?;
             let mut stmt = conn
