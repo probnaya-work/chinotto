@@ -17,6 +17,7 @@
     "deploy:hosting": "firebase deploy --only hosting"
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource/open-sauce-one": "^5.2.5",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
