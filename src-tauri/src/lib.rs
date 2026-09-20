@@ -1630,6 +1630,76 @@ fn audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// A recording on disk that no fragment claims.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrphanedRecording {
+    pub audio_path: String,
+    /// RFC3339, from the file's last write — the moment the recording stopped.
+    pub ended_at: String,
+    pub duration_ms: u64,
+}
+
+/// Recordings the Record has lost sight of.
+///
+/// The pipeline's whole claim is that the audio is the material and survives everything
+/// that can go wrong after it. It did — into a directory nothing pointed at. Quitting the
+/// app mid-recording, which is exactly what somebody does when a recording will not stop,
+/// left a complete file on disk and no fragment anywhere.
+///
+/// This lists rather than adopts. The fragment is then made through the same call a live
+/// capture makes, so there is one way a recording becomes material and not two.
+///
+/// `ended_at` comes from the file's modification time, which for a file written buffer by
+/// buffer is the last moment audio arrived. Checked against the two that were found: 31 s
+/// and 47 s of wall clock against 30.2 s and 47.3 s of audio.
+#[tauri::command(async)]
+fn orphaned_recordings(
+    app: tauri::AppHandle,
+    db: tauri::State<Db>,
+) -> Result<Vec<OrphanedRecording>, String> {
+    let dir = audio_dir(&app)?;
+    let claimed = db.claimed_audio_paths().map_err(|e| e.to_string())?;
+
+    let mut found: Vec<OrphanedRecording> = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("caf") {
+            continue;
+        }
+        let as_string = path.to_string_lossy().into_owned();
+        if claimed.contains(&as_string) {
+            continue;
+        }
+
+        // A file that cannot be opened is left alone rather than adopted with a guessed
+        // length: a recording's duration is a fact about it, and inventing one would put
+        // something into the Record that the Record cannot show.
+        #[cfg(target_os = "macos")]
+        let duration_ms = match speech::duration_ms_of(&path) {
+            Some(ms) => ms,
+            None => continue,
+        };
+        #[cfg(not(target_os = "macos"))]
+        let duration_ms = continue;
+
+        let modified = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .map_err(|e| e.to_string())?;
+        found.push(OrphanedRecording {
+            audio_path: as_string,
+            ended_at: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
+            duration_ms,
+        });
+    }
+
+    // Oldest first, so adopting them lands them in the record in the order they happened.
+    found.sort_by(|a, b| a.ended_at.cmp(&b.ended_at));
+    Ok(found)
+}
+
 /// Hold to speak. Records to a file and transcribes it if it can.
 ///
 /// The recording is the material and it is written as it arrives, so a recogniser that is
@@ -1937,6 +2007,7 @@ pub fn run() {
             jump_anchor_for_local_date,
             search_entries,
             run_native_speech_recognition,
+            orphaned_recordings,
             stop_voice_capture,
             generate_embedding,
             classify_entry_theme,

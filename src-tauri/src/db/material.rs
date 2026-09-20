@@ -413,15 +413,24 @@ impl Db {
     ///
     /// The body starts empty and is filled in when a transcript arrives. A voice fragment
     /// with no transcript is complete, not broken.
+    ///
+    /// `ended_at` is when the recording stopped, which is when it became a fragment. The
+    /// live path leaves it out and gets now, because it is calling within a second of the
+    /// release. A recording found on disk afterwards knows its own time and is not made to
+    /// pretend it was just made — `captured_at` is immutable, so it has exactly one chance
+    /// to be right.
     pub fn capture_voice(
         &self,
         audio_path: &str,
         duration_ms: i64,
         capture_origin: Option<&str>,
+        ended_at: Option<&str>,
     ) -> Result<Fragment, rusqlite::Error> {
         let conn = self.0.lock().unwrap();
         let id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = ended_at
+            .map(str::to_string)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
 
         conn.execute(
             "INSERT INTO fragments (id, body, captured_at, capture_method, capture_origin) \
@@ -455,6 +464,17 @@ impl Db {
                 })
             },
         )
+    }
+
+    /// Every recording some fragment already points at.
+    ///
+    /// Used to find the ones none does. Paths, not ids: the file is the thing that either
+    /// is or is not accounted for.
+    pub fn claimed_audio_paths(&self) -> Result<std::collections::HashSet<String>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT audio_path FROM voice_captures")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect()
     }
 
     /// Records what the machine heard.
@@ -789,7 +809,7 @@ mod tests {
     #[test]
     fn a_voice_fragment_exists_before_anything_is_transcribed() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 42_000, Some("desktop")).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 42_000, Some("desktop"), None).unwrap();
         let v = db.voice_for(&f.id).unwrap().unwrap();
 
         assert_eq!(f.capture_method, "voice");
@@ -802,7 +822,7 @@ mod tests {
     #[test]
     fn a_failed_transcription_keeps_the_audio() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 6_000, None).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 6_000, None, None).unwrap();
         db.record_transcript(&f.id, Err("no speech recognised".into())).unwrap();
 
         let v = db.voice_for(&f.id).unwrap().unwrap();
@@ -815,7 +835,7 @@ mod tests {
     #[test]
     fn a_transcript_fills_an_empty_body_and_is_searchable() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 11_000, None).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 11_000, None, None).unwrap();
         db.record_transcript(&f.id, Ok(("a tag is a folder that is embarrassed".into(), "whisper")))
             .unwrap();
 
@@ -829,7 +849,7 @@ mod tests {
     #[test]
     fn correcting_a_transcript_touches_neither_the_audio_nor_what_the_machine_heard() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 11_000, None).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 11_000, None, None).unwrap();
         db.record_transcript(&f.id, Ok(("ref four four seven one".into(), "whisper")))
             .unwrap();
 
@@ -855,7 +875,7 @@ mod tests {
     #[test]
     fn re_transcribing_never_overwrites_a_correction() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 11_000, None).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 11_000, None, None).unwrap();
         db.record_transcript(&f.id, Ok(("teh wrong words".into(), "whisper"))).unwrap();
         db.correct_fragment(&f.id, "the right words").unwrap();
 
@@ -875,7 +895,7 @@ mod tests {
     #[test]
     fn missing_audio_is_recorded_without_losing_the_fragment() {
         let db = db();
-        let f = db.capture_voice("/audio/gone.wav", 3_000, None).unwrap();
+        let f = db.capture_voice("/audio/gone.wav", 3_000, None, None).unwrap();
         db.record_transcript(&f.id, Ok(("something said".into(), "whisper"))).unwrap();
 
         db.mark_audio_missing(&f.id).unwrap();
@@ -890,7 +910,7 @@ mod tests {
     fn a_very_long_transcript_is_stored_and_searchable_whole() {
         let db = db();
         let long = "so the thing about the onboarding is ".repeat(400);
-        let f = db.capture_voice("/audio/long.wav", 1_800_000, None).unwrap();
+        let f = db.capture_voice("/audio/long.wav", 1_800_000, None, None).unwrap();
         db.record_transcript(&f.id, Ok((long.clone(), "whisper"))).unwrap();
 
         assert_eq!(body_of(&db, &f.id).len(), long.len());

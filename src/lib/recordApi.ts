@@ -642,13 +642,32 @@ export function captureVoice(
   audioPath: string,
   durationMs: number,
   captureOrigin = "desktop",
+  /** When the recording ended. Omitted by the live path, which is already there. */
+  endedAt?: string,
 ): Promise<Fragment> {
-  return invoke<Fragment>("capture_voice", { audioPath, durationMs, captureOrigin }).then(
-    (f) => {
-      carryToSync(f);
-      return f;
-    },
-  );
+  return invoke<Fragment>("capture_voice", {
+    audioPath,
+    durationMs,
+    captureOrigin,
+    endedAt: endedAt ?? null,
+  }).then((f) => {
+    carryToSync(f);
+    return f;
+  });
+}
+
+/** A recording on disk that no fragment claims. */
+export interface OrphanedRecording {
+  audioPath: string;
+  /** RFC3339, from the file itself: the moment the recording stopped. */
+  endedAt: string;
+  durationMs: number;
+}
+
+/** Recordings the Record has lost sight of — see `orphaned_recordings` in `lib.rs`. */
+export function orphanedRecordings(): Promise<OrphanedRecording[]> {
+  if (devOnly()) return Promise.resolve([]);
+  return invoke<OrphanedRecording[]>("orphaned_recordings");
 }
 
 /** Attaches what the machine heard. Derived material: it never moves or replaces the audio. */

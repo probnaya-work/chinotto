@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn a_voice_fragment_waits_for_a_transcript_before_it_can_mirror() {
         let db = db();
-        let f = db.capture_voice("/audio/a.wav", 6_000, None).unwrap();
+        let f = db.capture_voice("/audio/a.wav", 6_000, None, None).unwrap();
         assert!(!db.mirror_fragment_to_entry(&f.id).unwrap(), "nothing to mirror yet");
         assert!(entry(&db, &f.id).is_none());
 
@@ -749,7 +749,7 @@ mod tests {
         let db = db();
         let removed = db.capture_fragment("will go", "typed", None).unwrap();
         db.remove_fragment(&removed.id).unwrap();
-        let silent = db.capture_voice("/audio/a.wav", 1000, None).unwrap();
+        let silent = db.capture_voice("/audio/a.wav", 1000, None, None).unwrap();
 
         let owed = db.fragments_awaiting_mirror(100).unwrap();
         assert!(!owed.contains(&removed.id));

@@ -311,9 +311,16 @@ pub fn capture_voice(
     audio_path: String,
     duration_ms: i64,
     capture_origin: Option<String>,
+    // When the recording ended. Omitted by the live path, which is already there.
+    ended_at: Option<String>,
 ) -> Result<crate::db::record::Fragment, String> {
-    db.capture_voice(&audio_path, duration_ms.max(0), capture_origin.as_deref())
-        .map_err(|e| e.to_string())
+    db.capture_voice(
+        &audio_path,
+        duration_ms.max(0),
+        capture_origin.as_deref(),
+        ended_at.as_deref(),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// What the machine heard, or why it could not hear anything.

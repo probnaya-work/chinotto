@@ -442,6 +442,25 @@ impl SpeechManager {
     }
 }
 
+/// How long a recording on disk actually is.
+///
+/// Read from the file rather than guessed from its size: a `.caf` header can describe any
+/// number of formats, and a recording's length is a fact about the material. `None` means
+/// the file could not be opened at all, which is the one case where the app must not claim
+/// a duration.
+pub fn duration_ms_of(path: &std::path::Path) -> Option<u64> {
+    let url = NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+        &path.to_string_lossy(),
+    ));
+    let file = unsafe { AVAudioFile::initForReading_error(AVAudioFile::alloc(), &url) }.ok()?;
+    let frames = unsafe { file.length() };
+    let rate = unsafe { file.fileFormat().sampleRate() };
+    if frames <= 0 || rate <= 0.0 {
+        return None;
+    }
+    Some(((frames as f64 / rate) * 1000.0).round() as u64)
+}
+
 /// What one capture leaves behind: a recording, and possibly a reading of it.
 #[derive(Clone, Debug)]
 pub struct VoiceCapture {

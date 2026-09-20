@@ -576,6 +576,7 @@ with nothing pointing at it.
 | 15.2 | The release is listened for on the window | `keyup` (space), `mouseup`, `blur` | `useVoice.ts` | correctness fix |
 | 15.3 | Speech permission is asked for, not pointed at | `requestAuthorization` on the main thread, not awaited | `speech.rs`, `lib.rs` | correctness fix |
 | 15.4 | A missing transcript carries the mac's own reason | `transcript_failure` through to `voice_transcripts.failure` | `speech.rs` → `useVoice.ts` | invented |
+| 15.5 | A recording on disk that no fragment claims is adopted on launch | its own end time, its real duration, a transcript that says why there is none | `lib.rs`, `RecordApp.tsx` | invented |
 
 **15.1.** `run_capture` cleared `STOP_REQUESTED` *after* creating the recogniser and starting
 the audio engine — which, the first time, is also when the mac puts up its microphone
@@ -609,3 +610,33 @@ it is the mac's, not ours — *not allowing*, *being asked*, *nothing was heard*
 carried from `run_capture` through to `voice_transcripts.failure` rather than flattened on
 the way. Never a reason the *audio* failed: those are different events and the product's
 whole claim is that they are.
+
+**15.5.** Both stuck recordings left a complete `.caf` on disk and no fragment anywhere,
+because the only way to end them was to quit the app. The audio survived, which is what the
+pipeline was rebuilt for — into a directory the Record could not see, which is not.
+
+Written as a rule rather than as a one-off repair of those two files. The one-off would have
+meant hand-writing rows into a live database, and it would have left the next interrupted
+recording orphaned in exactly the same way. `orphaned_recordings` lists what is in the audio
+directory that `voice_captures` does not point at; the surface adopts each one through the
+same calls a live capture makes, so a recording becomes material by one path and not two.
+
+Four things it is careful about:
+
+- **The time is the file's, not the moment it was noticed.** `captured_at` is immutable, so
+  it gets exactly one chance to be right. The end of the recording is the file's last write,
+  which is also when a live capture would have become a fragment. Checked against the two
+  that were found: 31 s and 47 s of wall clock between creation and last write, against
+  30.2 s and 47.3 s of audio.
+- **The duration is read from the file**, not inferred from its size, and a file that cannot
+  be opened is left alone rather than adopted with a guessed length.
+- **`DROP_UNDER_MS` still applies.** Being interrupted must not put something into the
+  Record that holding the key for the same time would have thrown away.
+- **The transcript says what happened**: state `failed`, reason "found on disk after the app
+  stopped · no words were ever taken from it". Not "pending", which would promise words that
+  nothing is going to fetch.
+
+What it does not record is that a fragment arrived this way rather than live. There is no
+field for it — `capture_method` is `voice` and `capture_origin` is `desktop`, both true —
+and the transcript's reason is where the story is. A fragment that is later transcribed by
+hand loses that line, and with it the only trace; noted rather than solved.

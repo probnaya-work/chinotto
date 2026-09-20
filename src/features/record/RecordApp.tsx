@@ -29,7 +29,7 @@ import { QuietLine } from "./QuietLine";
 import { Settings, type MicrophoneState } from "./Settings";
 import { Sync, type SyncState } from "./Sync";
 import { Launch, useLaunch } from "./Launch";
-import { useVoice } from "./useVoice";
+import { DROP_UNDER_MS, useVoice } from "./useVoice";
 import { useNow } from "./useNow";
 import { useAppleSyncOAuth } from "@/lib/useAppleSyncOAuth";
 import { D0_WINDOW_HOURS, metaStyle } from "../../design/tiers";
@@ -327,6 +327,58 @@ export function RecordApp() {
   useEffect(() => {
     if (voice.recording) setMicrophone("granted");
   }, [voice.recording]);
+
+  /**
+   * Recordings that are on disk with nothing pointing at them.
+   *
+   * The voice pipeline's one claim is that the audio is the material and outlives whatever
+   * happens to the words. It did — into a directory the Record could not see. Quitting the
+   * app mid-recording, which is what somebody does when a recording will not stop, left the
+   * file complete and no fragment anywhere.
+   *
+   * They are adopted through the same calls a live capture makes, carrying the time the
+   * file says the recording ended rather than the time they were noticed: `captured_at` is
+   * immutable, so it has exactly one chance to be right. Each one is a voice fragment with
+   * its audio, and a transcript that says plainly it was never taken.
+   *
+   * Runs once, after the first read, and never blocks anything.
+   */
+  const adopted = useRef(false);
+  useEffect(() => {
+    if (!loaded || adopted.current) return;
+    adopted.current = true;
+    void (async () => {
+      let found: api.OrphanedRecording[];
+      try {
+        found = await api.orphanedRecordings();
+      } catch {
+        return;
+      }
+      // Shorter than a hold: a slip of the hand, not a thought. The same threshold the
+      // live path drops on, so being interrupted cannot make something the product would
+      // not have kept anyway.
+      const keep = found.filter((r) => r.durationMs >= DROP_UNDER_MS);
+      if (keep.length === 0) return;
+      for (const r of keep) {
+        try {
+          const f = await api.captureVoice(r.audioPath, r.durationMs, "desktop", r.endedAt);
+          await api.recordTranscript(
+            f.id,
+            null,
+            "found on disk after the app stopped · no words were ever taken from it",
+          );
+        } catch {
+          // One that cannot be adopted stays on disk and is offered again next launch.
+        }
+      }
+      await reload();
+      setNotice(
+        keep.length === 1
+          ? "a recording was found on disk and put back in the record"
+          : `${keep.length} recordings were found on disk and put back in the record`,
+      );
+    })();
+  }, [loaded, reload]);
 
   const changeTextScale = useCallback((delta: number) => {
     setTextScale((current) => writeTextScale(clampTextScale(current + delta)));
