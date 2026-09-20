@@ -32,7 +32,7 @@ import { Launch, useLaunch } from "./Launch";
 import { useVoice } from "./useVoice";
 import { useNow } from "./useNow";
 import { useAppleSyncOAuth } from "@/lib/useAppleSyncOAuth";
-import { metaStyle } from "../../design/tiers";
+import { D0_WINDOW_HOURS, metaStyle } from "../../design/tiers";
 import { suggestContinuation, type ContinuationOffer } from "./continuation";
 import { resolveAnchor, type ParsedAnchor } from "./anchors";
 import { MONTHS, clockLabel, dayLabel, firstLineOf } from "./format";
@@ -209,7 +209,6 @@ export function RecordApp() {
   const [analyticsOn, setAnalyticsOn] = useState(() => isOptIn());
   const [exportNote, setExportNote] = useState("");
   const [backupAt, setBackupAt] = useState<string | null>(null);
-  const voice = useVoice(() => void reload());
   /**
    * What the mac has said about the microphone.
    *
@@ -218,12 +217,6 @@ export function RecordApp() {
    * asking, so it does not claim to know it.
    */
   const [microphone, setMicrophone] = useState<MicrophoneState>("ask");
-  useEffect(() => {
-    if (voice.notice === "denied") setMicrophone("denied");
-  }, [voice.notice]);
-  useEffect(() => {
-    if (voice.recording) setMicrophone("granted");
-  }, [voice.recording]);
 
   // ---- sync ------------------------------------------------------------------------------
   const [devices, setDevices] = useState<SyncDevice[] | null>(null);
@@ -321,6 +314,19 @@ export function RecordApp() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Stable on purpose: a fresh arrow here gives `voice` a new identity on every render,
+  // and the ⌥space effect below then tears down and re-registers two native listeners each
+  // time — ten times a second while a recording's timer is running.
+  const onVoiceCaptured = useCallback(() => void reload(), [reload]);
+  const voice = useVoice(onVoiceCaptured);
+
+  useEffect(() => {
+    if (voice.notice === "denied") setMicrophone("denied");
+  }, [voice.notice]);
+  useEffect(() => {
+    if (voice.recording) setMicrophone("granted");
+  }, [voice.recording]);
 
   const changeTextScale = useCallback((delta: number) => {
     setTextScale((current) => writeTextScale(clampTextScale(current + delta)));
@@ -482,13 +488,16 @@ export function RecordApp() {
    * this fires, so the recording is always visible while it is happening.
    */
   useEffect(() => {
-    const start = listen("chinotto-voice-hold-start", () => voice.start());
-    const stop = listen("chinotto-voice-hold-stop", () => voice.stop());
+    const started = listen("chinotto-voice-hold-start", () => voice.start());
+    const stopped = listen("chinotto-voice-hold-stop", () => voice.stop());
     return () => {
-      void start.then((f) => f());
-      void stop.then((f) => f());
+      void started.then((f) => f());
+      void stopped.then((f) => f());
     };
-  }, [voice]);
+    // The two verbs, not the whole hook: `seconds` ticks while recording, and re-registering
+    // the shortcut on every tick both costs a round trip and can drop a release.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.start, voice.stop]);
 
   /**
    * Something was captured from the menu bar while this window was elsewhere.
@@ -773,28 +782,46 @@ export function RecordApp() {
 
   const [lineMeta, setLineMeta] = useState<Map<string, string>>(() => new Map());
   useEffect(() => {
-    // Only D0 shows this, so only the newest material is asked about.
-    const recent = fragments.slice(0, 40);
+    /*
+      Only D0 draws this line, so only D0 is asked about.
+
+      Both halves of that matter. Asking for the newest forty regardless of distance meant a
+      record whose newest fragment is weeks old — which is every record that has been left
+      alone for a while — spent forty round trips on rows that will never show the answer.
+      And asking for them one after another made it forty round trips in series, on every
+      single reload. The cutoff is read from the clock once rather than from `now`, so this
+      does not re-run on the minute tick.
+    */
+    const edge = Date.now() - D0_WINDOW_HOURS * 60 * 60 * 1000;
+    const recent = fragments
+      .filter((f) => new Date(f.capturedAt).getTime() >= edge)
+      .slice(0, 40);
+    if (recent.length === 0) {
+      setLineMeta((m) => (m.size === 0 ? m : new Map()));
+      return;
+    }
     let stale = false;
     void (async () => {
-      const out = new Map<string, string>();
-      for (const f of recent) {
-        try {
-          const line = await api.lineFor(f.id);
-          if (line.length < 2) continue;
-          const i = line.findIndex((m) => m.fragment.id === f.id);
-          if (i < 0) continue;
-          const first = new Date(line[0].fragment.capturedAt);
-          out.set(
-            f.id,
-            i === 0
-              ? `↳ first moment of a line · continued ${line.length - 1} times`
-              : `↳ moment ${i + 1} of a line · since ${MONTHS[first.getMonth()]} ${first.getFullYear()}`,
-          );
-        } catch {
+      const lines = await Promise.all(
+        recent.map((f) =>
           // A line that cannot be read is simply not annotated.
-        }
-      }
+          api.lineFor(f.id).catch(() => []),
+        ),
+      );
+      const out = new Map<string, string>();
+      recent.forEach((f, n) => {
+        const line = lines[n];
+        if (line.length < 2) return;
+        const i = line.findIndex((m) => m.fragment.id === f.id);
+        if (i < 0) return;
+        const first = new Date(line[0].fragment.capturedAt);
+        out.set(
+          f.id,
+          i === 0
+            ? `↳ first moment of a line · continued ${line.length - 1} times`
+            : `↳ moment ${i + 1} of a line · since ${MONTHS[first.getMonth()]} ${first.getFullYear()}`,
+        );
+      });
       if (!stale) setLineMeta(out);
     })();
     return () => {
@@ -1192,49 +1219,58 @@ export function RecordApp() {
             heldIds={new Set(held.map((h) => h.fragment.id))}
           />
         )}
-
-        {launch === "done" ? (
-        <QuietLine
-          undo={
-            undo
-              ? {
-                  text:
-                    firstLineOf(undo.fragment.body).slice(0, 48) +
-                    (firstLineOf(undo.fragment.body).length > 48 ? "…" : ""),
-                  secondsLeft: Math.max(
-                    0,
-                    UNDO_WINDOW_SECONDS - Math.floor((Date.now() - undo.at) / 1000),
-                  ),
-                  onBringBack: () => void bringBack(),
-                }
-              : null
-          }
-          notice={notice}
-          offline={!online}
-          syncOn={isFirebaseSyncConfigured()}
-          update={
-            updater.phase === "available" && updater.version
-              ? {
-                  text: `chinotto ${updater.version} is out · download`,
-                  onClick: () => void updater.download(),
-                }
-              : updater.phase === "downloading" && updater.version
-                ? { text: `downloading ${updater.version}…`, onClick: () => {} }
-                : updater.phase === "ready"
-                  ? { text: "update ready · restart to finish", onClick: () => void updater.installAndRestart() }
-                  : null
-          }
-          surfaceOpen={surface !== null}
-          onSettings={() => setSurface("settings")}
-        />
-        ) : null}
-
-        {error ? (
-          <div style={{ position: "fixed", right: "48px", bottom: "36px", ...metaStyle() }}>
-            {error}
-          </div>
-        ) : null}
       </div>
+
+      {/*
+        Outside the column on purpose.
+
+        The column carries `chinotto-rise`, and an element with an animation on `transform`
+        is a containing block for anything `position: fixed` inside it — so in here the quiet
+        line stopped being fixed to the window and pinned itself to the bottom of the record
+        instead, landing on top of the last rows. Nothing about its own styling said so.
+      */}
+      {launch === "done" ? (
+      <QuietLine
+        undo={
+          undo
+            ? {
+                text:
+                  firstLineOf(undo.fragment.body).slice(0, 48) +
+                  (firstLineOf(undo.fragment.body).length > 48 ? "…" : ""),
+                secondsLeft: Math.max(
+                  0,
+                  UNDO_WINDOW_SECONDS - Math.floor((Date.now() - undo.at) / 1000),
+                ),
+                onBringBack: () => void bringBack(),
+              }
+            : null
+        }
+        notice={notice}
+        offline={!online}
+        syncOn={isFirebaseSyncConfigured()}
+        update={
+          updater.phase === "available" && updater.version
+            ? {
+                text: `chinotto ${updater.version} is out · download`,
+                onClick: () => void updater.download(),
+              }
+            : updater.phase === "downloading" && updater.version
+              ? { text: `downloading ${updater.version}…`, onClick: () => {} }
+              : updater.phase === "ready"
+                ? { text: "update ready · restart to finish", onClick: () => void updater.installAndRestart() }
+                : null
+        }
+        surfaceOpen={surface !== null}
+        onSettings={() => setSurface("settings")}
+      />
+      ) : null}
+
+      {error ? (
+        <div style={{ position: "fixed", right: "48px", bottom: "36px", ...metaStyle() }}>
+          {error}
+        </div>
+      ) : null}
+
       <Launch phase={launch} visible={loaded} />
     </div>
   );

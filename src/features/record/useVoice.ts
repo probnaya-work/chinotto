@@ -11,7 +11,7 @@
  * thought, and the product should not make somebody delete it.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../../lib/recordApi";
 
 /** A press this short is a slip, not something said. */
@@ -122,5 +122,13 @@ export function useVoice(onCaptured: () => void) {
     void api.stopVoiceCapture().catch(() => {});
   }, []);
 
-  return { recording, seconds, notice, start, stop, dismissNotice: () => setNotice(null) };
+  const dismissNotice = useCallback(() => setNotice(null), []);
+
+  // Memoised so `start` and `stop` keep their identity across the timer's ticks. The window
+  // registers the ⌥space listeners against them, and a new pair every 100ms is a new pair of
+  // native listeners every 100ms.
+  return useMemo(
+    () => ({ recording, seconds, notice, start, stop, dismissNotice }),
+    [recording, seconds, notice, start, stop, dismissNotice],
+  );
 }
