@@ -302,11 +302,7 @@ export function FragmentFocus({
               .filter((v, i, a) => a.indexOf(v) === i)
               .join(", ")}{" "}
             ·{" "}
-            <Verb
-              
-              onClick={() => setUnfolded(true)}
-              style={{ color: "var(--ink-verb)", cursor: "pointer" }}
-            >
+            <Verb onClick={() => setUnfolded(true)} style={{ cursor: "pointer" }}>
               unfold
             </Verb>
           </div>
@@ -417,6 +413,10 @@ export function FragmentFocus({
                   style={{
                     fontStyle: t.kind === "guess" ? "italic" : "normal",
                     color: t.kind === "guess" ? "var(--ink-dim)" : "var(--ink-far)",
+                    borderLeft: `2px solid ${
+                      t.kind === "guess" ? "var(--evidence-rail-inferred)" : "var(--evidence-rail)"
+                    }`,
+                    paddingLeft: "16px",
                   }}
                 >
                   <span
@@ -430,7 +430,7 @@ export function FragmentFocus({
                           : t.fragment.body.split("\n")[0].slice(0, 90)
                       }
                       mark={t.phrase}
-                      wash="var(--mark-trace)"
+                      wash="var(--evidence-ground-trace)"
                     />
                   </span>
                   <span style={{ color: "var(--meta)", fontStyle: "normal" }}> · {when}</span>
@@ -441,17 +441,15 @@ export function FragmentFocus({
                         · {t.why} ·{" "}
                       </span>
                       <Verb
-                        
                         onClick={() => void acceptTrace(t.fragment)}
-                        style={{ color: "var(--ink-verb)", fontStyle: "normal", cursor: "pointer" }}
+                        style={{ fontStyle: "normal", cursor: "pointer" }}
                       >
                         yes
                       </Verb>
                       <span style={{ color: "var(--meta)", fontStyle: "normal" }}> · </span>
                       <Verb
-                        
                         onClick={() => rejectTrace(t.fragment)}
-                        style={{ color: "var(--ink-verb)", fontStyle: "normal", cursor: "pointer" }}
+                        style={{ fontStyle: "normal", cursor: "pointer" }}
                       >
                         not this
                       </Verb>
@@ -548,11 +546,11 @@ export function FragmentFocus({
                 marginLeft: "auto",
                 display: "flex",
                 gap: "16px",
-                color: "var(--ink-verb)",
+                color: "var(--agency)",
+                fontWeight: "var(--agency-weight)",
               }}
             >
               <Verb
-                bright
                 onClick={() => {
                   setCorrectingId(f.id);
                   setDraft(f.body);
@@ -562,14 +560,12 @@ export function FragmentFocus({
                 correct
               </Verb>
               <Verb
-                bright
                 onClick={() => (heldIds.has(f.id) ? onRelease(f) : onHold(f))}
                 style={{ cursor: "pointer" }}
               >
                 {heldIds.has(f.id) ? "release" : "hold"}
               </Verb>
               <Verb
-                bright
                 onClick={async () => {
                   if (onRemove) await onRemove(f);
                   else await api.removeFragment(f.id);
@@ -624,14 +620,13 @@ export function FragmentFocus({
                   : "changes the wording only — the moment keeps its date and the earlier wording"}
               </span>
               <Verb
-                
                 onClick={() => void saveCorrection()}
-                style={{ marginLeft: "auto", color: "var(--ink)", cursor: "pointer" }}
+                style={{ marginLeft: "auto", cursor: "pointer" }}
               >
                 ⏎ save
               </Verb>
               <Verb
-                
+                quiet
                 onClick={() => {
                   setCorrectingId(null);
                   setDraft("");
@@ -691,8 +686,16 @@ export function FragmentFocus({
                   style={{
                     display: "inline-block",
                     fontSize: "var(--size-voice-chip)",
-                    color: voice.audioMissing ? "var(--meta)" : "var(--ink-verb)",
-                    border: "1px solid var(--rule)",
+                    // The chip is pressable — it plays — so it is a verb and takes agency's
+                    // colour and weight. When the audio is not on this device it is not a
+                    // control at all: it drops to meta and the dimmer chip border, and says so
+                    // with the dashed edge. (UNSPECIFIED: the design draws an inert chip only
+                    // for the compact tiers, which never play; this borrows its border.)
+                    color: voice.audioMissing ? "var(--meta)" : "var(--agency)",
+                    fontWeight: voice.audioMissing ? undefined : "var(--agency-weight)",
+                    border: `1px solid ${
+                      voice.audioMissing ? "var(--chip-border-inert)" : "var(--chip-border)"
+                    }`,
                     borderStyle: voice.audioMissing ? "dashed" : "solid",
                     padding: "3px 10px 3px 8px",
                     verticalAlign: "4px",

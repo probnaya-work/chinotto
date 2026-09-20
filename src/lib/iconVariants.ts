@@ -8,6 +8,10 @@
  *
  * The geometry is not a variant. Both are the same drawing at the same rung; only the field
  * and the ink change.
+ *
+ * The ink is material D0, not agency: an icon is the product's own mark, not something you
+ * press. Both values are literals rather than tokens because the rasters are generated from
+ * them outside any document that has tokens.
  */
 
 export type IconVariantId = "dark" | "light";
@@ -22,7 +26,7 @@ export interface IconVariant {
 }
 
 export const ICON_VARIANTS: IconVariant[] = [
-  { id: "dark", name: "dark", foreground: "#e6e6e3", background: "#141416" },
+  { id: "dark", name: "dark", foreground: "#d4d3ce", background: "#141416" },
   { id: "light", name: "light", foreground: "#1b1b1d", background: "#f2f1ec" },
 ];
 

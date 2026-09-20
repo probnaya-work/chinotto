@@ -2,7 +2,7 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="32" height="32" rx="7" fill="#141416"/>
   <g transform="translate(5.5 5.5) scale(0.328125)">
-    <circle cx="32" cy="32" r="27" stroke="#e6e6e3" stroke-width="6" fill="none"/>
-    <circle cx="32" cy="27" r="11" fill="#e6e6e3"/>
+    <circle cx="32" cy="32" r="27" stroke="#d4d3ce" stroke-width="6" fill="none"/>
+    <circle cx="32" cy="27" r="11" fill="#d4d3ce"/>
   </g>
 </svg>

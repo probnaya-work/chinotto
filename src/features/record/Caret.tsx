@@ -41,7 +41,9 @@ export function SpeakingBars() {
             display: "inline-block",
             width: "var(--caret-width)",
             height: "var(--caret-height)",
-            background: "var(--ink)",
+            // Live: a level meter is the one place a colour is allowed, because it is the one
+            // thing on the surface that is happening rather than written.
+            background: "var(--live)",
             animation: `chinotto-rec ${d} ease-in-out infinite`,
           }}
         />

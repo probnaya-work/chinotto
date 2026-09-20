@@ -12,8 +12,8 @@
 export function Marked({
   text,
   mark,
-  /** Default is Find's match wash. Traces use the quieter `--mark-trace`. */
-  wash = "var(--mark)",
+  /** Default is Find's ground. A trace uses the quieter `--evidence-ground-trace`. */
+  wash = "var(--evidence-ground)",
 }: {
   text: string;
   mark?: string | string[] | null;
@@ -43,7 +43,7 @@ export function Marked({
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <mark key={i} style={{ background: wash, color: "var(--ink)" }}>
+          <mark key={i} style={{ background: wash, color: "var(--evidence-ink)" }}>
             {part}
           </mark>
         ) : (

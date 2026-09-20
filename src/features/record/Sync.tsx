@@ -58,7 +58,7 @@ export function Sync(props: SyncProps) {
   return (
     <div>
       <div style={{ ...metaStyle(), display: "flex", justifyContent: "space-between" }}>
-        <Verb  onClick={props.onLeave} style={{ cursor: "pointer" }}>
+        <Verb quiet onClick={props.onLeave} style={{ cursor: "pointer" }}>
           ‹ settings · esc
         </Verb>
         <span>sync</span>
@@ -122,11 +122,11 @@ export function Sync(props: SyncProps) {
                       alignItems: "center",
                       fontSize: "var(--size-utility-2)",
                       cursor: props.phoneReady ? "pointer" : "default",
-                      background: props.phoneReady ? "var(--ink)" : "transparent",
-                      color: props.phoneReady ? "var(--surface)" : "var(--faint)",
+                      background: props.phoneReady ? "var(--agency)" : "transparent",
+                      color: props.phoneReady ? "var(--agency-ground)" : "var(--inert-ink)",
                       border: props.phoneReady
-                        ? "1px solid var(--ink)"
-                        : "1px solid var(--rule)",
+                        ? "1px solid var(--agency)"
+                        : "1px solid var(--inert-border)",
                       transition: "all .25s",
                     }}
                   >
@@ -156,7 +156,7 @@ export function Sync(props: SyncProps) {
                       display: "inline-block",
                       width: "3px",
                       height: "24px",
-                      background: "var(--meta)",
+                      background: "var(--live)",
                       animation: `chinotto-rec ${d} ease-in-out infinite`,
                     }}
                   />
@@ -226,7 +226,7 @@ export function Sync(props: SyncProps) {
                         style={{
                           width: 8,
                           height: 8,
-                          background: d.isThisDevice ? "var(--ink)" : "var(--meta)",
+                          background: d.isThisDevice ? "var(--live)" : "var(--meta)",
                           flex: "none",
                           alignSelf: "center",
                         }}
@@ -236,7 +236,7 @@ export function Sync(props: SyncProps) {
                         {lastSeen(d, props.offline, props.now)}
                       </span>
                       {!d.isThisDevice ? (
-                        <Verb onClick={() => setConfirm({ kind: "device", id: d.id })}>
+                        <Verb quiet onClick={() => setConfirm({ kind: "device", id: d.id })}>
                           remove
                         </Verb>
                       ) : null}
@@ -247,7 +247,7 @@ export function Sync(props: SyncProps) {
                         remove {d.name} from this record? what is already on the phone stays
                         there; it just stops receiving.{" "}
                         <Verb
-                          ink
+                          quiet
                           onClick={() => {
                             props.onRemoveDevice(d.id);
                             setConfirm(null);
@@ -255,7 +255,7 @@ export function Sync(props: SyncProps) {
                         >
                           remove
                         </Verb>{" "}
-                        · <Verb tone="var(--ink-verb)" onClick={() => setConfirm(null)}>keep</Verb>
+                        · <Verb onClick={() => setConfirm(null)}>keep</Verb>
                       </InPlace>
                     ) : null}
                   </div>
@@ -277,14 +277,14 @@ export function Sync(props: SyncProps) {
             </div>
 
             <div style={{ marginTop: "10px", ...metaStyle("var(--size-meta-lg)") }}>
-              <Verb onClick={() => setConfirm({ kind: "stop" })}>stop syncing on this mac</Verb>
+              <Verb quiet onClick={() => setConfirm({ kind: "stop" })}>stop syncing on this mac</Verb>
             </div>
             {confirm?.kind === "stop" ? (
               <InPlace indent={false}>
                 stop syncing on this mac? the record stays here in full — it just stops
                 travelling.{" "}
                 <Verb
-                  ink
+                  quiet
                   onClick={() => {
                     props.onStopSyncing();
                     setConfirm(null);
@@ -293,7 +293,7 @@ export function Sync(props: SyncProps) {
                   stop
                 </Verb>{" "}
                 ·{" "}
-                <Verb tone="var(--ink-verb)" onClick={() => setConfirm(null)}>
+                <Verb onClick={() => setConfirm(null)}>
                   keep syncing
                 </Verb>
               </InPlace>
@@ -322,14 +322,14 @@ export function Sync(props: SyncProps) {
                   padding: "0 20px",
                   display: "inline-flex",
                   alignItems: "center",
-                  background: "var(--ink)",
-                  color: "var(--surface)",
+                  background: "var(--agency)",
+                  color: "var(--agency-ground)",
                   fontSize: "var(--size-utility-2)",
                 }}
               >
                 sign in again
               </Verb>
-              <Verb onClick={props.onStopSyncing}>or stop syncing on this mac</Verb>
+              <Verb quiet onClick={props.onStopSyncing}>or stop syncing on this mac</Verb>
             </div>
           </>
         ) : null}
@@ -387,7 +387,7 @@ export function Sync(props: SyncProps) {
                         flexDirection: "column",
                         gap: "6px",
                         paddingLeft: "18px",
-                        borderLeft: shown ? "2px solid var(--ink)" : "2px solid var(--rule)",
+                        borderLeft: shown ? "2px solid var(--agency)" : "2px solid var(--rule)",
                       }}
                     >
                       <div style={metaStyle()}>
@@ -411,7 +411,6 @@ export function Sync(props: SyncProps) {
                           <span>shown in the record now</span>
                         ) : (
                           <Verb
-                            ink
                             onClick={() => props.onResolveConflict(c.fragmentId, which)}
                           >
                             show this one instead
@@ -422,7 +421,7 @@ export function Sync(props: SyncProps) {
                   );
                 })}
                 <div style={metaStyle("var(--size-meta-lg)")}>
-                  <Verb ink onClick={() => props.onResolveConflict(c.fragmentId, c.shows)}>
+                  <Verb onClick={() => props.onResolveConflict(c.fragmentId, c.shows)}>
                     that’s settled
                   </Verb>{" "}
                   · either way the other stays under the moment as earlier wording, where you
@@ -528,7 +527,7 @@ function QrTile({ url }: { url: string }) {
         // Fixed ink-on-paper rather than the appearance's tokens: a camera has to read
         // this, and `fill` is a presentation attribute that would not resolve a CSS
         // variable anyway. High contrast is the only thing that matters here.
-        background: "#e6e6e3",
+        background: "#fbf9f4",
         border: "1px solid var(--rule-dim)",
         boxSizing: "border-box",
         padding: "10px",
@@ -537,7 +536,7 @@ function QrTile({ url }: { url: string }) {
       <QRCode
         value={url}
         size={146}
-        bgColor="#e6e6e3"
+        bgColor="#fbf9f4"
         fgColor="#141416"
         style={{ width: "100%", height: "100%" }}
       />

@@ -58,12 +58,11 @@ export function QuietLine({
       }}
     >
       {undo ? (
-        <span style={{ color: "var(--ink-verb)", pointerEvents: "auto" }}>
+        <span style={{ color: "var(--ink-quoted)", pointerEvents: "auto" }}>
           removed “{undo.text}” ·{" "}
           <Verb
-            
             onClick={undo.onBringBack}
-            style={{ color: "var(--ink)", cursor: "pointer" }}
+            style={{ color: "var(--agency)", cursor: "pointer" }}
           >
             bring back
           </Verb>{" "}
@@ -72,7 +71,7 @@ export function QuietLine({
       ) : null}
 
       {notice && !undo && !surfaceOpen ? (
-        <span style={{ color: "var(--ink-verb)", pointerEvents: "auto" }}>{notice}</span>
+        <span style={{ color: "var(--ink-far)", pointerEvents: "auto" }}>{notice}</span>
       ) : null}
 
       {offline && !undo && !surfaceOpen ? (
@@ -81,9 +80,10 @@ export function QuietLine({
 
       {update && !undo ? (
         <Verb
-          
+          ambient
+          tone="var(--ink-far)"
           onClick={update.onClick}
-          style={{ color: "var(--ink-far)", pointerEvents: "auto", cursor: "pointer" }}
+          style={{ pointerEvents: "auto", cursor: "pointer" }}
         >
           {update.text}
         </Verb>
@@ -91,7 +91,9 @@ export function QuietLine({
 
       <span style={{ marginLeft: "auto", display: "flex", gap: "var(--quiet-gap)", pointerEvents: "auto" }}>
         {syncOn && !surfaceOpen ? (
-          <span style={{ cursor: "default" }}>● sync on</span>
+          <span style={{ cursor: "default" }}>
+            <span style={{ color: "var(--live)" }}>●</span> sync on
+          </span>
         ) : null}
         <Verb quiet onClick={onSettings} style={{ cursor: "pointer" }}>
           settings ⌘,

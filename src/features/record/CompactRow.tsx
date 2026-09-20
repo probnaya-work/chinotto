@@ -55,8 +55,11 @@ export function CompactRow({ fragment, tier, onOpen, mark, encounter, voice }: C
           style={{
             display: "inline-block",
             fontSize: "var(--size-voice-chip-sm)",
-            color: "var(--ink-verb)",
-            border: "1px solid var(--rule)",
+            // Inert: the compact tiers draw the chip but do not play from it, so it takes
+            // the quiet rank and the dimmer of the two chip borders.
+            color: "var(--agency-quiet)",
+            fontWeight: "var(--agency-weight)",
+            border: "1px solid var(--chip-border-inert)",
             padding: "1px 7px 1px 5px",
             verticalAlign: "2px",
             marginRight: "8px",

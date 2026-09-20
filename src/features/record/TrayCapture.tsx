@@ -162,7 +162,7 @@ export function TrayCapture() {
             display: "flex",
             gap: "22px",
             fontSize: "12px",
-            color: "var(--faint-text)",
+            color: "var(--faint)",
             fontVariationSettings: "'wdth' 90",
           }}
         >

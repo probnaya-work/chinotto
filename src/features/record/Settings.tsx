@@ -80,7 +80,7 @@ export function Settings(props: SettingsProps) {
   return (
     <div>
       <div style={{ ...metaStyle(), display: "flex", justifyContent: "space-between" }}>
-        <Verb  onClick={props.onLeave} style={{ cursor: "pointer" }}>
+        <Verb quiet onClick={props.onLeave} style={{ cursor: "pointer" }}>
           ‹ back to the edge · esc
         </Verb>
         <span>settings · this mac</span>
@@ -104,7 +104,7 @@ export function Settings(props: SettingsProps) {
         <Row label="sync">
           <div>
             {props.syncLine}{" "}
-            <Verb ink onClick={props.onOpenSync}>
+            <Verb onClick={props.onOpenSync}>
               {props.syncVerb} ›
             </Verb>
           </div>
@@ -123,7 +123,7 @@ export function Settings(props: SettingsProps) {
             <div style={{ color: "var(--ink-far)" }}>
               microphone · {micLine}{" "}
               {props.microphone === "denied" ? (
-                <Verb ink onClick={props.onOpenSystemSettings}>
+                <Verb onClick={props.onOpenSystemSettings}>
                   open system settings ›
                 </Verb>
               ) : null}
@@ -137,12 +137,15 @@ export function Settings(props: SettingsProps) {
               {(["system", "light", "dark"] as const).map((id) => (
                 <Verb
                   key={id}
+                  ambient
                   onClick={() => props.onAppearance(id)}
                   aria-label={`appearance: ${id}`}
                   style={{
                     fontSize: "var(--size-utility)",
                     color: props.appearance === id ? "var(--ink)" : "var(--meta)",
-                    boxShadow: props.appearance === id ? "inset 0 -2px var(--ink)" : "none",
+                    // The word stays material; the rule under it is the choice, so it is
+                    // drawn in agency.
+                    boxShadow: props.appearance === id ? "inset 0 -2px var(--agency)" : "none",
                     paddingBottom: "3px",
                   }}
                 >
@@ -168,10 +171,10 @@ export function Settings(props: SettingsProps) {
 
         <Row label="text">
           <div style={{ display: "flex", gap: "22px", alignItems: "baseline" }}>
-            <Verb ink onClick={() => props.onTextScale(props.textScale - ZOOM_STEP)}>
+            <Verb onClick={() => props.onTextScale(props.textScale - ZOOM_STEP)}>
               smaller ⌘−
             </Verb>
-            <Verb ink onClick={() => props.onTextScale(props.textScale + ZOOM_STEP)}>
+            <Verb onClick={() => props.onTextScale(props.textScale + ZOOM_STEP)}>
               larger ⌘+
             </Verb>
             <span style={{ color: "var(--meta)" }}>{textScaleLabel(props.textScale)}</span>
@@ -184,6 +187,7 @@ export function Settings(props: SettingsProps) {
               {(["dark", "light"] as const).map((id) => (
                 <Verb
                   key={id}
+                  ambient
                   onClick={() => props.onIconVariant(id)}
                   aria-label={`dock icon: ${id}`}
                   style={{
@@ -201,7 +205,7 @@ export function Settings(props: SettingsProps) {
                       background: id === "dark" ? "#141416" : "#f2f1ec",
                       border:
                         props.iconVariant === id
-                          ? "1px solid var(--ink)"
+                          ? "1px solid var(--agency)"
                           : `1px solid ${id === "dark" ? "#2a2a2e" : "#c9c9c6"}`,
                       display: "flex",
                       alignItems: "center",
@@ -209,7 +213,7 @@ export function Settings(props: SettingsProps) {
                       boxSizing: "border-box",
                     }}
                   >
-                    <Mark size={35} ink={id === "dark" ? "#e6e6e3" : "#1b1b1d"} appIcon />
+                    <Mark size={35} ink={id === "dark" ? "#d4d3ce" : "#1b1b1d"} appIcon />
                   </span>
                   <span
                     style={{
@@ -249,7 +253,7 @@ export function Settings(props: SettingsProps) {
                     justifyContent: "center",
                   }}
                 >
-                  <Mark size={20} ink="#e6e6e3" />
+                  <Mark size={20} ink="#d4d3ce" />
                 </span>
                 <span
                   style={{
@@ -264,7 +268,7 @@ export function Settings(props: SettingsProps) {
                     justifyContent: "center",
                   }}
                 >
-                  <Mark size={11} ink="#e6e6e3" />
+                  <Mark size={11} ink="#d4d3ce" />
                 </span>
                 <span style={metaStyle("var(--size-meta-lg)")}>
                   as finder and spotlight draw it
@@ -282,7 +286,7 @@ export function Settings(props: SettingsProps) {
           <Stack>
             <div>
               everything lives in one file on this mac.{" "}
-              <Verb ink onClick={props.onExport}>
+              <Verb onClick={props.onExport}>
                 export it ›
               </Verb>{" "}
               <span style={{ color: "var(--meta)" }}>
@@ -291,7 +295,7 @@ export function Settings(props: SettingsProps) {
             </div>
             <div>
               a backup is made each time chinotto opens · last {props.backupLine} ·{" "}
-              <Verb ink onClick={props.onBackUpNow}>
+              <Verb onClick={props.onBackUpNow}>
                 back up now
               </Verb>
             </div>
@@ -349,7 +353,7 @@ export function Settings(props: SettingsProps) {
               <div>apple id · the only thing sync knows about you.</div>
               {del === "idle" ? (
                 <div>
-                  <Verb onClick={() => setDel("armed")}>delete the cloud account ›</Verb>
+                  <Verb quiet onClick={() => setDel("armed")}>delete the cloud account ›</Verb>
                 </div>
               ) : null}
               {del === "armed" ? (
@@ -377,7 +381,7 @@ export function Settings(props: SettingsProps) {
                   </span>
                   <span>
                     <Verb
-                      ink
+                      quiet
                       onClick={async () => {
                         await props.onDeleteAccount();
                         setDel("done");
@@ -386,7 +390,7 @@ export function Settings(props: SettingsProps) {
                       delete for good
                     </Verb>{" "}
                     ·{" "}
-                    <Verb onClick={() => setDel("idle")} tone="var(--ink-verb)">
+                    <Verb onClick={() => setDel("idle")}>
                       keep it
                     </Verb>
                   </span>
@@ -421,7 +425,7 @@ export function Settings(props: SettingsProps) {
             <div>
               {props.version} · <span style={{ color: "var(--meta)" }}>{props.updateLine}</span>{" "}
               {props.updateVerb ? (
-                <Verb ink onClick={props.onUpdate}>
+                <Verb onClick={props.onUpdate}>
                   {props.updateVerb} ›
                 </Verb>
               ) : null}
@@ -497,7 +501,11 @@ function Secondary({ children }: { children: ReactNode }) {
 
 /** A key, or the current value of a setting: both are things the product states, not verbs. */
 function Key({ children }: { children: ReactNode }) {
-  return <span style={{ color: "var(--ink)" }}>{children}</span>;
+  return (
+    <span style={{ color: "var(--agency-quiet)", fontWeight: "var(--agency-weight)" }}>
+      {children}
+    </span>
+  );
 }
 
 

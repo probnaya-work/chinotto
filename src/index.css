@@ -20,7 +20,7 @@ body {
   font-family: "Archivo Variable", system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  color: #e6e6e3;
+  color: #d4d3ce;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -29,8 +29,12 @@ body {
   min-height: 100%;
 }
 
+/*
+  Literal rather than `var(--selection)`: this file is what has to be true before tokens.css
+  loads. It is the same value.
+*/
 ::selection {
-  background: rgba(230, 230, 227, 0.25);
+  background: rgba(230, 230, 227, 0.26);
 }
 
 /*

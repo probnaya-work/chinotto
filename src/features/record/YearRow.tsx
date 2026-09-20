@@ -54,7 +54,7 @@ export function YearRow({
     >
       <button
         type="button"
-        className="chinotto-verb"
+        className="chinotto-affordance"
         onClick={() => onStandIn?.(year, landing)}
         style={{
           ...metaStyle("var(--size-year-label)"),

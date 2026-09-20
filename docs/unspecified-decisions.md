@@ -41,7 +41,7 @@ Four tiers became five: the old `d3` is the prototype's **D4**, and a real D3 (1
 |---|---|---|---|---|
 | 0.1 | The record is unbounded, so rendering is windowed instead | chunks of `50` rows, mounted within `1400px` of the viewport, windowing above `100` rows | `src/features/record/Windowed.tsx` | **agreed** (handoff-diff §1.1) |
 | 0.2 | How much of the record is held in memory at once | `50_000` fragments | `recordApi.ts` `RECORD_CAP` | invented |
-| 0.3 | `--faint` split in two: the prototype's `#5f5e5a` for texture, a lifted `#878682` for the capture hints | — | `tokens.css` | **agreed** (handoff-diff §1.2) |
+| 0.3 | `--faint` split in two: the prototype's `#5f5e5a` for texture, a lifted `#878682` for the capture hints | — | `tokens.css` | **superseded — see §16.1** (the split is gone; `◌ hold space to speak` is now a quiet verb) |
 | 0.4 | Light-mode `--ink-dim`, the new D3 step | `#52514e` | `tokens.css` | invented — the light appearance is a token pass, not drawn |
 | 0.5 | Which Return triggers survive "the reason is mandatory" | a because-clause per trigger; `interval` dropped | `returns.rs` | **agreed** (handoff-diff §1.3) |
 | 0.6 | Continuation offer: lookback and threshold | `3` days, score ≥ `2` with a shared run counting double | `continuation.ts` | ported from the prototype |
@@ -97,7 +97,7 @@ harder to read with anything else, not easier.
 | 0.20 | What a conflict is detectable from | the two texts differ; which came first is unknown | `bridge.rs` `notice_remote_wordings` | forced by the legacy contract |
 | 0.21 | Which wording the record shows until asked | the local one | same | inferred |
 | 0.22 | Last-seen wording | `now` · `a moment ago` (<3 min) · `N minutes ago` (<1 h) · day + time | `Sync.tsx` `lastSeen` | invented |
-| 0.23 | QR colours | fixed `#141416` on `#e6e6e3` in both appearances | `Sync.tsx` | invented |
+| 0.23 | QR colours | fixed `#141416` on `#fbf9f4` in both appearances | `Sync.tsx` | invented — still appearance-independent, because a camera reads it; the ground moved with the palette (§16) |
 
 0.19 is the one that looks like an implementation detail and is not. A deleted device row is
 indistinguishable from a device that never registered, so the removed device would re-register
@@ -564,6 +564,13 @@ the same step past `--ink` in the other direction.
 Not carried over: the voice chip's `border-color:#8f8e89` on hover, which is a fifth
 register for one element.
 
+**SUPERSEDED by the finalized colour system (§16).** The four registers above collapse into
+two ranks, and a verb is now coloured *at rest* rather than only under the pointer: full
+agency lifts to `--agency-hover` with an underline, the quiet rank lifts to `--agency` without
+one, and an ambient clickable word takes agency's colour and weight only while the pointer is
+on it. `--ink-bright` is now `--agency-hover` and `--ink-verb` is now `--ink-quoted`, which
+inks no verb at all.
+
 ## 15. Voice, the first time it was actually held (post-dogfood)
 
 Three symptoms, four causes. The audio was never at risk in any of them — every recording
@@ -640,3 +647,103 @@ What it does not record is that a fragment arrived this way rather than live. Th
 field for it — `capture_method` is `voice` and `capture_origin` is `desktop`, both true —
 and the transcript's reason is where the story is. A fragment that is later transcribed by
 hand loses that line, and with it the only trace; noted rather than solved.
+
+## 16. The finalized colour system (post-handoff)
+
+The handoff package now ends with a **Colour and affordance** table, and it is the source of
+truth for colour. It supersedes the ink ladder §8 was written against. Four families, which
+do not borrow from each other: **material** (your words and Chinotto's voice, lightness only),
+**agency** (verbs, filled primaries, the single recovery in any error — lightness *and* weight,
+`wght 540`), **evidence** (a ground plus an ink that lifts above material), and **live**
+(`#9fb79f`, the only hue, and never on anything pressable).
+
+What actually moved, in the dark appearance:
+
+| token | was | is | why |
+|---|---|---|---|
+| `--ink` (D0, caret, mark) | `#e6e6e3` | `#d4d3ce` | material's top step; 12.27:1 |
+| `--ink-near` (D1, utility body) | `#cfcfcc` | `#c0bfba` | |
+| `--ink-verb` → `--ink-quoted` | `#c9c9c6` | `#c9c9c6` | value kept, role narrowed: it no longer inks a verb, only material Chinotto quotes back inside its own sentence |
+| `--ink-bright` → `--agency-hover` | `#ffffff` | `#ffffff` | it was never "a step past material"; it is a verb under the pointer |
+| `--mark` → `--evidence-ground` | `…0.16` | `…0.15` | and its ink is now `#f4f2ee`, above material, rather than `--ink` |
+| `--mark-trace` → `--evidence-ground-trace` | `…0.14` | `…0.13` | |
+| `--row-hover` | `…0.04` | `…0.045` | |
+| `::selection` | `…0.25` | `…0.26` | |
+| `--correction-rule` | `--meta` | `--agency-quiet` | the edit window is an affordance, not a label |
+| `--rule-present` (a Return's rail) | `--ink` | `--agency-quiet` | |
+| the app icon's ink | `#e6e6e3` | `#d4d3ce` | material, not agency: an icon is a mark, not a control |
+| accent (the sync dot) | periwinkle | `--live` `#9fb79f` | the one hue, and it moved hue entirely |
+
+New: `--agency` `#fbf9f4`, `--agency-quiet` `#e9e7e0`, `--agency-weight` `540`,
+`--agency-ground`, `--inert-ink` / `--inert-border`, `--evidence-rail` `#5c5a52` and
+`--evidence-rail-inferred` `#2a2a2e`, `--live`, `--row-selected`, `--selection`,
+`--placeholder`, `--surface-deep`, `--chip-border` / `--chip-border-inert`.
+
+Retired, with no replacement needed: `--faint-text`.
+
+### 16.1 `--faint-text` is gone, and the contrast question it answered has changed shape
+
+§0.3 / §1.2 / §8.6 split `--faint` and lifted the functional half to `#878682` (5.05:1),
+because Distance v2 stated a floor of "nothing below 12px or 5:1" and the prototype inked the
+capture hints at `#5f5e5a` (2.83:1).
+
+The finalized system states no floor, draws `#5f5e5a` at every one of those sites, and
+resolves the underlying problem differently: **`◌ hold space to speak`** — the one hint that
+teaches an interface you cannot otherwise discover — is now a quiet verb at `--agency-quiet`,
+**14.87:1**, rather than a dim label. What stays at `#5f5e5a` is the row that merely restates
+keys already pressed (`⏎ leave it · ⇧⏎ new line · esc drop it`), the quiet line at rest, and
+the year-density bars.
+
+So the split is removed and the design's own value stands. **This is still a contrast
+regression on that hint row**, and it is recorded here rather than argued away: reverting is
+one token (`--faint`), and the sites that would come with it are listed above.
+
+The inert filled primary (`--inert-ink`, 2.83:1) is deliberate and is not the same question:
+a control that is not operable is exempt from the contrast minimum, and the design draws it.
+
+### 16.2 The light appearance is still a token pass
+
+The finalized system gives the light appearance its field and its ink (`#f2f1ec` / `#1b1b1d`,
+and only on the settings icon tiles). Everything else is **derived, not sampled**: each token
+is placed at the contrast ratio its dark counterpart carries against `#141416`, which keeps
+the ladder's shape and the two agency ranks' spacing without inventing a second design. The
+material ladder below D0 is unchanged — the design's light endpoints did not move.
+
+Two light values have no basis in the design at all and are flagged as such:
+
+- **`--live` `#3d473d`** — the sage held and darkened until it carries the same 8.5:1 on
+  `#f2f1ec` that `#9fb79f` carries on `#141416`. `#9fb79f` itself measures about 2:1 on the
+  light field and would disappear.
+- **the agency steps** `#0f0f11` / `#050507` / `#000000` — past the given ink toward black, at
+  the dark side's spacing.
+
+### 16.3 States the design does not draw, and what each was derived from
+
+| state | derived from | value |
+|---|---|---|
+| keyboard focus ring | agency — a focus ring says where your next action lands | `2px solid var(--agency)` |
+| keyboard-selected row | selection-as-structure, like the current moment's dot | `inset 2px 0 var(--ink)` |
+| a voice chip whose audio is not on this device | not a control at all, so it leaves agency | `--meta`, dashed, `--chip-border-inert` |
+| the quiet line's transient notice (`held at capacity`) | the neutral tone the design gives the quiet line's own sync sentence | `--ink-far` |
+| the hosted sign-in bridge and the "Mac app only" page | the field, which the design states is universal | `--surface` / `#d4d3ce`, everything else untouched |
+
+### 16.4 Where the prototype and the handoff's prose disagree
+
+The prose says an ambient clickable element "lifts only on hover, where it also gains an
+underline". The prototype gives the underline to **full-rank verbs** (`#ffffff` +
+`text-underline-offset: 4px`) and gives ambient elements a lift to `--agency` with **no**
+underline — consistently, at every one of the sites the prose names (band label, year row,
+sync status, fold). The prototype is followed, per this repository's standing rule that it is
+the visual source of truth.
+
+Two more places where the prototype is internally inconsistent and each site was matched
+exactly rather than normalised: Find's meaning-guess dismissal `not this` rests at
+`--agency-quiet`, while the traces block's `yes` / `not this` rest at `--agency`; and the
+continuation offer's `no` rests at `--meta`, below either rank.
+
+### 16.5 Mobile: the weight is a family
+
+React Native's `fontWeight` takes hundreds only, and with the `wdth` axis already resolved
+ahead of time the weight has to be carried by the family too. `Archivo-540-{90,92,94}` are
+generated alongside the existing instances, and a verb asks for `weight: 540` rather than
+setting `fontWeight` — which would silently round to 500 and drop half of what marks a verb.

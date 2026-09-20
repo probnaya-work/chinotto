@@ -190,16 +190,16 @@ function isHostedOauthBridgePage(): boolean {
 function showDevBridgeSafariPage(message: string): void {
   try {
     document.documentElement.style.minHeight = "100%";
-    document.documentElement.style.background = "#0a0a0e";
+    document.documentElement.style.background = "#141416";
   } catch {
     /* ignore */
   }
   document.body.replaceChildren();
   document.body.style.cssText =
-    "min-height:100vh;margin:0;background:#0a0a0e;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:1.5rem;";
+    "min-height:100vh;margin:0;background:#141416;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:1.5rem;";
   const p = document.createElement("p");
   p.style.cssText =
-    "font-family:system-ui,-apple-system,sans-serif;margin:0;max-width:28rem;width:100%;color:#e4e4e9;text-align:center;line-height:1.5;font-size:15px;";
+    "font-family:system-ui,-apple-system,sans-serif;margin:0;max-width:28rem;width:100%;color:#d4d3ce;text-align:center;line-height:1.5;font-size:15px;";
   p.textContent = message;
   document.body.appendChild(p);
 }
@@ -732,8 +732,8 @@ export function OAuthBridge() {
         justifyContent: "center",
         padding: "1.5rem",
         gap: "1.25rem",
-        background: "#0a0a0e",
-        color: "#e4e4e9",
+        background: "#141416",
+        color: "#d4d3ce",
         fontFamily: "system-ui, sans-serif",
         fontSize: "15px",
         textAlign: "center",
@@ -751,8 +751,8 @@ export function OAuthBridge() {
             padding: "0.65rem 1.25rem",
             fontSize: "15px",
             fontWeight: 600,
-            color: "#0a0a0e",
-            background: "#e4e4e9",
+            color: "#141416",
+            background: "#fbf9f4",
             border: "none",
             borderRadius: "8px",
             cursor: busy ? "not-allowed" : "pointer",

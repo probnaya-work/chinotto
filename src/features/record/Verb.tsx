@@ -8,6 +8,12 @@
  * It is a `<button>` stripped of everything a button normally brings: no background, no
  * border, no padding, no font of its own. What it keeps is the part that matters — focus,
  * Enter and Space, and a role a screen reader can name.
+ *
+ * A verb is coloured at rest, which is what separates it from an ambient word that merely
+ * happens to be clickable (those go through `.chinotto-affordance` and lift only on hover).
+ * `font-weight` comes from `.chinotto-verb` in tokens.css rather than from here, because
+ * lightness and weight together are what mark agency — neither alone is enough at 12px, and
+ * 12px is where most of these are drawn.
  */
 
 import type { CSSProperties, ReactNode } from "react";
@@ -15,23 +21,27 @@ import type { CSSProperties, ReactNode } from "react";
 export interface VerbProps {
   children: ReactNode;
   onClick: () => void;
-  /** An active verb, in full ink. The default is the quieter register around it. */
-  ink?: boolean;
   /**
-   * Hovers past ink, to white.
+   * The quiet rank: a step back (`‹ back to the edge`), a dismissal (`not this`, `let go ↓`),
+   * key notation, and every destructive verb in the product (`remove`, `stop syncing on this
+   * mac`, `delete the cloud account ›`).
    *
-   * The design spends this on a row's own verbs and on the ⋯ menu that opens from them —
-   * the two places where a control sits on top of material rather than beside it.
-   */
-  bright?: boolean;
-  /**
-   * Hovers to the verb register rather than to ink.
-   *
-   * For words that are always on screen — the quiet line, "wording corrected" — and should
-   * not flare when the pointer only crosses them.
+   * Rests at `--agency-quiet` and lifts to `--agency`, without an underline. Destruction is
+   * never loud: its safe counterpart — `keep it` — is the one that takes full agency.
    */
   quiet?: boolean;
-  /** For the few places that want a specific step on the ladder. */
+  /**
+   * Ambient: not a verb, but clickable — `no`, a year label, `↳ first moment of a line`.
+   *
+   * It rests at whatever tone surrounds it and takes agency's colour and weight only under
+   * the pointer, then stops being a verb again. Still a `<button>`, because it is still
+   * something you can reach with a keyboard.
+   */
+  ambient?: boolean;
+  /**
+   * For the few places that want a specific step on the ladder rather than either rank —
+   * a voice chip's label, or a word that is quoted rather than pressed.
+   */
   tone?: string;
   style?: CSSProperties;
   "aria-label"?: string;
@@ -41,9 +51,8 @@ export interface VerbProps {
 export function Verb({
   children,
   onClick,
-  ink = false,
-  bright = false,
   quiet = false,
+  ambient = false,
   tone,
   style,
   disabled = false,
@@ -53,9 +62,7 @@ export function Verb({
     <button
       type="button"
       className={
-        "chinotto-verb" +
-        (bright ? " chinotto-verb--bright" : "") +
-        (quiet ? " chinotto-verb--quiet" : "")
+        ambient ? "chinotto-affordance" : "chinotto-verb" + (quiet ? " chinotto-verb--quiet" : "")
       }
       disabled={disabled}
       onClick={(e) => {
@@ -70,7 +77,7 @@ export function Verb({
         margin: 0,
         font: "inherit",
         textAlign: "inherit",
-        color: tone ?? (ink ? "var(--ink)" : "inherit"),
+        color: tone ?? (ambient ? "inherit" : quiet ? "var(--agency-quiet)" : "var(--agency)"),
         cursor: disabled ? "default" : "pointer",
         ...style,
       }}

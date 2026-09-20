@@ -13,7 +13,7 @@ const OAUTH_PAGE_PATH: &str = "/chinotto-oauth";
 const HEADER_SECRET: &str = "x-chinotto-oauth-secret";
 const MAX_BODY: usize = 256 * 1024;
 const LISTEN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-const BRIDGE_SUCCESS_HTML: &str = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Signed in</title></head><body style=\"font-family:system-ui;background:#0a0a0e;color:#e4e4e9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\"><p>Signed in. Close this tab and return to Chinotto.</p></body></html>";
+const BRIDGE_SUCCESS_HTML: &str = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Signed in</title></head><body style=\"font-family:system-ui;background:#141416;color:#d4d3ce;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\"><p>Signed in. Close this tab and return to Chinotto.</p></body></html>";
 
 struct HttpRequest {
     request_line: String,

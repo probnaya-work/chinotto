@@ -145,7 +145,7 @@ export function AppIconTile({ size = 56, light = false }: { size?: number; light
         justifyContent: "center",
       }}
     >
-      <Mark size={Math.round(size * 0.62)} ink={light ? "#1b1b1d" : "#e6e6e3"} appIcon />
+      <Mark size={Math.round(size * 0.62)} ink={light ? "#1b1b1d" : "#d4d3ce"} appIcon />
     </span>
   );
 }

@@ -1,11 +1,49 @@
 /*
   Chinotto — design tokens.
 
-  Every value here is lifted verbatim from the working prototype ("Chinotto Desktop.dc.html"
-  in the desktop handoff package), which is the UI and visual source of truth. Nothing is
-  interpolated, averaged or extrapolated. If a value is needed that the prototype does not
-  draw, it is marked UNSPECIFIED rather than invented.
+  Every value here is lifted verbatim from the working prototypes ("Chinotto Desktop.dc.html"
+  and "Chinotto Mobile.dc.html") and from the handoff's own "Colour and affordance" table,
+  which together are the UI and visual source of truth. Nothing is interpolated, averaged or
+  extrapolated. If a value is needed that the design does not draw, it is marked UNSPECIFIED
+  rather than invented.
 
+  ------------------------------------------------------------------------------------------
+  THE COLOUR SYSTEM
+
+  Chinotto is monochrome. Your material and your actions are both ink, separated by
+  LIGHTNESS AND WEIGHT. Exactly one hue exists in the product, and it never appears on
+  anything you can press.
+
+  Four families, and they do not borrow from each other:
+
+    1. MATERIAL — your words, and Chinotto's voice. A five-step lightness ladder, D0…D4,
+       which moves lightness ONLY: no hue, no weight. 12.27:1 at the top.
+    2. AGENCY — every verb, every filled primary, the single recovery in any error.
+       Lightness AND weight together (`--agency-weight`, 540). Neither alone is enough at
+       12px, which is where most verbs are drawn: the weight step against material's 400 is
+       as load-bearing as the tone step. See the hover rules at the foot of this file.
+    3. EVIDENCE — what Chinotto found: a matched phrase, a shared phrase, an observed trace.
+       A ground plus an ink that lifts ABOVE material, so highlighting raises readability
+       rather than merely tinting it.
+    4. LIVE — `--live`, the only hue in the product. Voice capture, the connecting pulse, the
+       sync dot, this device. Never on a verb. It does not mean "ok".
+
+  Two ranks of affordance:
+    - a VERB is coloured at rest (`--agency`, or `--agency-quiet` when it is a step back, a
+      dismissal, a key, or destructive);
+    - an AMBIENT element that merely happens to be clickable — a band label, a year row, the
+      sync status, a fold — rests at whatever tone it already had and lifts to `--agency`
+      only under the pointer.
+
+  Destruction is never loud: `remove`, `stop syncing on this mac` and `delete the cloud
+  account` all sit at the quiet rank, and their safe counterpart (`keep it`) takes full
+  agency. System trouble stays neutral and only its recovery lifts.
+
+  The trade the design accepts: hue is detectable in peripheral vision and weight is not, so
+  verbs are found by scanning rather than at a glance. In exchange the Record is never
+  competed with, and the one colour that remains means exactly one thing.
+
+  ------------------------------------------------------------------------------------------
   Two independent systems use Archivo's wdth axis, and they must not be conflated:
 
     1. MATERIAL narrows as it recedes in time — 100 / 92 / 84 / 80 / 76 across five named
@@ -20,93 +58,195 @@
 :root {
   /* ---- surface ---------------------------------------------------------- */
   --surface: #141416;
+  /* Outside the window. The mobile frame's backdrop; the desktop app never paints it. */
+  --surface-deep: #0e0e10;
 
-  /* ---- ink ladder ------------------------------------------------------- */
-  --ink: #e6e6e3;        /* D0 material, active verbs, the caret, the mark          */
-  --ink-bright: #ffffff; /* a step past ink: a row's own verbs and the ⋯ menu        */
-  --ink-near: #cfcfcc;   /* D1 (19px), utility body copy                            */
-  --ink-verb: #c9c9c6;   /* hover verbs, voice chip, "unfold", secondary emphasis   */
-  --ink-far: #b4b4b2;    /* D2 (14px), voice transcripts, quotations, warnings      */
-  --ink-dim: #aaa9a4;    /* D3 (13px), guesses                                      */
-  --meta: #8f8e89;       /* D4 (12px), time labels, provenance, section labels      */
   /*
-    Two tokens, because one colour was doing two jobs.
+    ---- material: the ladder ---------------------------------------------
 
-    --faint is the prototype's #5f5e5a exactly: hints, prototype affordances, fourth-level
-    detail, the year-density bars, the quiet line's resting colour. Decoration and texture.
+    Lightness only, near to far. `--ink` is D0 AND the caret AND the mark — all three are
+    material, and none of them is an affordance. A verb never takes a value from this block.
+  */
+  --ink: #d4d3ce;        /* D0 (26px), the caret, the mark                    12.27:1    */
+  --ink-near: #c0bfba;   /* D1 (19px), utility body copy                       9.99:1    */
+  --ink-far: #b4b4b2;    /* D2 (14px), voice transcripts, quotations           8.86:1    */
+  --ink-dim: #aaa9a4;    /* D3 (13px), guesses                                 7.82:1    */
+  --meta: #8f8e89;       /* D4 (12px), time labels, provenance, labels         5.61:1    */
+  /*
+    Material quoted back inside one of Chinotto's own sentences: the continuation offer's
+    `continues yesterday's “…”?` and the quiet line's `removed “…”`. It is your words held at
+    arm's length by the system — above D1, but not a verb, and it never becomes one. It is
+    also where the quiet line's own ambient hover lands.
+  */
+  --ink-quoted: #c9c9c6; /*                                                   11.09:1    */
+  /*
+    Texture, rather than text you are meant to read at a glance: the capture hints, the quiet
+    line at rest, the year-density bars, `wording corrected`, an inert button's label.
 
-    --faint-text is the same register lifted to 5.05:1 for text that carries function rather
-    than atmosphere — the capture hints ("⏎ leave it", "esc drop it", "◌ hold space to
-    speak"), which are how the keyboard interface is discoverable at all. Deliberately still
-    below --meta (5.61:1), so the ladder between the two registers survives.
-
-    Distance v2 stated a 5:1 floor; the working prototype restates neither the floor nor an
-    exception. Splitting the token honours the prototype everywhere the colour is not
-    carrying functional text. See docs/handoff-diff.md §1.2.
+    2.83:1. The previous pass split this token and lifted the functional half to #878682
+    (5.05:1), because Distance v2 stated a floor of "nothing below 12px or 5:1". The finalized
+    colour system states no floor, draws #5f5e5a at every one of these sites, and resolves the
+    legibility problem differently and better: the one hint that teaches an interface you
+    could not otherwise discover — `◌ hold space to speak` — is now a quiet verb at 14.87:1
+    rather than a dim label. So the split is gone and the design's own value stands.
+    See docs/unspecified-decisions.md §9.
   */
   --faint: #5f5e5a;
-  --faint-text: #878682;
+  /* The capture field's placeholder, and nothing else. Drawn at 44px. */
+  --placeholder: #4a4a50;
+
+  /*
+    ---- agency: lightness and weight -------------------------------------
+
+    `--agency-weight` is not decoration. Anything that colours a verb must also set it, or the
+    verb is only half marked — see rule 1 of the colour system above.
+  */
+  --agency: #fbf9f4;         /* every verb at rest, filled primaries         17.49:1     */
+  --agency-hover: #ffffff;   /* a verb under the pointer, plus an underline   18.40:1     */
+  --agency-quiet: #e9e7e0;   /* back/up, dismissals, keys, destruction       14.87:1     */
+  --agency-weight: 540;
+  /* Ink on a filled primary. The field itself, so the button reads as a hole in the page. */
+  --agency-ground: var(--surface);
+
+  /*
+    An inert filled primary — the sync CTA before the phone has reported in. Not a dimmed
+    verb but a different thing: it loses its fill, keeps its shape in `--rule`, and states
+    itself in `--faint`. 2.83:1, which is the design's value, and which the contrast minimum
+    does not reach because a control that is not operable is exempt from it.
+  */
+  --inert-ink: var(--faint);
+  --inert-border: var(--rule);
+
+  /*
+    ---- evidence: what Chinotto found ------------------------------------
+
+    `--evidence-ink` lifts above material rather than sitting level with it, which is what
+    makes a highlight raise readability instead of merely tinting the words.
+  */
+  --evidence-ground: rgba(230, 230, 227, 0.15);       /* Find, a Return's matched phrase  */
+  --evidence-ground-trace: rgba(230, 230, 227, 0.13); /* the same, inside a trace snippet */
+  --evidence-ink: #f4f2ee;   /* on either ground                             11.12:1     */
+  --evidence-rail: #5c5a52;  /* 2px, on material Chinotto actually observed               */
+  /* An inferred trace takes the dimmer rail and NO ground: a guess is not evidence. */
+  --evidence-rail-inferred: #2a2a2e;
+
+  /*
+    ---- live: the only hue -----------------------------------------------
+
+    Voice capture, the connecting pulse, the sync dot, this device. 8.54:1.
+    Never on a verb, and it never means "ok" — an offline record keeps the sage dot and needs
+    nothing from you.
+  */
+  --live: #9fb79f;
+
+  /*
+    ---- selection and focus, as structure --------------------------------
+
+    Neither a highlight nor evidence: the record saying which row the pointer is on, which
+    moment you are in, which appearance you chose.
+  */
+  --row-hover: rgba(230, 230, 227, 0.045);   /* a D0 row under the pointer                */
+  --row-selected: rgba(230, 230, 227, 0.06); /* a row reached by keyboard (mobile: by tap) */
+  --selection: rgba(230, 230, 227, 0.26);    /* ::selection                               */
 
   /* ---- lines and marks -------------------------------------------------- */
-  --rule: #3a3a40;             /* line spine, voice chip border, folded-moment dot  */
-  --rule-dim: #2a2a2e;         /* separators, device chrome, the tray panel's edge  */
-  --rule-present: var(--ink);  /* a Return's spine is ink, not rule: it is here now */
-  --mark: rgba(230, 230, 227, 0.16); /* Find match                                  */
-  --mark-trace: rgba(230, 230, 227, 0.14); /* shared words inside a Trace           */
-  --row-hover: rgba(230, 230, 227, 0.04);  /* the row under the pointer             */
-  --correction-rule: var(--meta);          /* inset 0 -2px under text being corrected */
+  --rule: #3a3a40;             /* line spine, rails, inactive year ticks, borders   */
+  --rule-dim: #2a2a2e;         /* separators, device chrome, the tray panel's edge   */
+  /*
+    A Return's rail is `--agency-quiet` — not `--rule`, and not material. The Return is the
+    one block that arrived on its own and is asking you something, so its spine is drawn at
+    the weight of the verbs underneath it.
+  */
+  --rule-present: var(--agency-quiet);
+  /*
+    Under text being corrected, and under a fragment inside its edit window. Agency-quiet,
+    because the correction window is an affordance — the moment is still yours to change — so
+    it is drawn at the quiet verb rank rather than in meta, as it used to be.
+  */
+  --correction-rule: var(--agency-quiet);
+  /* A voice chip's border: the pressable chip, and the compact tiers' inert one. */
+  --chip-border: #4e4d48;
+  --chip-border-inert: #3f3e3a;
 }
 
 /*
-  "The same edge when the system is light." Identical geometry and identical ladder;
-  ink inverted; the band is ink at 12%.
+  "The same edge when the system is light."
+
+  UNSPECIFIED, still. The finalized colour system gives the light appearance its field and its
+  ink (`#f2f1ec` / `#1b1b1d`, drawn only on the settings icon tiles) and nothing else, so
+  everything below is derived rather than sampled: each token is placed at the contrast ratio
+  its dark counterpart carries against `#141416`, which keeps the ladder's shape and the two
+  agency ranks' spacing without inventing a second design. The material ladder below D0 is
+  unchanged from the previous pass — the design's light endpoints did not move.
+
+  It is a full second appearance, not a dimmed dark one. See docs/unspecified-decisions.md §9.
 */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --surface: #f2f1ec;
+    --surface-deep: #e6e5e0;
     --ink: #1b1b1d;
-    --ink-bright: #000000;
     --ink-near: #2c2c2f;
-    --ink-verb: #3f3f42;   /* light collapses verb and far ink to one value         */
     --ink-far: #3f3f42;
-    --ink-dim: #52514e;    /* UNSPECIFIED: the light appearance is a token pass, not
-                              drawn. Sits between --ink-far and --meta, as D3 does
-                              in the dark ladder. */
+    --ink-dim: #52514e;
     /*
-      #6b6a66 is the colour 3k samples, but it gives 4.79:1 on this surface — just under the
-      design's own stated floor of "nothing below 12px or 5:1", and this token inks the floor
-      tier. Darkened by three points to 5.01:1, honouring the rule over the sampled value.
-      Revert to #6b6a66 to match the mockup exactly. See docs/unspecified-decisions.md.
+      #6b6a66 is the colour the mockup samples, but it gives 4.79:1 on this surface — just
+      under the design's own stated floor, and this token inks the floor tier. Darkened by
+      three points to 5.01:1, honouring the rule over the sampled value.
     */
     --meta: #686763;
-    --faint: #686763;      /* UNSPECIFIED: no light capture row is drawn, so the
-                              prototype never states a light `faint`. Mapped to meta. */
-    --faint-text: #686763;
+    --ink-quoted: #333335;
+    --faint: #8f8f8f;
+    --placeholder: #a8a7a2;
+    /* Past the given ink, toward black, at the dark side's spacing. */
+    --agency: #050507;
+    --agency-hover: #000000;
+    --agency-quiet: #0f0f11;
+    --evidence-ground: rgba(27, 27, 29, 0.15);
+    --evidence-ground-trace: rgba(27, 27, 29, 0.13);
+    --evidence-ink: #0a0a0c;
+    --evidence-rail: #949494;
+    --evidence-rail-inferred: rgba(27, 27, 29, 0.08);
+    /* The hue held, darkened until it carries the same 8.5:1 it has on the dark field. */
+    --live: #3d473d;
+    --row-hover: rgba(27, 27, 29, 0.045);
+    --row-selected: rgba(27, 27, 29, 0.06);
+    --selection: rgba(27, 27, 29, 0.22);
     --rule: rgba(27, 27, 29, 0.12);
     --rule-dim: rgba(27, 27, 29, 0.08);
-    --mark: rgba(27, 27, 29, 0.12);
-    --mark-trace: rgba(27, 27, 29, 0.12);
-    --row-hover: rgba(27, 27, 29, 0.04); /* UNSPECIFIED: derived to match dark's 4% */
+    --chip-border: #a5a5a5;
+    --chip-border-inert: #b9b9b9;
   }
 }
 
 :root[data-theme="light"] {
   --surface: #f2f1ec;
+  --surface-deep: #e6e5e0;
   --ink: #1b1b1d;
-  --ink-bright: #000000;
   --ink-near: #2c2c2f;
-  --ink-verb: #3f3f42;
   --ink-far: #3f3f42;
   --ink-dim: #52514e;
   /* See the note above: 5.01:1 rather than the mockup's 4.79:1. */
   --meta: #686763;
-  --faint: #686763;
-  --faint-text: #686763;
+  --ink-quoted: #333335;
+  --faint: #8f8f8f;
+  --placeholder: #a8a7a2;
+  --agency: #050507;
+  --agency-hover: #000000;
+  --agency-quiet: #0f0f11;
+  --evidence-ground: rgba(27, 27, 29, 0.15);
+  --evidence-ground-trace: rgba(27, 27, 29, 0.13);
+  --evidence-ink: #0a0a0c;
+  --evidence-rail: #949494;
+  --evidence-rail-inferred: rgba(27, 27, 29, 0.08);
+  --live: #3d473d;
+  --row-hover: rgba(27, 27, 29, 0.045);
+  --row-selected: rgba(27, 27, 29, 0.06);
+  --selection: rgba(27, 27, 29, 0.22);
   --rule: rgba(27, 27, 29, 0.12);
   --rule-dim: rgba(27, 27, 29, 0.08);
-  --mark: rgba(27, 27, 29, 0.12);
-  --mark-trace: rgba(27, 27, 29, 0.12);
-  --row-hover: rgba(27, 27, 29, 0.04);
+  --chip-border: #a5a5a5;
+  --chip-border-inert: #b9b9b9;
 }
 
 :root {
@@ -314,11 +454,15 @@
 
   The surface has almost no chrome, so a focus ring is the one piece of interface that has to
   appear from nowhere — and only for keyboard users. `:focus-visible` keeps it off the pointer
-  path entirely. It is drawn in ink at a 2px offset rather than as a box, so it reads like the
-  caret rather than like a form control.
+  path entirely. It is drawn at a 2px offset rather than as a box, so it reads like the caret
+  rather than like a form control.
+
+  UNSPECIFIED: the prototype has no keyboard focus ring. Drawn in `--agency` because that is
+  what a focus ring is — the product saying where your next action will land — and agency is
+  the family the colour system gives to actions. Material would say the opposite.
 */
 :where(button, [href], input, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--agency);
   outline-offset: 2px;
   border-radius: 1px;
 }
@@ -332,61 +476,89 @@ input[aria-label="Find"]:focus-visible {
   outline: none;
 }
 
-/* A keyboard-selected row, so ↑↓ is visible without hovering. */
+/*
+  A keyboard-selected row, so ↑↓ is visible without hovering. Material, not agency: this marks
+  which of your words you are on, the way the current moment's dot and the current month's bar
+  do. It is the same role the colour system calls selection.
+*/
 [data-selected="true"] {
   box-shadow: inset 2px 0 0 var(--ink);
 }
 
 /*
-  Hover.
+  Hover, and the two ranks.
 
-  There is no hover state in this product that changes a shape, only ones that brighten ink
-  by a step on the ladder. A verb reaching for --ink is the whole interaction language:
-  nothing grows, nothing boxes, nothing moves.
+  Nothing changes shape. A pointer moves a word along the agency scale and, at the full rank,
+  adds an underline — that is the whole interaction language.
+
+    .chinotto-verb                a verb. Coloured at rest by `--agency` (or `--agency-quiet`
+                                  via `quiet`), and it lifts to `--agency-hover` with an
+                                  underline. The underline is the design's own: 1px, offset
+                                  4px, and it appears only under the pointer.
+    .chinotto-verb--quiet         a step back, a dismissal, a key, or destruction. Rests at
+                                  `--agency-quiet` and lifts to `--agency`, without an
+                                  underline: a quieter verb answers more quietly.
+    .chinotto-affordance          AMBIENT. Something that is not a verb but happens to be
+    .chinotto-band-label          clickable — a band label, a year row, `wording corrected`.
+                                  It rests at whatever tone it already had, and only under the
+                                  pointer does it take agency's colour AND weight at once.
 
   Every rule below carries `!important`, and that is structural rather than a preference. A
-  row's resting colour comes from `tierStyle()` and a verb's from `metaStyle()`, both of
-  which write `color` into the element's own `style` attribute, because the value is decided
-  per tier at render time. An inline declaration outranks any class rule — so these were all
-  computed correctly and then lost, on every element they name, which is every element that
-  has a hover state at all. The surface had no pointer feedback below D0 whatsoever.
+  row's resting colour comes from `tierStyle()` and a verb's from `metaStyle()`, both of which
+  write `color` into the element's own `style` attribute, because the value is decided per tier
+  at render time. An inline declaration outranks any class rule — so without `!important`
+  these are all computed correctly and then lost, on every element they name.
 
-  `:not(:disabled)` is what keeps a disabled verb from brightening: it is a statement, not a
-  control, and it must not answer the pointer.
+  `:not(:disabled)` is what keeps a disabled verb from answering: it is a statement, not a
+  control.
 */
-.chinotto-verb:hover:not(:disabled),
-.chinotto-affordance:hover {
-  color: var(--ink) !important;
+
+/*
+  The full rank. `--agency-weight` is set at rest as well as on hover, because weight is half
+  of what marks a verb at all — see rule 1 at the head of this file.
+
+  `!important` for the same structural reason the colours below carry it, and one more: a verb
+  is a `<button>` reset with `font: inherit`, and the `font` shorthand resets `font-weight`
+  along with everything else. An inline shorthand outranks a class rule, so without this the
+  weight is computed and then thrown away on every verb in the product — which is half of what
+  marks a verb at all.
+*/
+.chinotto-verb {
+  font-weight: var(--agency-weight) !important;
+}
+
+.chinotto-verb:hover:not(:disabled) {
+  color: var(--agency-hover) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
 }
 
 /*
-  A step past ink, which the design spends in exactly two places: a row's own verbs
-  (`continue`, `hold`, `⋯`) and the menu that opens from them. Both sit on top of material
-  rather than beside it, and both are reached deliberately, so they are allowed to be the
-  brightest thing on the surface.
+  The quiet rank: back and up, dismissals, key notation, the correction window, and every
+  destructive verb in the product. It lifts one step, to full agency, and takes no underline —
+  `remove` must never arrive louder than `keep it`.
 */
-.chinotto-verb--bright:hover:not(:disabled) {
-  color: var(--ink-bright) !important;
-}
-
-/*
-  The quieter register: words that are always on screen — a band's label, the quiet line,
-  "wording corrected" — and must not flare when the pointer merely crosses them on its way
-  somewhere else.
-*/
-.chinotto-band-label:hover,
 .chinotto-verb--quiet:hover:not(:disabled) {
-  color: var(--ink-verb) !important;
+  color: var(--agency) !important;
+  text-decoration: none;
 }
 
-/* A capture hint rests below meta and comes up to it, never to ink. */
-.chinotto-hint:hover {
-  color: var(--meta) !important;
+/*
+  Ambient, and the one place weight is added by a hover rather than held from the start: these
+  words are always on screen, so at rest they belong to the material around them. Under the
+  pointer they become a verb — colour and weight together — and then stop being one again.
+*/
+.chinotto-affordance:hover,
+.chinotto-band-label:hover {
+  color: var(--agency) !important;
+  font-weight: var(--agency-weight) !important;
 }
 
 /*
   A compact row brightens to full ink under the pointer rather than taking the D0 wash: at
-  13px a background band is a bigger gesture than the text it sits behind.
+  13px a background band is a bigger gesture than the text it sits behind. It brightens as
+  MATERIAL — it is your words, not an action — so it stops at `--ink` and gains no weight.
 */
 .chinotto-compact-row:hover {
   color: var(--ink) !important;
@@ -397,7 +569,8 @@ input[aria-label="Find"]:focus-visible {
 
   The window's own background has to be the field too, or overscroll, the area under a
   short record and the space behind the titlebar all show the shell's colour instead. This
-  overrides what is left of the v1 stylesheet, which still paints #0a0a0e.
+  overrides index.css, which paints the same field as a literal so the window never flashes a
+  different colour before this file arrives.
 */
 /*
   `:root` rather than `html` on purpose: the v1 stylesheet is imported after this one, so a
@@ -422,16 +595,19 @@ input[aria-label="Find"]:focus-visible {
 /*
   Lift contrast in bright light.
 
-  Not a fourth appearance and not a dimmed one: it raises only the quiet end of the ladder,
-  where sunlight actually takes legibility away, and leaves ink, the rules and the washes
-  alone. The ordering between the tiers survives, which is the thing that must not break.
+  Not a fourth appearance and not a dimmed one: it raises only the quiet end of the material
+  ladder, where sunlight actually takes legibility away, and leaves the top of the ladder, the
+  rules and the washes alone. The ordering between the tiers survives, which is the thing that
+  must not break.
+
+  Agency is not touched. It is already the lightest thing on the surface at 17.49:1, and it is
+  carried by weight as much as by tone — there is nowhere for it to go and no need to send it.
 */
 :root[data-lift-contrast] {
   --ink-far: #c6c6c3;
   --ink-dim: #bcbbb7;
   --meta: #a3a29c;
   --faint: #8b8a85;
-  --faint-text: #9d9c97;
 }
 
 :root[data-lift-contrast][data-theme="light"],
@@ -440,7 +616,6 @@ input[aria-label="Find"]:focus-visible {
   --ink-dim: #45443f;
   --meta: #56554f;
   --faint: #56554f;
-  --faint-text: #56554f;
 }
 
 /*
@@ -494,7 +669,7 @@ input[aria-label="Find"]:focus-visible {
 .chinotto-verb:focus-visible,
 .chinotto-affordance:focus-visible,
 .chinotto-band-label:focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--agency);
   outline-offset: 2px;
   border-radius: 1px;
 }

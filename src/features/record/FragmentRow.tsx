@@ -230,8 +230,8 @@ export function FragmentRow(props: FragmentRowProps) {
               <span>
                 changes the wording only — the moment keeps its date and the earlier wording
               </span>
-              <Verb ink onClick={() => props.onEditSave?.()} style={{ marginLeft: "auto" }}>⏎ save</Verb>
-              <Verb onClick={() => props.onEditCancel?.()}>esc cancel</Verb>
+              <Verb onClick={() => props.onEditSave?.()} style={{ marginLeft: "auto" }}>⏎ save</Verb>
+              <Verb quiet onClick={() => props.onEditCancel?.()}>esc cancel</Verb>
             </div>
           </>
         ) : (
@@ -272,8 +272,16 @@ export function FragmentRow(props: FragmentRowProps) {
                   style={{
                     display: "inline-block",
                     fontSize: "var(--size-voice-chip)",
-                    color: voice.audioMissing ? "var(--meta)" : "var(--ink-verb)",
-                    border: "1px solid var(--rule)",
+                    // The chip is pressable — it plays — so it is a verb and takes agency's
+                    // colour and weight. When the audio is not on this device it is not a
+                    // control at all: it drops to meta and the dimmer chip border, and says so
+                    // with the dashed edge. (UNSPECIFIED: the design draws an inert chip only
+                    // for the compact tiers, which never play; this borrows its border.)
+                    color: voice.audioMissing ? "var(--meta)" : "var(--agency)",
+                    fontWeight: voice.audioMissing ? undefined : "var(--agency-weight)",
+                    border: `1px solid ${
+                      voice.audioMissing ? "var(--chip-border-inert)" : "var(--chip-border)"
+                    }`,
                     borderStyle: voice.audioMissing ? "dashed" : "solid",
                     padding: "3px 10px 3px 8px",
                     verticalAlign: "4px",
@@ -350,16 +358,16 @@ export function FragmentRow(props: FragmentRowProps) {
                 {suggestion ? (
                   <span>
                     continues {suggestion.when}{" "}
-                    <span style={{ color: "var(--ink-verb)" }}>“{suggestion.text}”</span>?{" "}
+                    <span style={{ color: "var(--ink-quoted)" }}>“{suggestion.text}”</span>?{" "}
+                    {/* The offer itself, so it carries its underline at rest. */}
                     <Verb
                       onClick={() => props.onAcceptSuggestion?.()}
-                      ink
                       style={{ textDecoration: "underline", textUnderlineOffset: "4px" }}
                     >
                       yes
                     </Verb>{" "}
                     ·{" "}
-                    <Verb onClick={() => props.onRejectSuggestion?.()}>no</Verb>
+                    <Verb ambient onClick={() => props.onRejectSuggestion?.()}>no</Verb>
                   </span>
                 ) : null}
               </span>
@@ -369,19 +377,20 @@ export function FragmentRow(props: FragmentRowProps) {
               <div
                 style={{
                   ...metaStyle("var(--size-meta-lg)"),
-                  color: "var(--ink-verb)",
+                  color: "var(--agency)",
+                  fontWeight: "var(--agency-weight)",
                   display: "flex",
                   gap: "22px",
                   marginTop: "10px",
                 }}
               >
-                <Verb bright onClick={() => props.onCorrect?.(fragment)}>correct</Verb>
-                <Verb bright onClick={() => props.onCopy?.(fragment)}>copy</Verb>
+                <Verb onClick={() => props.onCorrect?.(fragment)}>correct</Verb>
+                <Verb onClick={() => props.onCopy?.(fragment)}>copy</Verb>
                 {encounter ? (
-                  <Verb bright onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
+                  <Verb onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
                 ) : null}
-                <Verb bright onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
-                <Verb bright onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
+                <Verb onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
+                <Verb quiet onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
               </div>
             ) : null}
 
@@ -398,7 +407,8 @@ export function FragmentRow(props: FragmentRowProps) {
         aria-hidden={!showVerbs}
         style={{
           ...metaStyle("var(--size-meta-lg)"),
-          color: "var(--ink-verb)",
+          color: "var(--agency)",
+          fontWeight: "var(--agency-weight)",
           display: "flex",
           gap: "18px",
           flex: "none",
@@ -407,9 +417,9 @@ export function FragmentRow(props: FragmentRowProps) {
           pointerEvents: showVerbs ? "auto" : "none",
         }}
       >
-        <Verb bright onClick={() => props.onContinue?.(fragment)}>continue</Verb>
-        <Verb bright onClick={() => props.onHold?.(fragment)}>{held ? "release" : "hold"}</Verb>
-        <Verb bright aria-label="more" onClick={() => props.onToggleMenu?.(fragment)}>⋯</Verb>
+        <Verb onClick={() => props.onContinue?.(fragment)}>continue</Verb>
+        <Verb onClick={() => props.onHold?.(fragment)}>{held ? "release" : "hold"}</Verb>
+        <Verb aria-label="more" onClick={() => props.onToggleMenu?.(fragment)}>⋯</Verb>
       </div>
     </div>
   );

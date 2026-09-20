@@ -113,11 +113,7 @@ function micNotice(
       <>
         chinotto can’t hear — the mac isn’t allowing the microphone. system settings ›
         privacy › microphone, then hold space again.{" "}
-        <Verb
-          
-          onClick={onOpenSettings}
-          style={{ color: "var(--ink)", cursor: "pointer" }}
-        >
+        <Verb onClick={onOpenSettings} style={{ cursor: "pointer" }}>
           open system settings ›
         </Verb>
       </>
@@ -1058,7 +1054,7 @@ export function RecordApp() {
                 }}
               >
                 <Verb
-                  
+                  quiet
                   onClick={() => setAnchor(null)}
                   style={{ cursor: "pointer", whiteSpace: "nowrap" }}
                 >
@@ -1146,7 +1142,7 @@ export function RecordApp() {
                           {g.fragment.body}
                         </div>
                         <Verb
-                          
+                          quiet
                           onClick={() =>
                             setRejectedGuesses((s) => new Set(s).add(g.fragment.id))
                           }

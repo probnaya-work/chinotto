@@ -393,14 +393,14 @@ export function Record(props: RecordProps) {
                 {heldSinceLabel(new Date(heldAt), now)} ·{" "}
                 <button
                   type="button"
-                  className="chinotto-verb"
+                  className="chinotto-verb chinotto-verb--quiet"
                   onClick={() => props.onRelease(f)}
                   style={{
                     background: "none",
                     border: "none",
                     padding: 0,
                     font: "inherit",
-                    color: "var(--ink-verb)",
+                    color: "var(--agency-quiet)",
                     cursor: "pointer",
                   }}
                 >

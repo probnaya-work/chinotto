@@ -228,10 +228,12 @@ export function Capture({
         {!hasText ? (
           <span
             onMouseDown={onStartSpeaking}
-            className="chinotto-hint"
+            className="chinotto-verb chinotto-verb--quiet"
             style={{
               ...metaStyle("var(--size-meta-lg)"),
-              color: "var(--faint-text)",
+              // A quiet verb rather than a hint: it is the only way holding space to speak
+              // is discoverable at all, and the design inks it accordingly.
+              color: "var(--agency-quiet)",
               paddingTop: "22px",
               cursor: "pointer",
               userSelect: "none",
@@ -251,7 +253,7 @@ export function Capture({
             }}
           >
             {findCount} in words ·{" "}
-            <Verb onClick={() => onToggleMeaning?.()} tone="var(--ink-verb)">
+            <Verb onClick={() => onToggleMeaning?.()}>
               {meaningOn ? "in words only" : "also by meaning"}
             </Verb>{" "}
             · esc
@@ -270,7 +272,7 @@ export function Capture({
           gap: "26px",
           marginTop: "6px",
           ...metaStyle("var(--size-meta-lg)"),
-          color: "var(--faint-text)",
+          color: "var(--faint)",
           opacity: hasText && !isFind ? 1 : 0,
           transition: "opacity var(--settle) var(--ease)",
         }}

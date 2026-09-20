@@ -227,14 +227,16 @@ function Verb({
   return (
     <button
       type="button"
-      className="chinotto-verb"
+      className={"chinotto-verb" + (emphasis ? "" : " chinotto-verb--quiet")}
       onClick={onClick}
       style={{
         background: "none",
         border: "none",
         padding: 0,
         font: "inherit",
-        color: emphasis ? "var(--ink)" : "inherit",
+        // `continue` is the Return's one full verb; `open the line`, `hold` and `let go ↓`
+        // are the quiet rank beside it.
+        color: emphasis ? "var(--agency)" : "var(--agency-quiet)",
         cursor: "pointer",
       }}
     >

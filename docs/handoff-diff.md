@@ -66,6 +66,11 @@ matches the prototype everywhere the colour is not carrying functional text.
 **DECIDED: (c)** — `--faint` returns to `#5f5e5a` for decorative use; a second token carries the
 lifted value for the capture hints.
 
+**SUPERSEDED by the finalized colour system.** The split is gone and `--faint-text` with it:
+`◌ hold space to speak` is now a quiet verb at 14.87:1 rather than a lifted label, which is a
+better answer to the same problem, and what stays at `#5f5e5a` is the row that restates keys
+already pressed. The remaining regression is recorded in `unspecified-decisions.md` §16.1.
+
 ### 1.3 A Return must state why, but three of the four triggers cannot
 
 The package: *"The reason is mandatory — a return that cannot show why it came back must not
@@ -148,9 +153,11 @@ Correct as built; no work.
   Each rung drawn, not scaled. `MarkTile` radius `0.225` = 185/824, mark at 0.625 ≈ the specified
   0.62.
 - **Column geometry.** 940px column, left-biased offset, 46px time gutter, 22px gap, 68px indent.
-- **The ink ladder**, for the five steps that exist: `#e6e6e3 / #cfcfcc / #c9c9c6 / #b4b4b2 /
+- ~~**The ink ladder**, for the five steps that exist: `#e6e6e3 / #cfcfcc / #c9c9c6 / #b4b4b2 /
   #8f8e89`, plus `#3a3a40` rules, `rgba(230,230,227,0.16)` match, `…0.04` row hover, `…0.25`
-  selection.
+  selection.~~ **Superseded by the finalized colour system** — material is now
+  `#d4d3ce / #c0bfba / #b4b4b2 / #aaa9a4 / #8f8e89`, verbs leave the ladder entirely for
+  `--agency`, and the washes moved. See `unspecified-decisions.md` §16.
 - **D0/D1/D2 type**: 26/1.24/−0.012em/100, 19/1.26/92 clamp 3, 14/1.3/84 clamp 2. Gaps 24/12/7.
 - **Capture.** 44px, −0.02em, auto-growing textarea, field cleared *before* anything else happens,
   hint row `⏎ leave it · ⇧⏎ new line · esc drop it`, `◌ hold space to speak` right-aligned.
@@ -283,7 +290,7 @@ Nothing in this list exists on the branch in any form.
 | Return verbs `continue · open · hold` | `continue · open the line · hold` | `ReturnBlock.tsx` |
 | `⋯` as an anchored popover | an inline verb row | `MoreMenu.tsx` |
 | Undo 10s, centred toast | 8s, in the quiet line, with `⌘Z` | `RecordApp.tsx` |
-| `--faint` lifted to `#878682` | `#5f5e5a` (see §1.2) | `tokens.css` |
+| `--faint` lifted to `#878682` | `#5f5e5a` (see §1.2, now superseded by §16.1) | `tokens.css` |
 | Wordmark carries `an instrument by PROBNAYA` | lockup is mark + wordmark only, never with a tagline | `Mark.tsx` |
 | Ten alternate app icons | two: dark and light | `iconVariants.ts`, `setDesktopIcon.ts` |
 | `⌘⇧V` voice shortcut | removed — hold is the model (`space`, `⌥space`) | `lib.rs` |
@@ -309,7 +316,9 @@ deleted — so replacing them removes dead code rather than working features.
 
 **Every shipped raster is still the old mark** — a ring with four scattered dots, periwinkle
 `#8a94c8` on `#0a0a0e`. The new mark is a ring with three dots receding down a column, ink
-`#e6e6e3` on `#141416`. `Mark.tsx` is already correct (§2); nothing else is.
+`#d4d3ce` on `#141416` (material's top step — the finalized colour system moved it from
+`#e6e6e3`, and an icon is a mark rather than a control, so it does not take agency).
+`Mark.tsx` is already correct (§2); nothing else is.
 
 | Asset | State | Action |
 |---|---|---|
