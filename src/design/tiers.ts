@@ -153,11 +153,37 @@ const HOUR = 3_600_000;
 const DAY = 86_400_000;
 
 /**
- * Which level a fragment sits at, counted from now. 5 means the years band.
+ * Where the record's distances are measured from.
+ *
+ * Not the clock — the record's own edge, which is where your writing actually stops.
+ *
+ * The prototype measures from `now`, and cannot show what that costs: its corpus is built
+ * relative to its own `NOW`, so it always has today's material in it. A real record that has
+ * been left alone for three weeks recedes *whole* — every tier collapses onto the floor
+ * together, and the column becomes one wall of 12px at the moment you come back to it. The
+ * ladder is meant to say "this is near and that is far", and a ladder with everything on
+ * the bottom rung says nothing.
+ *
+ * Reading from the edge keeps the ladder's shape: the newest thing you have is as near as
+ * it was when you wrote it, and everything behind it recedes away from it. What it costs is
+ * that a fragment can grow back toward D0 as older material ages past it — so the words are
+ * still taken from the clock (see `labelFor`), and a row's gutter still says the day it was
+ * actually written.
+ *
+ * Never later than now: a fragment dated in the future — a clock moved back, a phone in the
+ * wrong timezone — must not drag the whole record forward with it.
+ */
+export function referenceFor(newestCapturedAt: number | null, now: number): number {
+  if (newestCapturedAt === null || Number.isNaN(newestCapturedAt)) return now;
+  return Math.min(now, newestCapturedAt);
+}
+
+/**
+ * Which level a fragment sits at, counted from `reference`. 5 means the years band.
  *
  * This is `level()` from the prototype, transcribed. It is deliberately a free function on
  * timestamps rather than a method on anything, so the band builder and its tests can call
- * it with a fixed clock.
+ * it with a fixed clock — and so the reference can be the record's edge rather than now.
  */
 export function levelForRecency(capturedAt: number, now: number): number {
   const dt = now - capturedAt;

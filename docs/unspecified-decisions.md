@@ -465,7 +465,7 @@ not mine to close.
 | 14.2 | A failed model load is remembered for the run | one attempt, then meaning is simply absent | `embeddings.rs` | invented |
 | 14.3 | The model's weights live in the app's data directory | `<app data>/models`, not `./.fastembed_cache` | `embeddings.rs`, `lib.rs` | correctness fix |
 | 14.4 | Fixed-position chrome sits outside the animated column | `QuietLine` and the error line are siblings of it | `RecordApp.tsx` | correctness fix |
-| 14.5 | Distance is still measured from now, not from the record's own edge | unchanged — flagged, not decided | `tiers.ts` | **open** |
+| 14.5 | Distance is measured from the record's own edge, not from the clock | `referenceFor()`, clamped to now | `tiers.ts`, `bands.ts` | decided by the owner |
 
 **14.1.** `#[tauri::command]` without `(async)` runs on the app's main thread. All 106
 commands were plain, so reading the whole Record, selecting a Return, transcribing speech
@@ -501,16 +501,33 @@ on top of the last rows and scrolling away with them. Nothing in its own styling
 `offsetParent` did. It now renders outside the column, where `bottom: 22px` means what it
 says.
 
-**14.5 — the open one.** `levelForRecency` measures from the wall clock, exactly as the
-prototype does. On a record left alone for three weeks that puts *everything* at the floor:
-170 fragments at D4, 4 at D3, nothing at D0, D1 or D2 — a whole record at 12 px, `wdth` 76,
-one ellipsised line each. The prototype cannot show this, because its corpus is generated
-relative to its own `NOW` and so always has today's material in it; run its own `bandsFor`
-against a real stale record and it collapses the same way.
+**14.5.** `levelForRecency` measured from the wall clock, exactly as the prototype does. On
+a record left alone for three weeks that put *everything* at the floor: 170 fragments at D4,
+4 at D3, nothing at D0, D1 or D2 — a whole record at 12 px, `wdth` 76, one ellipsised line
+each. The prototype cannot show this, because its corpus is generated relative to its own
+`NOW` and so always has today's material in it; run its own `bandsFor` against a real stale
+record and it collapses the same way.
 
-This is faithful, and it is unusable. The implementation is not wrong and is left alone.
-What needs deciding is the semantics: whether "distance" is measured from now — in which
-case a record you have not written to recedes out of legibility, which may be the honest
-thing — or from the record's own edge, so the newest material you have is always near. That
-changes what the central metaphor of the product means, so it is not a decision this build
-gets to make on its own.
+Raised as a semantics question rather than fixed, because it is about what distance *means*,
+and answered by the owner: distance is measured from the record's own edge — the newest
+fragment it holds — clamped so that a date in the future cannot drag the record forward.
+`referenceFor()` in `tiers.ts`; `levelForRecency` is unchanged and still takes its reference
+as an argument.
+
+Two things it deliberately does not change. The **words** still come from the clock: a band
+that is D1 for this record can still be three weeks old, and `labelFor` picks its wording
+from the true recency so the column never answers "earlier today" about august. And a row's
+gutter was already keyed on the actual date rather than the tier, so a D0 row on a stale
+record reads `29 aug`, not a clock time.
+
+What it costs: a fragment can move back *toward* D0 as the material around it ages, so
+"distance only ever recedes" is no longer true of an individual row — only of its position
+relative to the edge. On a record with anything in it today the reference is now and the
+behaviour is the prototype's, unchanged.
+
+What it does *not* buy, measured on the same real record: `d0(2) · d3(11) · d4(170) ·
+years(11)`. The ladder has a top again, but 170 rows are still at the floor — because the
+windows (8 h / yesterday / 7 d / 60 d / 180 d) are sized for someone writing many times a
+day, and this record averages roughly one fragment every other day. Whether the windows
+should scale with how often a person actually writes is a separate open question, and a
+larger one.

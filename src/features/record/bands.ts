@@ -19,6 +19,7 @@ import {
   YEARS_LEVEL,
   levelForAnchor,
   levelForRecency,
+  referenceFor,
   tierForLevel,
   type Tier,
 } from "../../design/tiers";
@@ -100,8 +101,17 @@ function labelFor(f: Fragment, level: number, now: Date, anchor: Anchor | null):
   const at = new Date(f.capturedAt);
   if (anchor) return level === 0 ? null : monthLabel(at, now, true);
   if (level === 0) return null;
-  if (level === 1) return isSameDay(at, now) ? "earlier today" : "yesterday";
-  if (level === 2) return dayLabel(at, now);
+  /*
+    The size comes from the record's edge; the words come from the clock.
+
+    These must not be the same number. A band can be near *for this record* and still be
+    three weeks old, and a column that answers "yesterday" because the tier says D1 would be
+    stating something false about when you wrote it. On a record with material in it today
+    the two agree exactly, and this is the prototype's rule unchanged.
+  */
+  const said = levelForRecency(at.getTime(), now.getTime());
+  if (said <= 1) return isSameDay(at, now) ? "earlier today" : "yesterday";
+  if (said === 2) return dayLabel(at, now);
   return monthLabel(at, now);
 }
 
@@ -124,13 +134,21 @@ export function bandsFor({
     (a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime(),
   );
 
+  // The edge of the record, which is what distance is measured from. `items` is newest
+  // first, so it is the first one — after the filters, so standing in a filtered view
+  // measures from what is actually on screen.
+  const reference = referenceFor(
+    items.length ? new Date(items[0].capturedAt).getTime() : null,
+    nowMs,
+  );
+
   const bands: Band[] = [];
   let current: Band | null = null;
 
   for (const f of items) {
     const at = new Date(f.capturedAt);
     const atMs = at.getTime();
-    const level = anchor ? levelForAnchor(atMs, anchor) : levelForRecency(atMs, nowMs);
+    const level = anchor ? levelForAnchor(atMs, anchor) : levelForRecency(atMs, reference);
 
     if (level >= YEARS_LEVEL) {
       const year = at.getFullYear();

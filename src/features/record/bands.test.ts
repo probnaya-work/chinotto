@@ -19,6 +19,16 @@ function frag(iso: string, body = "a fragment"): Fragment {
   };
 }
 
+/**
+ * A fragment at the edge.
+ *
+ * Distance is measured from the newest thing the record holds, so a fixture with nothing
+ * near puts its own oldest material at D0. Every test below that is about a *far* band
+ * needs an edge for that band to be far from — which is also what a real record being read
+ * at its edge looks like.
+ */
+const edge = () => frag("2026-09-19T17:02:00", "at the edge");
+
 const shape = (bands: ReturnType<typeof bandsFor>) =>
   bands.map((b) => (b.kind === "years" ? `years(${b.years.length})` : `${b.tier}(${b.items.length})`));
 
@@ -48,10 +58,10 @@ describe("banding the record", () => {
 
   it("labels D1 by whether it is still today", () => {
     const bands = bandsFor({
-      fragments: [frag("2026-09-19T08:40:00"), frag("2026-09-18T21:05:00")],
+      fragments: [edge(), frag("2026-09-19T08:40:00"), frag("2026-09-18T21:05:00")],
       now: NOW,
     });
-    expect((bands[0] as MaterialBand).labels).toEqual(["earlier today", "yesterday"]);
+    expect((bands[1] as MaterialBand).labels).toEqual(["earlier today", "yesterday"]);
   });
 
   it("never labels D0", () => {
@@ -63,13 +73,14 @@ describe("banding the record", () => {
   it("names at most three of the days a band spans, then elides", () => {
     const band = bandsFor({
       fragments: [
+        edge(),
         frag("2026-09-16T10:00:00"),
         frag("2026-09-15T10:00:00"),
         frag("2026-09-14T10:00:00"),
         frag("2026-09-13T10:00:00"),
       ],
       now: NOW,
-    })[0] as MaterialBand;
+    })[1] as MaterialBand;
     expect(band.labels).toHaveLength(4);
     expect(bandLabelText(band, NOW, null)).toBe("wed 16 · tue 15 · mon 14 · …");
   });
@@ -77,14 +88,15 @@ describe("banding the record", () => {
   it("folds everything past six months into years, oldest tier first", () => {
     const bands = bandsFor({
       fragments: [
+        edge(),
         frag("2026-01-09T08:30:00"),
         frag("2025-05-02T07:50:00"),
         frag("2025-11-20T12:00:00"),
       ],
       now: NOW,
     });
-    expect(shape(bands)).toEqual(["years(2)"]);
-    const years = bands[0].kind === "years" ? bands[0].years : [];
+    expect(shape(bands)).toEqual(["d0(1)", "years(2)"]);
+    const years = bands[1].kind === "years" ? bands[1].years : [];
     expect(years.map((y) => y.year)).toEqual([2026, 2025]);
     expect(years[0].count).toBe(1);
     expect(years[0].months[0]).toBe(1); // january
@@ -93,31 +105,32 @@ describe("banding the record", () => {
 
   it("keeps at most five first lines per year", () => {
     const bands = bandsFor({
-      fragments: Array.from({ length: 9 }, (_, i) =>
-        frag(`2021-03-0${i + 1}T10:00:00`, `line ${i}`),
-      ),
+      fragments: [
+        edge(),
+        ...Array.from({ length: 9 }, (_, i) => frag(`2021-03-0${i + 1}T10:00:00`, `line ${i}`)),
+      ],
       now: NOW,
     });
-    const years = bands[0].kind === "years" ? bands[0].years : [];
+    const years = bands[1].kind === "years" ? bands[1].years : [];
     expect(years[0].count).toBe(9);
     expect(years[0].firstLines).toHaveLength(5);
   });
 
   it("truncates a first line rather than letting a paragraph into a year row", () => {
     const bands = bandsFor({
-      fragments: [frag("2021-03-01T10:00:00", "x".repeat(400))],
+      fragments: [edge(), frag("2021-03-01T10:00:00", "x".repeat(400))],
       now: NOW,
     });
-    const years = bands[0].kind === "years" ? bands[0].years : [];
+    const years = bands[1].kind === "years" ? bands[1].years : [];
     expect(years[0].firstLines[0]).toHaveLength(90);
   });
 
   it("takes only the first line of a multi-paragraph fragment", () => {
     const bands = bandsFor({
-      fragments: [frag("2021-03-01T10:00:00", "the first line\n\nand a second paragraph")],
+      fragments: [edge(), frag("2021-03-01T10:00:00", "the first line\n\nand a second paragraph")],
       now: NOW,
     });
-    const years = bands[0].kind === "years" ? bands[0].years : [];
+    const years = bands[1].kind === "years" ? bands[1].years : [];
     expect(years[0].firstLines[0]).toBe("the first line");
   });
 
@@ -166,14 +179,53 @@ describe("banding the record", () => {
     const held = frag("2026-09-18T14:20:00", "boiler guy");
     const rest = frag("2026-09-18T13:48:00", "pasta water too salty again");
     const atEdge = bandsFor({
-      fragments: [held, rest],
+      fragments: [edge(), held, rest],
       now: NOW,
       exclude: new Set([held.id]),
     });
-    expect(shape(atEdge)).toEqual(["d1(1)"]);
+    expect(shape(atEdge)).toEqual(["d0(1)", "d1(1)"]);
     // Standing or filtering shows the record as it actually is.
-    const standing = bandsFor({ fragments: [held, rest], now: NOW });
-    expect(shape(standing)).toEqual(["d1(2)"]);
+    const standing = bandsFor({ fragments: [edge(), held, rest], now: NOW });
+    expect(shape(standing)).toEqual(["d0(1)", "d1(2)"]);
+  });
+
+  it("measures distance from the record's edge rather than from the clock", () => {
+    // Three weeks since the last fragment. Measured from now, every one of these is D3 or
+    // worse and the whole column collapses onto the floor together — which is what a real
+    // record looked like the first time one was opened. Measured from the edge, the ladder
+    // keeps its shape: the newest material is near, and the rest recedes behind it.
+    const bands = bandsFor({
+      fragments: [
+        frag("2026-08-29T21:30:00", "the last thing written"),
+        frag("2026-08-29T16:00:00", "and one before it"),
+        frag("2026-08-20T10:00:00"),
+        frag("2026-05-01T10:00:00"),
+        frag("2026-01-01T10:00:00"),
+      ],
+      now: NOW,
+    });
+    expect(shape(bands)).toEqual(["d0(2)", "d3(1)", "d4(1)", "years(1)"]);
+  });
+
+  it("still says when a band actually was, whatever its distance says about its size", () => {
+    // The size comes from the edge; the words come from the clock. A band that is D1 for
+    // this record is still three weeks old, and must not answer "earlier today".
+    const bands = bandsFor({
+      fragments: [frag("2026-08-29T21:30:00"), frag("2026-08-29T08:00:00")],
+      now: NOW,
+    });
+    expect(shape(bands)).toEqual(["d0(1)", "d1(1)"]);
+    expect((bands[1] as MaterialBand).labels).toEqual(["aug"]);
+  });
+
+  it("is not dragged forward by a fragment dated in the future", () => {
+    // A clock moved back, or a phone in the wrong timezone. Taking its date as the edge
+    // would push everything actually written today months into the past.
+    const bands = bandsFor({
+      fragments: [frag("2027-01-01T10:00:00", "from a wrong clock"), frag("2026-09-19T16:00:00")],
+      now: NOW,
+    });
+    expect(shape(bands)).toEqual(["d0(2)"]);
   });
 
   it("returns nothing for an empty record rather than an empty band", () => {
@@ -190,9 +242,9 @@ describe("banding the record", () => {
 
   it("sends a band's label to the month it opened in", () => {
     const band = bandsFor({
-      fragments: [frag("2026-08-14T19:30:00"), frag("2026-08-01T10:00:00")],
+      fragments: [edge(), frag("2026-08-14T19:30:00"), frag("2026-08-01T10:00:00")],
       now: NOW,
-    })[0] as MaterialBand;
+    })[1] as MaterialBand;
     expect(bandAnchor(band)).toEqual({ year: 2026, month: 7 });
   });
 });
