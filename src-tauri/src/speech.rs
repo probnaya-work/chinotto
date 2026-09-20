@@ -1,22 +1,82 @@
-//! Native macOS speech recognition via Speech framework.
-//! Long-lived SpeechManager plus warm-up to reduce startup latency.
+//! Voice capture: the audio is the material, the transcript is derived from it.
+//!
+//! This used to be a transcript-only pipeline — the microphone fed the recogniser, the
+//! recogniser produced a string, and the audio was discarded. That inverts the product's
+//! model. A recording is something the person made; a transcript is a machine's reading of
+//! it, which can be wrong, can fail entirely, and can be corrected later without the
+//! recording changing at all. Throwing away the source to keep the derivation is the one
+//! thing this module must not do.
+//!
+//! So the tap now feeds two things: the recogniser, and a file on disk. The file is written
+//! as the buffers arrive, so an aborted recognition, a denied speech authorisation or a
+//! crashed recogniser all still leave the audio behind. `run_capture` returns the path and
+//! duration whether or not any words came back.
 
 #![cfg(target_os = "macos")]
 
 use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::AnyThread;
-use objc2_avf_audio::{AVAudioEngine, AVAudioFrameCount, AVAudioPCMBuffer, AVAudioTime};
+use objc2_avf_audio::{
+    AVAudioEngine, AVAudioFile, AVAudioFrameCount, AVAudioPCMBuffer, AVAudioTime,
+};
+use objc2_foundation::NSURL;
 use objc2_foundation::NSError;
 use objc2_speech::{
     SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionResult, SFSpeechRecognizer,
+    SFSpeechRecognizerAuthorizationStatus,
 };
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const AUTHORIZED_STATUS: isize = 3;
+const NOT_DETERMINED_STATUS: isize = 0;
+
+/// Set when the hold is released. `max_ms` is a ceiling, not the length of the recording.
+pub static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Ends the current recording, if there is one. Idempotent.
+pub fn request_stop() {
+    STOP_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// Clears any leftover release, at the moment a capture is asked for.
+///
+/// This has to happen here — before the command reaches the speech thread — and not inside
+/// the capture. Starting a capture is slow the first time: the recogniser is created, the
+/// audio engine starts, and the mac puts up its microphone prompt. That is precisely when a
+/// person lets go of the key, and clearing the flag after all that threw their release away
+/// and recorded until the two-minute ceiling instead. A release is never early; it is only
+/// ever ahead of the machine.
+pub fn arm_stop() {
+    STOP_REQUESTED.store(false, Ordering::SeqCst);
+}
+
+/// Asks the mac, once, whether this app may read recordings back as words.
+///
+/// Speech recognition is a separate permission from the microphone, and an app that has
+/// never asked does not appear under System Settings › Privacy & Security › Speech
+/// Recognition at all — so telling somebody to go and enable it there, which is what this
+/// used to do, sent them to a list they could not be on. The only way out of "not
+/// determined" is to ask.
+///
+/// It does not wait for the answer. The prompt is the person's to take their time over, and
+/// the recording is already running; this capture keeps its audio and gets no transcript,
+/// and the next one gets both.
+pub fn ask_for_speech_if_undecided() {
+    let status = unsafe { SFSpeechRecognizer::authorizationStatus() };
+    if status.0 != NOT_DETERMINED_STATUS {
+        return;
+    }
+    eprintln!("[Speech] speech authorisation not determined — asking");
+    let handler = RcBlock::new(|answered: SFSpeechRecognizerAuthorizationStatus| {
+        eprintln!("[Speech] speech authorisation answered: {}", answered.0);
+    });
+    unsafe { SFSpeechRecognizer::requestAuthorization(&handler) };
+}
 
 /// Long-lived speech pipeline: authorization and recognizer created once.
 pub struct SpeechManager {
@@ -55,33 +115,29 @@ impl SpeechManager {
                 t0.elapsed().as_millis()
             );
             AUTHORIZED_STATUS
-        } else if current_status.0 == 0 {
-            // Status 0 = not determined, need to request authorization
-            // However, requestAuthorization callback requires the main thread's run loop.
-            // From a background thread, the callback never fires.
-            // Instead of hanging, return an error with instructions.
+        } else if current_status.0 == NOT_DETERMINED_STATUS {
+            // The asking itself is done on the main thread, at the moment the capture was
+            // asked for (see `lib.rs`). Nothing is waited for here: an answer that has not
+            // arrived yet is not a failure of the recording.
             eprintln!(
-                "[Speech] {} ms - warm-up: authorization not determined, needs user action",
+                "[Speech] {} ms - warm-up: asked for authorisation; this recording keeps its audio",
                 t0.elapsed().as_millis()
             );
-            return Err("Speech recognition permission is required. \n\n\
-                Please go to:\n\
-                System Settings > Privacy & Security > Speech Recognition\n\n\
-                Enable access for Chinotto, then try again."
-                .to_string());
+            return Err(
+                "the mac is being asked whether chinotto may read recordings back as words"
+                    .to_string(),
+            );
         } else {
             // Already denied (2) or restricted (1)
             current_status.0
         };
 
         if status != AUTHORIZED_STATUS {
-            return Err(format!(
-                "Speech recognition not authorized (status: {}).\n\n\
-                Please go to:\n\
-                System Settings > Privacy & Security > Speech Recognition\n\n\
-                Enable access for Chinotto, then try again.",
-                status
-            ));
+            return Err(
+                "the mac is not allowing chinotto to read recordings back as words \
+                 · system settings › privacy & security › speech recognition"
+                    .to_string(),
+            );
         }
 
         eprintln!(
@@ -125,21 +181,36 @@ impl SpeechManager {
             .ok_or_else(|| "Recognizer missing after warm-up".to_string())
     }
 
-    /// Run one capture: record up to `max_ms`, return final or best partial transcript.
-    /// `event_tx`: send "listening" | "processing" | "voice_captured" for UX.
+    /// One capture: record up to `max_ms` to `audio_path`, and transcribe it if we can.
+    ///
+    /// The audio is written as it arrives, so it survives everything that can go wrong
+    /// afterwards. The transcript is best-effort and may be `None`; the caller stores the
+    /// recording either way.
+    ///
+    /// `event_tx`: "listening" | "processing" | "voice_captured" for the surface.
     pub fn run_capture(
         &self,
         max_ms: u64,
+        audio_path: &std::path::Path,
         event_tx: Option<mpsc::SyncSender<&'static str>>,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<VoiceCapture, String> {
         let t0 = Instant::now();
         eprintln!("[Speech] {} ms - capture started", t0.elapsed().as_millis());
 
-        let recognizer = self.ensure_recognizer()?;
-        eprintln!(
-            "[Speech] {} ms - speech manager ready",
-            t0.elapsed().as_millis()
-        );
+        // Recognition is optional. If the Speech framework will not authorise — which is a
+        // different permission from the microphone — the recording still happens and the
+        // fragment is a voice fragment with no transcript yet.
+        let mut transcript_failure: Option<String> = None;
+        let recognizer = match self.ensure_recognizer() {
+            Ok(r) => Some(r),
+            Err(e) => {
+                eprintln!("[Speech] recogniser unavailable, recording anyway: {e}");
+                // Kept, and handed back. "not transcribed" is true but says nothing about
+                // what to do; the reason is the only part that is actionable.
+                transcript_failure = Some(e);
+                None
+            }
+        };
 
         let request = unsafe {
             SFSpeechAudioBufferRecognitionRequest::init(
@@ -149,30 +220,50 @@ impl SpeechManager {
         unsafe {
             request.setShouldReportPartialResults(true);
         }
-        let supports_on_device = unsafe { recognizer.supportsOnDeviceRecognition() };
-        if supports_on_device {
-            unsafe {
-                request.setRequiresOnDeviceRecognition(true);
+        if let Some(ref r) = recognizer {
+            if unsafe { r.supportsOnDeviceRecognition() } {
+                unsafe { request.setRequiresOnDeviceRecognition(true) };
+                eprintln!("[Speech] on-device recognition enabled");
             }
-            eprintln!(
-                "[Speech] {} ms - on-device recognition enabled",
-                t0.elapsed().as_millis()
-            );
         }
 
-        eprintln!(
-            "[Speech] {} ms - setting up audio engine",
-            t0.elapsed().as_millis()
-        );
         let engine = unsafe { AVAudioEngine::new() };
         let input_node = unsafe { engine.inputNode() };
         let format = unsafe { input_node.outputFormatForBus(0) };
 
+        // The file, opened before the tap is installed so no buffer can arrive with nowhere
+        // to go. Written in the input's own format: this is the source, and resampling it
+        // on the way in would mean the thing we kept is already a derivation.
+        if let Some(parent) = audio_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let url = NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+            &audio_path.to_string_lossy(),
+        ));
+        let settings = unsafe { format.settings() };
+        let audio_file = unsafe {
+            AVAudioFile::initForWriting_settings_error(AVAudioFile::alloc(), &url, &settings)
+        }
+        .map_err(|e| format!("could not open the recording for writing: {e:?}"))?;
+        let frames_written = Arc::new(Mutex::new(0u64));
+        let sample_rate = unsafe { format.sampleRate() };
+
         let request_for_tap = request.clone();
+        let file_for_tap = audio_file.clone();
+        let frames_for_tap = frames_written.clone();
         let tap_block: RcBlock<dyn Fn(NonNull<AVAudioPCMBuffer>, NonNull<AVAudioTime>) + 'static> =
             RcBlock::new(
                 move |buffer: NonNull<AVAudioPCMBuffer>, _when: NonNull<AVAudioTime>| unsafe {
-                    request_for_tap.appendAudioPCMBuffer(buffer.as_ref());
+                    let buf = buffer.as_ref();
+                    // The recording first. If writing ever fails we keep going rather than
+                    // tearing down the capture — a short recording beats none — but the
+                    // failure is not swallowed silently either.
+                    if let Err(e) = file_for_tap.writeFromBuffer_error(buf) {
+                        eprintln!("[Speech] could not write audio buffer: {e:?}");
+                    } else if let Ok(mut n) = frames_for_tap.lock() {
+                        *n += buf.frameLength() as u64;
+                    }
+                    request_for_tap.appendAudioPCMBuffer(buf);
                 },
             );
 
@@ -189,7 +280,7 @@ impl SpeechManager {
         }
         let _tap_block_guard = tap_block;
 
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        let (result_tx, result_rx) = mpsc::sync_channel::<Result<Option<String>, String>>(1);
         let last_transcript = Arc::new(Mutex::new(String::new()));
         let last_transcript_clone = last_transcript.clone();
         let first_partial_sent = Arc::new(Mutex::new(false));
@@ -243,12 +334,11 @@ impl SpeechManager {
             },
         );
 
-        let task =
-            unsafe { recognizer.recognitionTaskWithRequest_resultHandler(&request, &result_block) };
-        eprintln!(
-            "[Speech] {} ms - recognition task started",
-            t0.elapsed().as_millis()
-        );
+        // No recogniser means no transcript, and that is a complete outcome rather than a
+        // failure: the recording is still made, and words can be added to it later.
+        let task = recognizer.as_ref().map(|r| unsafe {
+            r.recognitionTaskWithRequest_resultHandler(&request, &result_block)
+        });
 
         let start_result = unsafe { engine.startAndReturnError() };
         if let Err(err) = start_result {
@@ -269,12 +359,17 @@ impl SpeechManager {
             }
         }
 
-        eprintln!(
-            "[Speech] {} ms - recording for {}ms",
-            t0.elapsed().as_millis(),
-            max_ms
-        );
-        std::thread::sleep(Duration::from_millis(max_ms));
+        // Hold is the model, so the recording ends when the hold does. `max_ms` is only a
+        // ceiling, so a key that never reports its release cannot record forever. The flag
+        // was armed by `arm_stop()` before this thread was even asked — see there for why
+        // it must not be cleared here.
+        let deadline = Instant::now() + Duration::from_millis(max_ms);
+        while Instant::now() < deadline {
+            if STOP_REQUESTED.swap(false, Ordering::SeqCst) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(16));
+        }
 
         eprintln!("[Speech] {} ms - ending audio", t0.elapsed().as_millis());
         if let Some(ref arc) = event_tx_for_sends {
@@ -302,33 +397,86 @@ impl SpeechManager {
         drop(task);
         drop(_tap_block_guard);
 
-        match outcome {
-            Ok(Ok(transcript)) => Ok(transcript),
-            Ok(Err(e)) => Err(e),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                eprintln!(
-                    "[Speech] {} ms - timed out waiting for final result, using partial",
-                    t0.elapsed().as_millis()
-                );
-                if let Ok(last) = last_transcript.lock() {
-                    if !last.is_empty() {
-                        Ok(Some(last.clone()))
-                    } else {
-                        Ok(None)
-                    }
-                } else {
-                    Ok(None)
-                }
+        // Close the file before anything reads it, so the header is complete on disk.
+        drop(audio_file);
+
+        let frames = frames_written.lock().map(|n| *n).unwrap_or(0);
+        let duration_ms = if sample_rate > 0.0 {
+            ((frames as f64 / sample_rate) * 1000.0).round() as u64
+        } else {
+            0
+        };
+
+        // From here the audio exists on disk whatever the recogniser did. A transcript that
+        // failed, timed out or was never authorised produces `None`, never an error: there
+        // is nothing to report a failure *about*, because the material is safe.
+        let transcript = match outcome {
+            Ok(Ok(t)) => t,
+            Ok(Err(e)) => {
+                eprintln!("[Speech] recognition failed, audio kept: {e}");
+                transcript_failure.get_or_insert(e);
+                None
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                eprintln!("[Speech] recognition timed out, using the best partial");
+                last_transcript.lock().ok().and_then(|last| {
+                    if last.is_empty() {
+                        None
+                    } else {
+                        Some(last.clone())
+                    }
+                })
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => None,
+        };
+        if transcript.is_none() && transcript_failure.is_none() {
+            transcript_failure = Some("nothing was heard in this recording".to_string());
         }
+
+        Ok(VoiceCapture {
+            audio_path: audio_path.to_path_buf(),
+            duration_ms,
+            transcript,
+            transcript_failure,
+        })
     }
 }
 
-/// Command for the speech thread: (max_ms, result_tx, event_tx for state events).
+/// How long a recording on disk actually is.
+///
+/// Read from the file rather than guessed from its size: a `.caf` header can describe any
+/// number of formats, and a recording's length is a fact about the material. `None` means
+/// the file could not be opened at all, which is the one case where the app must not claim
+/// a duration.
+pub fn duration_ms_of(path: &std::path::Path) -> Option<u64> {
+    let url = NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+        &path.to_string_lossy(),
+    ));
+    let file = unsafe { AVAudioFile::initForReading_error(AVAudioFile::alloc(), &url) }.ok()?;
+    let frames = unsafe { file.length() };
+    let rate = unsafe { file.fileFormat().sampleRate() };
+    if frames <= 0 || rate <= 0.0 {
+        return None;
+    }
+    Some(((frames as f64 / rate) * 1000.0).round() as u64)
+}
+
+/// What one capture leaves behind: a recording, and possibly a reading of it.
+#[derive(Clone, Debug)]
+pub struct VoiceCapture {
+    pub audio_path: std::path::PathBuf,
+    pub duration_ms: u64,
+    /// `None` means nothing was transcribed — not that the recording failed.
+    pub transcript: Option<String>,
+    /// Why there are no words, when that is known. Never a reason the *audio* failed.
+    pub transcript_failure: Option<String>,
+}
+
+/// Command for the speech thread: (max_ms, where to write the audio, result, state events).
 pub type SpeechCommand = (
     u64,
-    mpsc::SyncSender<Result<Option<String>, String>>,
+    std::path::PathBuf,
+    mpsc::SyncSender<Result<VoiceCapture, String>>,
     Option<mpsc::SyncSender<&'static str>>,
 );
 
@@ -336,8 +484,36 @@ pub type SpeechCommand = (
 pub fn run_speech_loop(rx: mpsc::Receiver<SpeechCommand>) {
     let manager = SpeechManager::new();
     eprintln!("[Speech] Speech loop started (warm-up deferred to first use)");
-    while let Ok((max_ms, result_tx, event_tx)) = rx.recv() {
-        let result = manager.run_capture(max_ms, event_tx);
+    while let Ok((max_ms, audio_path, result_tx, event_tx)) = rx.recv() {
+        let result = manager.run_capture(max_ms, &audio_path, event_tx);
         let _ = result_tx.send(result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A release belongs to the capture that was asked for before it.
+    ///
+    /// This ordering is the whole of the fix. `arm_stop` runs when the capture is *asked
+    /// for*; everything after it is a release of that capture, including one that arrives
+    /// while the recogniser is still being built or the mac is still asking about the
+    /// microphone. Clearing the flag after all that — which is what the capture itself used
+    /// to do — threw the release away and recorded to the two-minute ceiling instead.
+    #[test]
+    fn arming_clears_a_stale_release_and_keeps_every_later_one() {
+        request_stop();
+        arm_stop();
+        assert!(
+            !STOP_REQUESTED.load(Ordering::SeqCst),
+            "a release from a previous capture must not end this one"
+        );
+
+        request_stop();
+        assert!(
+            STOP_REQUESTED.swap(false, Ordering::SeqCst),
+            "a release asked for after arming must still be there when the loop looks"
+        );
     }
 }

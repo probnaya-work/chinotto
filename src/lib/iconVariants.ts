@@ -1,125 +1,52 @@
 /**
- * Icon variant system for Chinotto logo / app icon.
- * Used for the icon variant showcase and a future desktop icon switcher.
- * Variants are color and style only; logo shape and size are unchanged.
+ * The app icon's two variants.
+ *
+ * There were ten — violet, cyan, orange, a gradient, several greys. An icon picker is not
+ * an identity, and ten variants meant the mark had no fixed colour at all. The identity
+ * spec collapses them to two: dark, which is what ships, and light, which is the alternate
+ * and the one the platforms derive their themed icons from.
+ *
+ * The geometry is not a variant. Both are the same drawing at the same rung; only the field
+ * and the ink change.
  */
 
-export type IconVariant = {
-  id: string;
+export type IconVariantId = "dark" | "light";
+
+export interface IconVariant {
+  id: IconVariantId;
   name: string;
-  /** CSS color for the logo (stroke + fill via currentColor) */
+  /** The mark. */
   foreground: string;
-  /** CSS background for the icon container */
+  /** The tile. */
   background: string;
-  /** Optional container border (e.g. "1px solid rgba(...)") */
-  border?: string;
-  /** Optional container glow (box-shadow) */
-  boxShadow?: string;
-};
-
-/** Chinotto-aligned icon variants: dark, minimal, atmospheric. All suitable for app icon tiles. */
-export const ICON_VARIANTS: IconVariant[] = [
-  {
-    id: "default",
-    name: "Default",
-    foreground: "#8a94c8",
-    background: "#0a0a0e",
-  },
-  {
-    id: "light",
-    name: "Light",
-    foreground: "#e4e4e9",
-    background: "#0f0f14",
-  },
-  {
-    id: "muted",
-    name: "Muted",
-    foreground: "#5d6068",
-    background: "#0a0a0e",
-  },
-  {
-    id: "violet",
-    name: "Violet",
-    foreground: "#e4e4e9",
-    background: "#7C3AED",
-  },
-  {
-    id: "cyan",
-    name: "Cyan",
-    foreground: "#0a0a0e",
-    background: "#06B6D4",
-  },
-  {
-    id: "orange",
-    name: "Orange",
-    foreground: "#0a0a0e",
-    background: "#F97316",
-  },
-  {
-    id: "gradient",
-    name: "Gradient",
-    foreground: "#e4e4e9",
-    background: "linear-gradient(135deg, rgba(100,120,180,0.35), rgba(80,100,150,0.3))",
-  },
-  {
-    id: "border-glow",
-    name: "Border + glow",
-    foreground: "#a0aaff",
-    background: "#0a0a0e",
-    border: "1px solid rgba(120, 130, 200, 0.25)",
-    boxShadow: "0 0 24px rgba(90, 108, 156, 0.2)",
-  },
-  {
-    id: "glass",
-    name: "Glass",
-    foreground: "#e4e4e9",
-    background: "rgba(15, 15, 20, 0.85)",
-    border: "1px solid rgba(255,255,255,0.08)",
-  },
-  {
-    id: "accent",
-    name: "Accent",
-    foreground: "#c8d0f0",
-    background: "radial-gradient(ellipse 80% 80% at 50% 50%, rgba(128,138,188,0.2), #0f0f14)",
-  },
-];
-
-/** Variant ids offered in the in-app icon switcher (ChinottoCard). */
-export const SELECTABLE_ICON_VARIANT_IDS = [
-  "default",
-  "light",
-  "violet",
-  "cyan",
-  "orange",
-  "gradient",
-] as const;
-
-export type SelectableIconVariantId = (typeof SELECTABLE_ICON_VARIANT_IDS)[number];
-
-const variantById = new Map(ICON_VARIANTS.map((v) => [v.id, v]));
-
-export function getIconVariant(id: string | null | undefined): IconVariant {
-  if (!id) return ICON_VARIANTS[0];
-  return variantById.get(id) ?? ICON_VARIANTS[0];
 }
 
-const STORAGE_KEY = "chinotto-icon-variant";
+export const ICON_VARIANTS: IconVariant[] = [
+  { id: "dark", name: "dark", foreground: "#e6e6e3", background: "#141416" },
+  { id: "light", name: "light", foreground: "#1b1b1d", background: "#f2f1ec" },
+];
 
-export function getStoredIconVariantId(): string {
-  if (typeof window === "undefined") return "default";
+export const SELECTABLE_ICON_VARIANT_IDS: IconVariantId[] = ["dark", "light"];
+
+const STORAGE_KEY = "chinotto.iconVariant";
+
+export function getIconVariant(id: string | null | undefined): IconVariant {
+  return ICON_VARIANTS.find((v) => v.id === id) ?? ICON_VARIANTS[0];
+}
+
+export function getStoredIconVariantId(): IconVariantId {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw && typeof raw === "string" && variantById.has(raw)) return raw;
+    return raw === "light" ? "light" : "dark";
   } catch {
-    /* ignore */
+    return "dark";
   }
-  return "default";
 }
 
 export function setStoredIconVariantId(id: string): void {
   try {
-    localStorage.setItem(STORAGE_KEY, id);
+    localStorage.setItem(STORAGE_KEY, getIconVariant(id).id);
   } catch {
-    /* ignore */
+    // A dock icon that cannot be remembered still changes for this session.
   }
 }

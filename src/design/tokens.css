@@ -1,0 +1,510 @@
+/*
+  Chinotto — design tokens.
+
+  Every value here is lifted verbatim from the working prototype ("Chinotto Desktop.dc.html"
+  in the desktop handoff package), which is the UI and visual source of truth. Nothing is
+  interpolated, averaged or extrapolated. If a value is needed that the prototype does not
+  draw, it is marked UNSPECIFIED rather than invented.
+
+  Two independent systems use Archivo's wdth axis, and they must not be conflated:
+
+    1. MATERIAL narrows as it recedes in time — 100 / 92 / 84 / 80 / 76 across five named
+       tiers, moving in lockstep with the line-compression rule.
+    2. META sits at a constant 90 at every size and every tier. It is a register, not a
+       distance.
+
+  These are fixed per-tier tokens, not a function of age: the prototype's `STY` table gives
+  five tiers exactly and states no rule for anything between them.
+*/
+
+:root {
+  /* ---- surface ---------------------------------------------------------- */
+  --surface: #141416;
+
+  /* ---- ink ladder ------------------------------------------------------- */
+  --ink: #e6e6e3;        /* D0 material, active verbs, the caret, the mark          */
+  --ink-bright: #ffffff; /* a step past ink: a row's own verbs and the ⋯ menu        */
+  --ink-near: #cfcfcc;   /* D1 (19px), utility body copy                            */
+  --ink-verb: #c9c9c6;   /* hover verbs, voice chip, "unfold", secondary emphasis   */
+  --ink-far: #b4b4b2;    /* D2 (14px), voice transcripts, quotations, warnings      */
+  --ink-dim: #aaa9a4;    /* D3 (13px), guesses                                      */
+  --meta: #8f8e89;       /* D4 (12px), time labels, provenance, section labels      */
+  /*
+    Two tokens, because one colour was doing two jobs.
+
+    --faint is the prototype's #5f5e5a exactly: hints, prototype affordances, fourth-level
+    detail, the year-density bars, the quiet line's resting colour. Decoration and texture.
+
+    --faint-text is the same register lifted to 5.05:1 for text that carries function rather
+    than atmosphere — the capture hints ("⏎ leave it", "esc drop it", "◌ hold space to
+    speak"), which are how the keyboard interface is discoverable at all. Deliberately still
+    below --meta (5.61:1), so the ladder between the two registers survives.
+
+    Distance v2 stated a 5:1 floor; the working prototype restates neither the floor nor an
+    exception. Splitting the token honours the prototype everywhere the colour is not
+    carrying functional text. See docs/handoff-diff.md §1.2.
+  */
+  --faint: #5f5e5a;
+  --faint-text: #878682;
+
+  /* ---- lines and marks -------------------------------------------------- */
+  --rule: #3a3a40;             /* line spine, voice chip border, folded-moment dot  */
+  --rule-dim: #2a2a2e;         /* separators, device chrome, the tray panel's edge  */
+  --rule-present: var(--ink);  /* a Return's spine is ink, not rule: it is here now */
+  --mark: rgba(230, 230, 227, 0.16); /* Find match                                  */
+  --mark-trace: rgba(230, 230, 227, 0.14); /* shared words inside a Trace           */
+  --row-hover: rgba(230, 230, 227, 0.04);  /* the row under the pointer             */
+  --correction-rule: var(--meta);          /* inset 0 -2px under text being corrected */
+}
+
+/*
+  "The same edge when the system is light." Identical geometry and identical ladder;
+  ink inverted; the band is ink at 12%.
+*/
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --surface: #f2f1ec;
+    --ink: #1b1b1d;
+    --ink-bright: #000000;
+    --ink-near: #2c2c2f;
+    --ink-verb: #3f3f42;   /* light collapses verb and far ink to one value         */
+    --ink-far: #3f3f42;
+    --ink-dim: #52514e;    /* UNSPECIFIED: the light appearance is a token pass, not
+                              drawn. Sits between --ink-far and --meta, as D3 does
+                              in the dark ladder. */
+    /*
+      #6b6a66 is the colour 3k samples, but it gives 4.79:1 on this surface — just under the
+      design's own stated floor of "nothing below 12px or 5:1", and this token inks the floor
+      tier. Darkened by three points to 5.01:1, honouring the rule over the sampled value.
+      Revert to #6b6a66 to match the mockup exactly. See docs/unspecified-decisions.md.
+    */
+    --meta: #686763;
+    --faint: #686763;      /* UNSPECIFIED: no light capture row is drawn, so the
+                              prototype never states a light `faint`. Mapped to meta. */
+    --faint-text: #686763;
+    --rule: rgba(27, 27, 29, 0.12);
+    --rule-dim: rgba(27, 27, 29, 0.08);
+    --mark: rgba(27, 27, 29, 0.12);
+    --mark-trace: rgba(27, 27, 29, 0.12);
+    --row-hover: rgba(27, 27, 29, 0.04); /* UNSPECIFIED: derived to match dark's 4% */
+  }
+}
+
+:root[data-theme="light"] {
+  --surface: #f2f1ec;
+  --ink: #1b1b1d;
+  --ink-bright: #000000;
+  --ink-near: #2c2c2f;
+  --ink-verb: #3f3f42;
+  --ink-far: #3f3f42;
+  --ink-dim: #52514e;
+  /* See the note above: 5.01:1 rather than the mockup's 4.79:1. */
+  --meta: #686763;
+  --faint: #686763;
+  --faint-text: #686763;
+  --rule: rgba(27, 27, 29, 0.12);
+  --rule-dim: rgba(27, 27, 29, 0.08);
+  --mark: rgba(27, 27, 29, 0.12);
+  --mark-trace: rgba(27, 27, 29, 0.12);
+  --row-hover: rgba(27, 27, 29, 0.04);
+}
+
+:root {
+  /* ---- geometry --------------------------------------------------------- */
+  --column-offset: 200px;  /* content column's left edge in the 1440px frame        */
+  --column-width: 940px;
+  --gutter-width: 46px;    /* the time column                                       */
+  --gutter-gap: 22px;
+  --indent: 68px;          /* gutter + gap: where everything below D0 hangs         */
+  --caret-width: 3px;
+  --caret-height: 44px;
+  --capture-height: 60px;
+  /* The window's own padding. The column is left-biased, not centred. */
+  --window-pad-top: 64px;
+  --window-pad-right: 48px;
+  --window-pad-bottom: 200px;
+  --window-pad-left: clamp(24px, 12vw, 200px);
+  /* Utility surfaces: a label column against one measure. */
+  --utility-label-width: 120px;
+  --utility-gap: 22px;
+  --utility-section-gap: 40px;
+  --settings-measure: 760px;
+  --sync-measure: 720px;
+  /* Below this the utility grid collapses to a single column. */
+  --utility-collapse: 720px;
+
+  /* ---- type: capture ---------------------------------------------------- */
+  --size-capture: 44px;
+  --track-capture: -0.02em;
+
+  /* ---- type: material tiers, near to far -------------------------------- */
+  --size-d0: 26px;      --lh-d0: 1.24;   --wdth-d0: 100;  --track-d0: -0.012em;
+  --size-d1: 19px;      --lh-d1: 1.26;   --wdth-d1: 92;
+  --size-d2: 14px;      --lh-d2: 1.3;    --wdth-d2: 84;
+  --size-d3: 13px;      --lh-d3: 1.3;    --wdth-d3: 80;
+  --size-d4: 12px;      --lh-d4: 1.3;    --wdth-d4: 76;
+
+  /* ---- type: utility surfaces ------------------------------------------- */
+  --size-utility: 17px;      --lh-utility: 1.45;  --wdth-utility: 94;
+  --size-utility-2: 15px;    --lh-utility-2: 1.45; --wdth-utility-2: 92;
+  --size-utility-head: 26px; /* one sentence at the head of a utility surface   */
+
+  /* ---- type: meta — one register, every tier ---------------------------- */
+  --wdth-meta: 90;
+  --size-meta: 12px;
+  --size-meta-lg: 13px;  /* attached to D0 material                                */
+  --size-meta-sm: 11px;  /* tier labels: "earlier today · 24 more"                 */
+  --size-meta-xs: 10px;  /* far tier labels: "yesterday"                           */
+  --size-tier-label-far: 9px; /* "wed 16 · sat 12 · aug"                           */
+  --track-tier-label: 0.06em;
+
+  /* ---- type: named exceptions the design draws deliberately ------------- */
+  --size-held: 19px;    --lh-held: 1.3;   --wdth-held: 96;
+                        /* held material is WIDER than the tier below it: it is
+                           being kept present, so it reads as pulled toward now   */
+  --size-moment: 19px;  --lh-moment: 1.28; --wdth-moment: 94;
+                        /* a moment inside a Line (3c), and Find's meaning-guesses (3g) */
+  --size-return: 30px;  --lh-return: 1.22; --track-return: -0.014em;
+  --size-evidence: 15px; --lh-evidence: 1.45; --wdth-evidence: 92;
+  --size-quote: 22px;   --lh-quote: 1.3;   /* a kept quotation, 3a               */
+  --size-voice-chip: 14px;
+  --size-voice-chip-sm: 11px; /* the compact tiers' inert chip                  */
+  --size-year-label: 12px;
+  --size-wordmark-launch: 52px;  --track-wordmark-launch: -0.025em;
+  --size-wordmark: 28px;         --track-wordmark: -0.01em;  --wdth-wordmark: 96;
+  --mark-launch: 132px;          /* the launch lockup's mark                    */
+
+  /* ---- rhythm: the gap between rows within a tier ----------------------- */
+  --gap-d0: 24px;
+  --gap-d1: 12px;
+  --gap-d2: 7px;
+  --gap-d3: 5px;
+  --gap-d4: 4px;
+  --gap-line-moment: 28px;
+
+  /* ---- rhythm: the space above a band --------------------------------- */
+  --band-top-d0: 22px;
+  --band-top-d1: 36px;
+  --band-top-d2: 28px;
+  --band-top-d3: 22px;
+  --band-top-d4: 20px;
+  --band-top-years: 22px;
+
+  /* ---- the quiet line --------------------------------------------------- */
+  --quiet-bottom: 22px;
+  --quiet-gap: 26px;
+
+  /* ---- year rows -------------------------------------------------------- */
+  --year-label-width: 36px;
+  --year-bar-width: 5px;
+  --year-bar-gap: 3px;
+  --year-bar-max: 16px;
+  --year-bar-min: 3px;
+  --year-row-height: 24px;
+  --year-bar-ink: var(--faint);
+  --year-bar-empty: var(--rule);
+
+  /* ---- motion ----------------------------------------------------------- */
+  --blink: 1.1s;         /* caret, steps(1)                                       */
+  --settle: 350ms;       /* a fragment landing                                    */
+  --rise: 500ms;         /* a return arriving; the record after launch            */
+  --let-go: 450ms;       /* a return receding — it is never deleted               */
+  --ease: ease-out;
+  --ease-arrive: cubic-bezier(0.16, 0.84, 0.3, 1); /* the launch choreography     */
+
+  /* The launch lockup's timings, in the order they fire. */
+  --launch-hold: 2600ms;
+  --launch-exit: 520ms;
+  --return-delay: 1600ms;
+  --edit-window: 12s;    /* "still yours to change"                               */
+  --undo-window: 8s;     /* "bring back"                                          */
+}
+
+/*
+  The prototype's named animations, at its exact keyframes, durations and easings.
+  Anything not in this block is not an animation the product has.
+*/
+@keyframes chinotto-settle {
+  from { opacity: 0; transform: translateY(-10px) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-rise {
+  from { opacity: 0; transform: translateY(22px) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-riseword {
+  from { opacity: 0; transform: translateY(100%) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-wordout {
+  to { opacity: 0; transform: translateY(-10px) }
+}
+
+/*
+  The launch: three moments arrive out of the record — the near one first and fast, the far
+  one last and slow — and the ring closes around them once they are all in place. Leaving,
+  they fall back the way they came.
+*/
+@keyframes chinotto-arrive1 {
+  from { opacity: 0; transform: translate(-9px, 30px) scale(0.35) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-arrive2 {
+  from { opacity: 0; transform: translate(-15px, 44px) scale(0.3) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-arrive3 {
+  from { opacity: 0; transform: translate(-21px, 58px) scale(0.25) }
+  to   { opacity: 1; transform: none }
+}
+@keyframes chinotto-ringclose {
+  from { opacity: 0; transform: rotate(-90deg) scale(1.35) }
+  to   { opacity: 1; transform: rotate(-90deg) scale(1) }
+}
+@keyframes chinotto-scatter1 { to { opacity: 0; transform: translate(-8px, 26px) scale(0.4) } }
+@keyframes chinotto-scatter2 { to { opacity: 0; transform: translate(-13px, 38px) scale(0.35) } }
+@keyframes chinotto-scatter3 { to { opacity: 0; transform: translate(-18px, 50px) scale(0.3) } }
+@keyframes chinotto-ringopen { to { opacity: 0; transform: rotate(-90deg) scale(1.22) } }
+
+/*
+  The caret. One shape, used for typing, for the empty record, and (as a ring) in the mark.
+*/
+@keyframes chinotto-blink {
+  0%, 45%  { opacity: 1 }
+  50%, 95% { opacity: 0 }
+  100%     { opacity: 1 }
+}
+
+/* The five bars while speaking; each runs at its own duration in the design. */
+@keyframes chinotto-rec {
+  0%, 100% { transform: scaleY(0.4) }
+  50%      { transform: scaleY(1) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+    No motion, but nothing disappears and nothing is left mid-gesture.
+
+    Each animation here ends on the state it should rest in, so collapsing them to an instant
+    is safe: the blink's final keyframe is opacity 1, which leaves the caret solid and still
+    reading as "the record is waiting for you" rather than vanishing.
+  */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /*
+    The speaking bars are the exception: their last keyframe is scaleY(0.4), so freezing them
+    there would leave five stubs that look broken. Held at full height instead — still,
+    present, and legible as "recording".
+  */
+  .chinotto-rec-bar {
+    animation: none !important;
+    transform: scaleY(1) !important;
+  }
+}
+
+/*
+  Keyboard focus.
+
+  The surface has almost no chrome, so a focus ring is the one piece of interface that has to
+  appear from nowhere — and only for keyboard users. `:focus-visible` keeps it off the pointer
+  path entirely. It is drawn in ink at a 2px offset rather than as a box, so it reads like the
+  caret rather than like a form control.
+*/
+:where(button, [href], input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/*
+  Capture and Find suppress the native caret because the product draws its own. The drawn
+  caret IS the focus indicator there, so no ring is added on top of it.
+*/
+textarea[aria-label="Leave a fragment"]:focus-visible,
+input[aria-label="Find"]:focus-visible {
+  outline: none;
+}
+
+/* A keyboard-selected row, so ↑↓ is visible without hovering. */
+[data-selected="true"] {
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+/*
+  Hover.
+
+  There is no hover state in this product that changes a shape, only ones that brighten ink
+  by a step on the ladder. A verb reaching for --ink is the whole interaction language:
+  nothing grows, nothing boxes, nothing moves.
+
+  Every rule below carries `!important`, and that is structural rather than a preference. A
+  row's resting colour comes from `tierStyle()` and a verb's from `metaStyle()`, both of
+  which write `color` into the element's own `style` attribute, because the value is decided
+  per tier at render time. An inline declaration outranks any class rule — so these were all
+  computed correctly and then lost, on every element they name, which is every element that
+  has a hover state at all. The surface had no pointer feedback below D0 whatsoever.
+
+  `:not(:disabled)` is what keeps a disabled verb from brightening: it is a statement, not a
+  control, and it must not answer the pointer.
+*/
+.chinotto-verb:hover:not(:disabled),
+.chinotto-affordance:hover {
+  color: var(--ink) !important;
+}
+
+/*
+  A step past ink, which the design spends in exactly two places: a row's own verbs
+  (`continue`, `hold`, `⋯`) and the menu that opens from them. Both sit on top of material
+  rather than beside it, and both are reached deliberately, so they are allowed to be the
+  brightest thing on the surface.
+*/
+.chinotto-verb--bright:hover:not(:disabled) {
+  color: var(--ink-bright) !important;
+}
+
+/*
+  The quieter register: words that are always on screen — a band's label, the quiet line,
+  "wording corrected" — and must not flare when the pointer merely crosses them on its way
+  somewhere else.
+*/
+.chinotto-band-label:hover,
+.chinotto-verb--quiet:hover:not(:disabled) {
+  color: var(--ink-verb) !important;
+}
+
+/* A capture hint rests below meta and comes up to it, never to ink. */
+.chinotto-hint:hover {
+  color: var(--meta) !important;
+}
+
+/*
+  A compact row brightens to full ink under the pointer rather than taking the D0 wash: at
+  13px a background band is a bigger gesture than the text it sits behind.
+*/
+.chinotto-compact-row:hover {
+  color: var(--ink) !important;
+}
+
+/*
+  The field, all the way out.
+
+  The window's own background has to be the field too, or overscroll, the area under a
+  short record and the space behind the titlebar all show the shell's colour instead. This
+  overrides what is left of the v1 stylesheet, which still paints #0a0a0e.
+*/
+/*
+  `:root` rather than `html` on purpose: the v1 stylesheet is imported after this one, so a
+  plain element selector would lose the tie. The tray popover's own transparent background
+  is `!important` and still wins over this, which is correct — it is not a window.
+*/
+:root,
+:root body,
+:root #root {
+  background: var(--surface);
+}
+
+/*
+  Text size. The whole column scales from one number so the ladder keeps its proportions —
+  a larger D0 must still be exactly as much larger than D1 as it was at 100%.
+*/
+:root {
+  --text-scale: 1;
+  zoom: var(--text-scale);
+}
+
+/*
+  Lift contrast in bright light.
+
+  Not a fourth appearance and not a dimmed one: it raises only the quiet end of the ladder,
+  where sunlight actually takes legibility away, and leaves ink, the rules and the washes
+  alone. The ordering between the tiers survives, which is the thing that must not break.
+*/
+:root[data-lift-contrast] {
+  --ink-far: #c6c6c3;
+  --ink-dim: #bcbbb7;
+  --meta: #a3a29c;
+  --faint: #8b8a85;
+  --faint-text: #9d9c97;
+}
+
+:root[data-lift-contrast][data-theme="light"],
+:root[data-lift-contrast]:not([data-theme="dark"]) {
+  --ink-far: #333336;
+  --ink-dim: #45443f;
+  --meta: #56554f;
+  --faint: #56554f;
+  --faint-text: #56554f;
+}
+
+/*
+  Utility surfaces collapse to one column when the window can no longer hold a label beside
+  a measure. The label stays above its section rather than shrinking, because a 120px column
+  that is 60px wide is neither a label nor a layout.
+*/
+@media (max-width: 720px) {
+  .chinotto-utility-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+}
+
+
+/*
+  The menu-bar panel.
+
+  A panel, not a window and not a system sheet: one hairline, a deep shadow so it reads as
+  sitting above whatever you were doing, and the record's own field inside it. It settles in
+  rather than appearing, because it arrived from somewhere.
+*/
+.tray-capture-root {
+  min-height: 100%;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+  padding: 4px 20px 20px;
+  box-sizing: border-box;
+}
+
+.tray-capture-panel {
+  width: 440px;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--rule-dim);
+  padding: 18px 20px 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
+  animation: chinotto-settle 0.2s ease-out;
+}
+
+/*
+  Focus.
+
+  The verbs are buttons with no box of their own, so the ring has to come from nowhere and
+  land on the word. It is drawn in ink at a 2px offset rather than as a filled box, which
+  reads like the caret rather than like a form control — and it is `:focus-visible`, so it
+  never appears on the pointer path.
+*/
+.chinotto-verb:focus-visible,
+.chinotto-affordance:focus-visible,
+.chinotto-band-label:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/*
+  A disabled verb is a statement, not a control: it does not take focus or brighten. The
+  brightening is held off by `:not(:disabled)` on the rules above rather than by a rule
+  here, because a rule here would have to win against the inline colour too, and the one
+  thing a disabled verb should keep is exactly that colour.
+*/
+.chinotto-verb:disabled {
+  cursor: default;
+}

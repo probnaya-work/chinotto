@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   enableNetwork,
@@ -42,6 +43,7 @@ import {
   ingestFirestoreEntries,
   listEntries,
   listSyncTombstoneOutbox,
+  listDueSyncTombstoneOutbox,
   removeSyncTombstoneOutbox,
   type EntryTheme,
 } from "@/features/entries/entryApi";
@@ -145,7 +147,7 @@ let lastTombstoneGetDocsAt = 0;
 let appSingleton: FirebaseApp | null = null;
 let dbSingleton: Firestore | null = null;
 
-function getOrInitApp(): FirebaseApp {
+export function getOrInitApp(): FirebaseApp {
   if (appSingleton) {
     return appSingleton;
   }
@@ -157,7 +159,7 @@ function getOrInitApp(): FirebaseApp {
   return appSingleton;
 }
 
-function getOrInitFirestore(): Firestore {
+export function getOrInitFirestore(): Firestore {
   if (dbSingleton) {
     return dbSingleton;
   }
@@ -654,9 +656,16 @@ export function startLocalEntriesFirestoreUploadOnAuth(): () => void {
   };
 }
 
+let tombstoneFlushRetry: ReturnType<typeof setTimeout> | undefined;
+
+const TOMBSTONE_UNDO_SECS = 8;
+
 /**
  * Flush pending `{ op: "tombstone", entryId }` rows to Firestore with `deletedAt: serverTimestamp()`.
  * Idempotent: `setDoc` + merge on an already-tombstoned doc is allowed.
+ *
+ * Tombstones younger than eight seconds are skipped so `bring back` can still reach other
+ * devices. Remaining young rows schedule another flush when they become due.
  */
 export async function flushSyncTombstoneOutbox(): Promise<void> {
   if (!isFirebaseSyncConfigured()) {
@@ -668,7 +677,7 @@ export async function flushSyncTombstoneOutbox(): Promise<void> {
     return;
   }
   const db = getOrInitFirestore();
-  const ids = await listSyncTombstoneOutbox();
+  const ids = await listDueSyncTombstoneOutbox(TOMBSTONE_UNDO_SECS);
   for (const entryId of ids) {
     const ref = doc(db, "users", user.uid, "entries", entryId);
     try {
@@ -684,6 +693,13 @@ export async function flushSyncTombstoneOutbox(): Promise<void> {
         console.warn("[chinotto sync] tombstone flush failed, will retry", entryId, e);
       }
     }
+  }
+  const stillWaiting = (await listSyncTombstoneOutbox()).filter((id) => !ids.includes(id));
+  if (stillWaiting.length > 0 && tombstoneFlushRetry == null) {
+    tombstoneFlushRetry = setTimeout(() => {
+      tombstoneFlushRetry = undefined;
+      void flushSyncTombstoneOutbox();
+    }, 1000);
   }
 }
 
@@ -1490,4 +1506,46 @@ export async function fetchChinottoUserSyncAccessActive(uid: string): Promise<{
     console.error("[chinotto sync] fetch user sync access failed", e);
     return { active: false, permissionDenied: false };
   }
+}
+
+
+/** Whether this mac is actually signed in, as opposed to merely configured for sync. */
+export function isSignedInForSync(): boolean {
+  if (!isFirebaseSyncConfigured()) return false;
+  try {
+    const user = getAuth(getOrInitApp()).currentUser;
+    return user != null && !user.isAnonymous;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Deletes the copy of the record in the cloud, and the account it belonged to.
+ *
+ * The record on this mac and on the phone is untouched — they just stop meeting. Apple
+ * requires a recent sign-in before it will delete an account, and when it asks for one this
+ * throws rather than reporting a deletion that did not happen: an account-deletion screen
+ * that lies is worse than one that fails.
+ */
+export async function deleteCloudAccount(): Promise<void> {
+  if (!isFirebaseSyncConfigured()) {
+    throw new Error("sync is not set up on this mac");
+  }
+  const auth = getAuth(getOrInitApp());
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("this mac is not signed in");
+  }
+  const db = getOrInitFirestore();
+
+  // The entries first: deleting the auth user revokes the credential that authorises this.
+  const entries = await getDocs(collection(db, "users", user.uid, "entries"));
+  for (const d of entries.docs) {
+    await deleteDoc(d.ref);
+  }
+  await deleteDoc(doc(db, "users", user.uid)).catch(() => {
+    // A user document that was never written is not an error.
+  });
+  await user.delete();
 }

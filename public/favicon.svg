@@ -1,8 +1,8 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="14" fill="#0a0a0e"/>
-  <circle cx="32" cy="32" r="22" stroke="#8a94c8" stroke-width="2" fill="none"/>
-  <circle cx="32" cy="23" r="5" fill="#8a94c8"/>
-  <circle cx="24" cy="34" r="4" fill="#8a94c8"/>
-  <circle cx="40" cy="34" r="4" fill="#8a94c8"/>
-  <circle cx="32" cy="41" r="3" fill="#8a94c8"/>
+<!-- The <=20px rung on the ink field: a browser tab is a 16px surface. -->
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="7" fill="#141416"/>
+  <g transform="translate(5.5 5.5) scale(0.328125)">
+    <circle cx="32" cy="32" r="27" stroke="#e6e6e3" stroke-width="6" fill="none"/>
+    <circle cx="32" cy="27" r="11" fill="#e6e6e3"/>
+  </g>
 </svg>

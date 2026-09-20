@@ -1,4 +1,5 @@
 mod db;
+mod record_commands;
 mod embeddings;
 mod keywords;
 mod oauth_dev_bridge;
@@ -146,7 +147,7 @@ struct FirestoreEntryIn {
 }
 
 /// Ingest remote entries (Firestore pull). Idempotent per mobile sync.md: existing `id` skipped.
-#[tauri::command]
+#[tauri::command(async)]
 fn ingest_firestore_entries(
     db: tauri::State<Db>,
     entries: Vec<FirestoreEntryIn>,
@@ -155,44 +156,67 @@ fn ingest_firestore_entries(
         .into_iter()
         .map(|e| (e.id, e.text, e.created_at))
         .collect();
-    db.ingest_firestore_entries(&batch)
-        .map_err(|e| e.to_string())
+    let inserted = db
+        .ingest_firestore_entries(&batch)
+        .map_err(|e| e.to_string())?;
+    // Anything that just arrived from mobile becomes a fragment, or the Record would
+    // silently diverge from the table sync writes into.
+    if let Err(e) = db.project_entries_into_record() {
+        eprintln!("[bridge] projecting ingested entries failed: {e}");
+    }
+    Ok(inserted)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn enqueue_sync_tombstone(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.enqueue_sync_tombstone(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_sync_tombstone_outbox(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_sync_tombstone_outbox().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
+fn list_due_sync_tombstone_outbox(
+    db: tauri::State<Db>,
+    min_age_secs: i64,
+) -> Result<Vec<String>, String> {
+    db.list_due_sync_tombstone_outbox(min_age_secs)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
 fn remove_sync_tombstone_outbox(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.remove_sync_tombstone_outbox(&entry_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_sync_tombstone_outbox_all(db: tauri::State<Db>) -> Result<(), String> {
     db.clear_sync_tombstone_outbox_all().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_firestore_ingest_suppression(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.clear_firestore_ingest_suppression(&entry_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_local_entries_for_sync(
     db: tauri::State<Db>,
     entry_ids: Vec<String>,
 ) -> Result<u32, String> {
-    db.delete_local_entries_for_sync(&entry_ids)
-        .map_err(|e| e.to_string())
+    let deleted = db
+        .delete_local_entries_for_sync(&entry_ids)
+        .map_err(|e| e.to_string())?;
+    // A delete made on another device reaches the Record as a soft removal: the material
+    // stays here, it just stops being present.
+    if let Err(e) = db.absorb_remote_deletes(&entry_ids) {
+        eprintln!("[bridge] absorbing remote deletes failed: {e}");
+    }
+    Ok(deleted)
 }
 
 #[derive(serde::Deserialize)]
@@ -211,7 +235,7 @@ struct ApplyRemoteEntryThemeIn {
     theme: Option<RemoteEntryThemeIn>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn apply_remote_entry_theme(
     db: tauri::State<Db>,
     input: ApplyRemoteEntryThemeIn,
@@ -234,7 +258,7 @@ struct RemoteUserThemeIn {
     sort_order: i32,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn ingest_remote_user_themes(
     db: tauri::State<Db>,
     rows: Vec<RemoteUserThemeIn>,
@@ -247,7 +271,7 @@ fn ingest_remote_user_themes(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn apply_remote_user_theme_tombstones(
     db: tauri::State<Db>,
     theme_ids: Vec<String>,
@@ -265,7 +289,7 @@ struct UserThemeOutboxRowOut {
     sort_order: Option<i32>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_sync_user_theme_outbox(db: tauri::State<Db>) -> Result<Vec<UserThemeOutboxRowOut>, String> {
     db.list_sync_user_theme_outbox()
         .map(|rows| {
@@ -281,31 +305,31 @@ fn list_sync_user_theme_outbox(db: tauri::State<Db>) -> Result<Vec<UserThemeOutb
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn remove_sync_user_theme_outbox(db: tauri::State<Db>, theme_id: String) -> Result<(), String> {
     db.remove_sync_user_theme_outbox(&theme_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_sync_user_theme_outbox_all(db: tauri::State<Db>) -> Result<(), String> {
     db.clear_sync_user_theme_outbox_all()
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_user_theme_ingest_suppression(db: tauri::State<Db>, theme_id: String) -> Result<(), String> {
     db.clear_user_theme_ingest_suppression(&theme_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn enqueue_all_local_user_themes_for_sync(db: tauri::State<Db>) -> Result<(), String> {
     db.enqueue_all_local_user_themes_for_sync()
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_entry_ids_with_themes(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_entry_ids_with_themes()
         .map_err(|e| e.to_string())
@@ -342,7 +366,7 @@ fn validated_space_for_write(db: &Db, space_id: &Option<String>) -> Result<Optio
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_entry(db: tauri::State<Db>, input: CreateEntryIn) -> Result<String, String> {
     let trimmed = input.text.trim();
     if trimmed.is_empty() {
@@ -356,7 +380,7 @@ fn create_entry(db: tauri::State<Db>, input: CreateEntryIn) -> Result<String, St
     Ok(id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn restore_entry(db: tauri::State<Db>, input: RestoreEntryIn) -> Result<String, String> {
     let trimmed = input.text.trim();
     if trimmed.is_empty() {
@@ -378,7 +402,7 @@ fn restore_entry(db: tauri::State<Db>, input: RestoreEntryIn) -> Result<String, 
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_embedding(app: tauri::AppHandle, entry_id: String) -> Result<(), String> {
     let text = {
         let db = app.state::<Db>();
@@ -432,12 +456,12 @@ fn classify_entry_theme_for_entry(db: &Db, entry_id: &str) -> Result<(), String>
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn classify_entry_theme(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     classify_entry_theme_for_entry(&db, &entry_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_entry_theme(
     db: tauri::State<Db>,
     entry_id: String,
@@ -459,7 +483,7 @@ struct SetEntryThemeIn {
     locked: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_entry_theme(db: tauri::State<Db>, input: SetEntryThemeIn) -> Result<(), String> {
     if let Some(theme_id) = input.theme_id.as_deref() {
         if !db.theme_id_valid(theme_id).map_err(|e| e.to_string())? {
@@ -490,7 +514,7 @@ fn user_theme_out(row: crate::db::UserThemeRow) -> UserThemeOut {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_user_themes(db: tauri::State<Db>) -> Result<Vec<UserThemeOut>, String> {
     let rows = db.list_user_themes().map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(user_theme_out).collect())
@@ -502,7 +526,7 @@ struct CreateUserThemeIn {
     label: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_user_theme(
     db: tauri::State<Db>,
     input: CreateUserThemeIn,
@@ -520,7 +544,7 @@ struct UpdateUserThemeIn {
     label: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn update_user_theme(
     db: tauri::State<Db>,
     input: UpdateUserThemeIn,
@@ -531,7 +555,7 @@ fn update_user_theme(
     Ok(user_theme_out(row))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_user_theme(db: tauri::State<Db>, id: String) -> Result<(), String> {
     db.delete_user_theme(&id).map_err(|e| e.to_string())
 }
@@ -543,7 +567,7 @@ struct ThemeCountOut {
     count: i64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_theme_counts(db: tauri::State<Db>) -> Result<Vec<ThemeCountOut>, String> {
     let rows = db
         .list_theme_counts(crate::db::THEME_RECALL_MIN_CONFIDENCE)
@@ -554,7 +578,7 @@ fn list_theme_counts(db: tauri::State<Db>) -> Result<Vec<ThemeCountOut>, String>
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_theme_counts_recent(
     db: tauri::State<Db>,
     days: Option<u32>,
@@ -634,7 +658,7 @@ fn top_related_ids(mut with_sim: Vec<(String, f32)>, min_sim: f32, limit: usize)
     with_sim.into_iter().take(limit).map(|(id, _)| id).collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn find_similar_entries(
     db: tauri::State<Db>,
     entry_id: String,
@@ -672,7 +696,7 @@ fn find_similar_entries(
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_entries(
     db: tauri::State<Db>,
     space_filter: Option<String>,
@@ -684,7 +708,7 @@ fn list_entries(
     Ok(rows.into_iter().map(|r| entry_row_to_payload(&r)).collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_spaces(db: tauri::State<Db>) -> Result<Vec<SpacePayload>, String> {
     let rows = db.list_spaces().map_err(|e| e.to_string())?;
     Ok(rows
@@ -697,7 +721,7 @@ fn list_spaces(db: tauri::State<Db>) -> Result<Vec<SpacePayload>, String> {
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_entry(db: tauri::State<Db>, entry_id: String) -> Result<Option<EntryPayload>, String> {
     let row = db
         .get_entry_by_id(&entry_id)
@@ -705,7 +729,7 @@ fn get_entry(db: tauri::State<Db>, entry_id: String) -> Result<Option<EntryPaylo
     Ok(row.as_ref().map(entry_row_to_payload))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn jump_dates_in_month(
     db: tauri::State<Db>,
     year: i32,
@@ -720,7 +744,7 @@ fn jump_dates_in_month(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn jump_anchor_for_local_date(
     db: tauri::State<Db>,
     local_date: String,
@@ -735,7 +759,7 @@ fn jump_anchor_for_local_date(
 
 /// Temporal recall: try 24h, 7d, 30d anchors (±3h window); fallback to random past entry.
 /// Delegates to recall::select_entry_for_resurface (pure, testable).
-#[tauri::command]
+#[tauri::command(async)]
 fn get_resurfaced_entry(
     db: tauri::State<Db>,
     exclude_ids: Vec<String>,
@@ -822,7 +846,7 @@ pub(crate) fn get_resurfaced_entry_impl<R: rand::RngCore>(
 
 /// Thought trail: related entries ordered as earlier → current → later.
 /// Scores by similarity (IDF-weighted keyword overlap) + temporal proximity; importance is a small boost.
-#[tauri::command]
+#[tauri::command(async)]
 fn get_thought_trail(db: tauri::State<Db>, entry_id: String) -> Result<Vec<EntryPayload>, String> {
     let current = db
         .get_entry_by_id(&entry_id)
@@ -848,7 +872,7 @@ fn get_thought_trail(db: tauri::State<Db>, entry_id: String) -> Result<Vec<Entry
 }
 
 /// Entry ids with enough keyword overlap for a stream trail dot (fast pairwise scan).
-#[tauri::command]
+#[tauri::command(async)]
 fn list_thought_trail_entry_ids(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     let all = db.list_entries().map_err(|e| e.to_string())?;
     Ok(entries_with_trail_link_ids(&all).into_iter().collect())
@@ -895,7 +919,7 @@ struct CaptureContinuationHintPayload {
 }
 
 /// Recent entry that strongly overlaps capture text (continuation nudge after save).
-#[tauri::command]
+#[tauri::command(async)]
 fn get_capture_continuation_hint(
     db: tauri::State<Db>,
     text: String,
@@ -954,7 +978,7 @@ fn get_capture_continuation_hint(
     }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn search_entries(
     db: tauri::State<Db>,
     query: String,
@@ -986,7 +1010,7 @@ fn search_entries(
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn pin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -994,17 +1018,17 @@ fn pin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.insert_pinned(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn unpin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.remove_pinned(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_pinned_entry_ids(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_pinned_entry_ids().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_entry_continuation(
     db: tauri::State<Db>,
     entry_id: String,
@@ -1064,7 +1088,7 @@ fn share_thread_to_payload(row: db::ShareThreadRow) -> ShareThreadPayload {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_share_thread(
     db: tauri::State<Db>,
     input: CreateShareThreadInput,
@@ -1105,7 +1129,7 @@ fn create_share_thread(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_share_thread(
     db: tauri::State<Db>,
     token: String,
@@ -1118,7 +1142,7 @@ fn get_share_thread(
         .map(share_thread_to_payload))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_share_threads(db: tauri::State<Db>) -> Result<Vec<ShareThreadPayload>, String> {
     let rows = db.list_share_thread_rows().map_err(|e| e.to_string())?;
     Ok(rows
@@ -1128,7 +1152,7 @@ fn list_share_threads(db: tauri::State<Db>) -> Result<Vec<ShareThreadPayload>, S
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn revoke_share_thread(db: tauri::State<Db>, token: String) -> Result<(), String> {
     if db.revoke_share_thread(&token).map_err(|e| e.to_string())? {
         Ok(())
@@ -1137,12 +1161,12 @@ fn revoke_share_thread(db: tauri::State<Db>, token: String) -> Result<(), String
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn write_utf8_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn update_entry(db: tauri::State<Db>, entry_id: String, text: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -1152,7 +1176,7 @@ fn update_entry(db: tauri::State<Db>, entry_id: String, text: String) -> Result<
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_entry_space(
     db: tauri::State<Db>,
     entry_id: String,
@@ -1166,12 +1190,12 @@ fn set_entry_space(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn record_entry_open(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.record_entry_open(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -1179,12 +1203,12 @@ fn delete_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.delete_entry(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_all_entries(db: tauri::State<Db>) -> Result<(), String> {
     db.delete_all_entries().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
     let mut rows = db.list_entries().map_err(|e| e.to_string())?;
     rows.reverse();
@@ -1215,6 +1239,112 @@ fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// The whole Record, as plain text and audio, in one zip in Downloads.
+///
+/// Plain text on purpose. An export exists so the record can outlive this program, and a
+/// format only this program reads is not an escape hatch. The audio travels beside it
+/// because the recording is the material — the transcript is derived from it, and an export
+/// that kept only the derivation would be throwing the original away.
+#[tauri::command(async)]
+fn export_record(db: tauri::State<Db>, app: tauri::AppHandle) -> Result<String, String> {
+    let mut fragments = db.recent_fragments(1_000_000).map_err(|e| e.to_string())?;
+    // Oldest first: an export is read forwards.
+    fragments.reverse();
+    let ids: Vec<String> = fragments.iter().map(|f| f.id.clone()).collect();
+    let (_encounters, voices) = db.materials_for(&ids).map_err(|e| e.to_string())?;
+
+    let downloads = app
+        .path()
+        .download_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;
+    let name = "chinotto-record.zip".to_string();
+    let dest = downloads.join(&name);
+
+    let file = File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let opts =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    let mut text = String::new();
+    for f in &fragments {
+        text.push_str(&f.captured_at);
+        text.push_str(" · ");
+        text.push_str(&f.capture_method);
+        if let Some(origin) = &f.capture_origin {
+            text.push_str(" · ");
+            text.push_str(origin);
+        }
+        if f.correction_count > 0 {
+            text.push_str(" · wording corrected");
+        }
+        text.push('\n');
+        text.push_str(&f.body);
+        text.push_str("\n\n");
+    }
+    zip.start_file("chinotto-record/record.txt", opts)
+        .map_err(|e| e.to_string())?;
+    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+
+    for v in &voices {
+        // A recording whose file is gone is simply not in the export; the words for it are
+        // already in record.txt, and writing an empty file would claim otherwise.
+        let src = PathBuf::from(&v.audio_path);
+        let Ok(bytes) = fs::read(&src) else { continue };
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("m4a");
+        zip.start_file(format!("chinotto-record/audio/{}.{}", v.fragment_id, ext), opts)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+/// When the most recent automatic backup was taken, so settings can say so truthfully.
+#[tauri::command(async)]
+fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (_db_path, backups_dir) = backup_paths(&app)?;
+    let Ok(entries) = fs::read_dir(&backups_dir) else {
+        return Ok(None);
+    };
+    let mut newest: Option<std::time::SystemTime> = None;
+    for e in entries.flatten() {
+        let Ok(meta) = e.metadata() else { continue };
+        let Ok(modified) = meta.modified() else { continue };
+        if newest.map_or(true, |n| modified > n) {
+            newest = Some(modified);
+        }
+    }
+    Ok(newest.map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()))
+}
+
+/// Opens System Settings at the microphone pane.
+///
+/// The product cannot grant itself the microphone and must not pretend otherwise: when the
+/// mac has said no, the only honest affordance is the door to where the answer lives.
+#[tauri::command(async)]
+fn open_microphone_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Shows the menu-bar capture panel, for settings' "try it".
+#[tauri::command(async)]
+fn open_tray_capture(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("chinotto-capture-shortcut", ());
     Ok(())
 }
 
@@ -1257,7 +1387,7 @@ fn prune_old_backups(backups_dir: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_backup(app: tauri::AppHandle) -> Result<(), String> {
     let (db_path, backups_dir) = backup_paths(&app)?;
     if !db_path.exists() {
@@ -1272,7 +1402,7 @@ fn create_backup(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_backup_if_needed(app: tauri::AppHandle) -> Result<(), String> {
     let (db_path, backups_dir) = backup_paths(&app)?;
     if !db_path.exists() {
@@ -1477,18 +1607,114 @@ struct ResurfacedPayload {
 #[cfg(target_os = "macos")]
 struct SpeechCommandTx(Arc<mpsc::SyncSender<speech::SpeechCommand>>);
 
-#[tauri::command]
+/// What a finished capture left behind, for the surface to turn into a fragment.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceCaptureResult {
+    pub audio_path: String,
+    pub duration_ms: u64,
+    /// `null` when nothing was transcribed. The recording is still there.
+    pub transcript: Option<String>,
+    /// Why there are none, when the mac said. Attached to the fragment as the reason.
+    pub transcript_failure: Option<String>,
+}
+
+/// Where recordings live. Beside the record, because they are part of it.
+fn audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("audio");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// A recording on disk that no fragment claims.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrphanedRecording {
+    pub audio_path: String,
+    /// RFC3339, from the file's last write — the moment the recording stopped.
+    pub ended_at: String,
+    pub duration_ms: u64,
+}
+
+/// Recordings the Record has lost sight of.
+///
+/// The pipeline's whole claim is that the audio is the material and survives everything
+/// that can go wrong after it. It did — into a directory nothing pointed at. Quitting the
+/// app mid-recording, which is exactly what somebody does when a recording will not stop,
+/// left a complete file on disk and no fragment anywhere.
+///
+/// This lists rather than adopts. The fragment is then made through the same call a live
+/// capture makes, so there is one way a recording becomes material and not two.
+///
+/// `ended_at` comes from the file's modification time, which for a file written buffer by
+/// buffer is the last moment audio arrived. Checked against the two that were found: 31 s
+/// and 47 s of wall clock against 30.2 s and 47.3 s of audio.
+#[tauri::command(async)]
+fn orphaned_recordings(
+    app: tauri::AppHandle,
+    db: tauri::State<Db>,
+) -> Result<Vec<OrphanedRecording>, String> {
+    let dir = audio_dir(&app)?;
+    let claimed = db.claimed_audio_paths().map_err(|e| e.to_string())?;
+
+    let mut found: Vec<OrphanedRecording> = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("caf") {
+            continue;
+        }
+        let as_string = path.to_string_lossy().into_owned();
+        if claimed.contains(&as_string) {
+            continue;
+        }
+
+        // A file that cannot be opened is left alone rather than adopted with a guessed
+        // length: a recording's duration is a fact about it, and inventing one would put
+        // something into the Record that the Record cannot show.
+        #[cfg(target_os = "macos")]
+        let duration_ms = match speech::duration_ms_of(&path) {
+            Some(ms) => ms,
+            None => continue,
+        };
+        #[cfg(not(target_os = "macos"))]
+        let duration_ms = continue;
+
+        let modified = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .map_err(|e| e.to_string())?;
+        found.push(OrphanedRecording {
+            audio_path: as_string,
+            ended_at: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
+            duration_ms,
+        });
+    }
+
+    // Oldest first, so adopting them lands them in the record in the order they happened.
+    found.sort_by(|a, b| a.ended_at.cmp(&b.ended_at));
+    Ok(found)
+}
+
+/// Hold to speak. Records to a file and transcribes it if it can.
+///
+/// The recording is the material and it is written as it arrives, so a recogniser that is
+/// unauthorised, fails or times out costs the words but never the audio. Only a failure to
+/// record at all is an error here.
+#[tauri::command(async)]
 fn run_native_speech_recognition(
     app: tauri::AppHandle,
     max_ms: Option<u64>,
-) -> Result<Option<String>, String> {
+) -> Result<VoiceCaptureResult, String> {
     #[cfg(target_os = "macos")]
     {
-        if !EXPERIMENTAL_VOICE_CAPTURE {
-            return Err("Voice capture is not enabled".to_string());
-        }
-        eprintln!("[Speech] hotkey triggered / command invoked");
-        let max_ms = max_ms.unwrap_or(10_000);
+        let max_ms = max_ms.unwrap_or(120_000);
+        let path = audio_dir(&app)?.join(format!("{}.caf", uuid::Uuid::new_v4()));
+
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         let (event_tx, event_rx) = mpsc::sync_channel(4);
         let app_handle = app.clone();
@@ -1497,19 +1723,41 @@ fn run_native_speech_recognition(
                 let _ = app_handle.emit("chinotto-speech-state", state);
             }
         });
+        // Before the command is queued, so a release that arrives while the recogniser is
+        // being created or the mac is asking about the microphone is still seen.
+        speech::arm_stop();
+        // And, once ever, the other permission. On the main thread because that is where a
+        // system prompt is presented from; it is not waited for, so this recording keeps its
+        // audio and simply has no words. See `speech::ask_for_speech_if_undecided`.
+        let _ = app.run_on_main_thread(speech::ask_for_speech_if_undecided);
         let cmd_tx = app.state::<SpeechCommandTx>().0.clone();
         cmd_tx
-            .send((max_ms, result_tx, Some(event_tx)))
-            .map_err(|_| "Speech channel closed".to_string())?;
-        match result_rx.recv_timeout(std::time::Duration::from_secs(60)) {
-            Ok(inner) => inner,
-            Err(_) => Err("Speech recognition timed out".to_string()),
+            .send((max_ms, path, result_tx, Some(event_tx)))
+            .map_err(|_| "the voice pipeline is not running".to_string())?;
+        match result_rx.recv_timeout(std::time::Duration::from_secs(180)) {
+            Ok(Ok(capture)) => Ok(VoiceCaptureResult {
+                audio_path: capture.audio_path.to_string_lossy().into_owned(),
+                duration_ms: capture.duration_ms,
+                transcript: capture.transcript,
+                transcript_failure: capture.transcript_failure,
+            }),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err("the recording did not come back".to_string()),
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, max_ms);
-    #[cfg(not(target_os = "macos"))]
-    Err("Native speech recognition is only available on macOS".to_string())
+    {
+        let _ = (app, max_ms);
+        Err("Voice capture is only available on macOS".to_string())
+    }
+}
+
+/// The hold was released. Ends the recording that is running, if any.
+#[tauri::command(async)]
+fn stop_voice_capture() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    speech::request_stop();
+    Ok(())
 }
 
 #[tauri::command]
@@ -1553,10 +1801,11 @@ fn set_macos_dock_icon(png_bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Voice capture is disabled in the main flow. Set to true to re-enable as an experimental feature.
-const EXPERIMENTAL_VOICE_CAPTURE: bool = false;
-
-const VOICE_SHORTCUT: &str = "CommandOrControl+Shift+V";
+/// Speak from anywhere on the mac.
+///
+/// Hold is the model, so there is one voice chord and it is a hold. `⌘⇧V` is gone: a
+/// press-to-start/press-to-stop shortcut taught a different gesture from the one at the
+/// edge, and two gestures for one action is one too many.
 const VOICE_HOLD: &str = "Alt+Space";
 const CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+K";
 
@@ -1603,7 +1852,6 @@ pub fn run() {
     use tauri::Manager;
     use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
-    let voice_shortcut_id = Shortcut::from_str(VOICE_SHORTCUT).ok().map(|s| s.id());
     let voice_hold_id = Shortcut::from_str(VOICE_HOLD).ok().map(|s| s.id());
     let capture_shortcut_id = Shortcut::from_str(CAPTURE_SHORTCUT).ok().map(|s| s.id());
 
@@ -1612,14 +1860,14 @@ pub fn run() {
               shortcut: &tauri_plugin_global_shortcut::Shortcut,
               event: tauri_plugin_global_shortcut::ShortcutEvent| {
             let id = shortcut.id();
-            let _ = match (voice_shortcut_id, voice_hold_id, &event.state) {
-                (Some(sid), _, ShortcutState::Pressed) if id == sid => {
-                    app.emit("chinotto-voice-shortcut", ())
-                }
-                (_, Some(hid), ShortcutState::Pressed) if id == hid => {
+            // Hold is the model: press starts the recording, release ends it. There is no
+            // press-to-start/press-to-stop variant, here or at the edge.
+            let _ = match (voice_hold_id, &event.state) {
+                (Some(hid), ShortcutState::Pressed) if id == hid => {
+                    ensure_main_window_focus(app);
                     app.emit("chinotto-voice-hold-start", ())
                 }
-                (_, Some(hid), ShortcutState::Released) if id == hid => {
+                (Some(hid), ShortcutState::Released) if id == hid => {
                     app.emit("chinotto-voice-hold-stop", ())
                 }
                 _ => Ok(()),
@@ -1631,11 +1879,7 @@ pub fn run() {
             }
         };
 
-    let mut shortcuts: Vec<&str> = vec![CAPTURE_SHORTCUT];
-    if EXPERIMENTAL_VOICE_CAPTURE {
-        shortcuts.push(VOICE_SHORTCUT);
-        shortcuts.push(VOICE_HOLD);
-    }
+    let shortcuts: Vec<&str> = vec![CAPTURE_SHORTCUT, VOICE_HOLD];
     let plugin_builder = tauri_plugin_global_shortcut::Builder::new()
         .with_shortcuts(shortcuts)
         .expect("shortcuts")
@@ -1667,8 +1911,12 @@ pub fn run() {
             let db_path = path.join("chinotto.db");
             let db = Db::open(db_path).map_err(|e| e.to_string())?;
             app.manage(db);
+            // Before anything can ask for a guess. fastembed would otherwise cache the
+            // weights beside the working directory, which for an app opened from Finder is
+            // `/` — so they would be fetched, fail to store, and be fetched again forever.
+            embeddings::set_cache_dir(path.join("models"));
             #[cfg(target_os = "macos")]
-            if EXPERIMENTAL_VOICE_CAPTURE {
+            {
                 let (cmd_tx, cmd_rx) = mpsc::sync_channel(0);
                 app.manage(SpeechCommandTx(Arc::new(cmd_tx)));
                 std::thread::spawn(move || speech::run_speech_loop(cmd_rx));
@@ -1686,11 +1934,54 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // The Record
+            record_commands::capture_fragment,
+            record_commands::continue_fragment,
+            record_commands::link_continuation,
+            record_commands::correct_fragment,
+            record_commands::fragment_history,
+            record_commands::line_for,
+            record_commands::hold_fragment,
+            record_commands::max_held,
+            record_commands::release_fragment,
+            record_commands::held_fragments,
+            record_commands::recent_fragments,
+            record_commands::fragments_before,
+            record_commands::fragments_between,
+            record_commands::find_fragments,
+            record_commands::month_density,
+            record_commands::record_span,
+            record_commands::select_return,
+            record_commands::record_return_outcome,
+            record_commands::find_by_meaning,
+            record_commands::reject_guess,
+            record_commands::embed_pending,
+            record_commands::pending_embedding_count,
+            record_commands::capture_encounter,
+            record_commands::encounter_for,
+            record_commands::same_source_encounters,
+            record_commands::encounters_awaiting_enrichment,
+            record_commands::record_enrichment,
+            record_commands::capture_voice,
+            record_commands::record_transcript,
+            record_commands::voice_for,
+            record_commands::mark_audio_missing,
+            record_commands::materials_for,
+            record_commands::mirror_pending_fragments,
+            record_commands::fragments_awaiting_mirror,
+            record_commands::absorb_remote_deletes,
+            record_commands::project_entries_into_record,
+            record_commands::this_device,
+            record_commands::open_wording_conflicts,
+            record_commands::resolve_wording_conflict,
+            record_commands::restore_fragment,
+            record_commands::remove_fragment,
             native_apple_sign_in,
             oauth_dev_bridge::start_oauth_dev_bridge_listener,
             ingest_firestore_entries,
             enqueue_sync_tombstone,
             list_sync_tombstone_outbox,
+            list_due_sync_tombstone_outbox,
             remove_sync_tombstone_outbox,
             clear_sync_tombstone_outbox_all,
             clear_firestore_ingest_suppression,
@@ -1716,6 +2007,8 @@ pub fn run() {
             jump_anchor_for_local_date,
             search_entries,
             run_native_speech_recognition,
+            orphaned_recordings,
+            stop_voice_capture,
             generate_embedding,
             classify_entry_theme,
             get_entry_theme,
@@ -1738,6 +2031,10 @@ pub fn run() {
             delete_entry,
             delete_all_entries,
             export_entries,
+            export_record,
+            last_backup_at,
+            open_microphone_settings,
+            open_tray_capture,
             create_share_thread,
             get_share_thread,
             list_share_threads,

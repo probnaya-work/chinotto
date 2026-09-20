@@ -46,3 +46,6 @@ docs/internal/
 
 # PR drafting notes (local-only)
 .github/pull_request_body*.md
+
+# Local Claude Code runtime state (dev server config, per-machine).
+.claude/

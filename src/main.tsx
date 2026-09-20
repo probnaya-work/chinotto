@@ -1,10 +1,8 @@
-import "@fontsource/open-sauce-one/400.css";
-import "@fontsource/open-sauce-one/500.css";
-import { StrictMode, useEffect, useState } from "react";
+import "@fontsource-variable/archivo/wdth.css";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
-import { TrayCapturePanel } from "./features/entries/TrayCapturePanel";
-import { IconVariantShowcase } from "./components/IconVariantShowcase";
+import { TrayCapture } from "./features/record/TrayCapture";
+import { RecordApp } from "./features/record/RecordApp";
 import { HostingDesktopOnly } from "./components/HostingDesktopOnly";
 import { OAuthBridge } from "./components/OAuthBridge";
 import { setUmami } from "./lib/analytics";
@@ -21,21 +19,8 @@ if (import.meta.env.DEV) {
 setUmami(umamiUrl, umamiWebsiteId);
 
 function Root() {
-  const [showIconShowcase, setShowIconShowcase] = useState(() =>
-    import.meta.env.DEV && window.location.hash === "#icon-variants"
-  );
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const onHash = () => setShowIconShowcase(window.location.hash === "#icon-variants");
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  if (import.meta.env.DEV && showIconShowcase) {
-    return <IconVariantShowcase />;
-  }
-  return <App />;
+  // The Record is the product. There is no other home, and no route to the old one.
+  return <RecordApp />;
 }
 
 /* Path-based route survives Firebase redirect better than only ?chinotto_oauth=1 (that query is often dropped). */
@@ -93,9 +78,7 @@ const hostingDesktopOnlyGate = shouldRenderHostingDesktopOnlyGate() && !oauthChi
 createRoot(document.getElementById("root")!).render(
   trayCapture ? (
     <StrictMode>
-      <div className="tray-capture-root">
-        <TrayCapturePanel />
-      </div>
+      <TrayCapture />
     </StrictMode>
   ) : oauthChild ? (
     <OAuthBridge />

@@ -1,3 +1,9 @@
+pub mod bridge;
+pub mod material;
+pub mod meaning;
+pub mod migrate;
+pub mod record;
+pub mod returns;
 mod schema;
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, Utc};
@@ -271,7 +277,15 @@ fn ensure_updated_at_column(conn: &Connection) -> Result<(), rusqlite::Error> {
 
 impl Db {
     pub fn open(path: PathBuf) -> Result<Self, rusqlite::Error> {
-        let conn = Connection::open(path)?;
+        // ":memory:" and bare filenames have no meaningful parent; writing the theme
+        // archive relative to the current working directory would litter wherever the app
+        // happened to be launched from.
+        let archive_dir = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf());
+        let mut conn = Connection::open(path)?;
+        conn.pragma_update(None, "foreign_keys", true)?;
         schema::run_migrations(&conn)?;
         ensure_importance_columns(&conn)?;
         ensure_updated_at_column(&conn)?;
@@ -279,6 +293,8 @@ impl Db {
         ensure_share_threads_table(&conn)?;
         ensure_user_themes_table(&conn)?;
         ensure_spaces(&conn)?;
+        // v1 ensure_* calls above must run first: the v2 migration reads the columns they add.
+        migrate::run(&mut conn, archive_dir.as_deref())?;
         Ok(Self(Mutex::new(conn)))
     }
 
@@ -958,6 +974,18 @@ impl Db {
             "SELECT entry_id FROM sync_tombstone_outbox ORDER BY enqueued_at ASC",
         )?;
         let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect()
+    }
+
+    /// Tombstones old enough to publish. Younger than `min_age_secs` are still inside the
+    /// undo window and must not reach other devices.
+    pub fn list_due_sync_tombstone_outbox(&self, min_age_secs: i64) -> Result<Vec<String>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let cutoff = (chrono::Utc::now() - chrono::Duration::seconds(min_age_secs)).to_rfc3339();
+        let mut stmt = conn.prepare(
+            "SELECT entry_id FROM sync_tombstone_outbox WHERE enqueued_at <= ?1 ORDER BY enqueued_at ASC",
+        )?;
+        let rows = stmt.query_map([cutoff], |r| r.get(0))?;
         rows.collect()
     }
 
@@ -1880,6 +1908,31 @@ mod tests {
         db.enqueue_sync_tombstone("same").unwrap();
         let ids = db.list_sync_tombstone_outbox().unwrap();
         assert_eq!(ids, vec!["same".to_string()]);
+    }
+
+    #[test]
+    fn a_fresh_tombstone_is_not_due_for_eight_seconds() {
+        let db = Db::open(PathBuf::from(":memory:")).unwrap();
+        db.enqueue_sync_tombstone("fresh").unwrap();
+        assert!(
+            db.list_due_sync_tombstone_outbox(8).unwrap().is_empty(),
+            "publishing inside the undo window would destroy the fragment on other devices"
+        );
+        assert_eq!(db.list_sync_tombstone_outbox().unwrap(), vec!["fresh".to_string()]);
+    }
+
+    #[test]
+    fn an_old_enough_tombstone_is_due() {
+        let db = Db::open(PathBuf::from(":memory:")).unwrap();
+        {
+            let conn = db.0.lock().unwrap();
+            conn.execute(
+                "INSERT INTO sync_tombstone_outbox (entry_id, enqueued_at) VALUES ('old', '2020-01-01T00:00:00+00:00')",
+                [],
+            )
+            .unwrap();
+        }
+        assert_eq!(db.list_due_sync_tombstone_outbox(8).unwrap(), vec!["old".to_string()]);
     }
 
     #[test]
