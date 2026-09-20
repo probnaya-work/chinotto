@@ -188,11 +188,26 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === releaseKey) stopRef.current();
     };
+    /**
+     * The held key is still the page's key.
+     *
+     * `space` is how a browser pages down, and the field that swallowed the first press is
+     * gone the moment the recording starts — both surfaces replace it with the waveform
+     * rather than hiding it behind one. So every auto-repeat of the hold lands on the
+     * document instead, and the record pages itself to the far end underneath a recording
+     * nobody has finished making yet. The hold is held against the window; so is its
+     * default.
+     */
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === releaseKey) e.preventDefault();
+    };
     const release = () => stopRef.current();
+    window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("mouseup", release);
     window.addEventListener("blur", release);
     return () => {
+      window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("mouseup", release);
       window.removeEventListener("blur", release);

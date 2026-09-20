@@ -76,8 +76,12 @@ export function Capture({
   useEffect(() => {
     // preventScroll: focusing otherwise scrolls the field into view, which drags the whole
     // record back to the top every time you return to the edge.
-    if (autoFocus) ref.current?.focus({ preventScroll: true });
-  }, [autoFocus]);
+    //
+    // `speaking` is in here because the recording replaces the field rather than hiding it:
+    // when it ends, this is a new element with nothing in it, and without this you would
+    // have to click the edge before you could type into it again.
+    if (!speaking && autoFocus) ref.current?.focus({ preventScroll: true });
+  }, [autoFocus, speaking]);
 
   // The field grows downward with the text rather than scrolling inside a fixed box: long
   // material needs room, but capture never becomes a writing mode.

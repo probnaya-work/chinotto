@@ -63,6 +63,40 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
+  it("does not let the held key page the record away underneath it", () => {
+    const hook = holding();
+
+    // The field that swallowed the first press is gone — the waveform replaced it — so the
+    // auto-repeats of the hold arrive at the document, where `space` means "page down".
+    const repeat = new KeyboardEvent("keydown", { key: " ", cancelable: true });
+    act(() => {
+      window.dispatchEvent(repeat);
+    });
+    expect(repeat.defaultPrevented).toBe(true);
+    expect(stopped()).toBe(0);
+    hook.unmount();
+  });
+
+  it("leaves other keys' defaults alone", () => {
+    const hook = holding();
+    const other = new KeyboardEvent("keydown", { key: "PageDown", cancelable: true });
+    act(() => {
+      window.dispatchEvent(other);
+    });
+    expect(other.defaultPrevented).toBe(false);
+    hook.unmount();
+  });
+
+  it("stops holding the key's default once the recording is over", () => {
+    const hook = renderHook(() => useVoice(() => {}));
+    const idle = new KeyboardEvent("keydown", { key: " ", cancelable: true });
+    act(() => {
+      window.dispatchEvent(idle);
+    });
+    expect(idle.defaultPrevented).toBe(false);
+    hook.unmount();
+  });
+
   it("is not ended by some other key coming up", () => {
     const hook = holding();
     act(() => {
