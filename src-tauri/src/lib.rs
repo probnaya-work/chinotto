@@ -1719,6 +1719,8 @@ pub fn run() {
             record_commands::find_fragments,
             record_commands::month_density,
             record_commands::record_span,
+            record_commands::select_return,
+            record_commands::record_return_outcome,
             record_commands::find_by_meaning,
             record_commands::reject_guess,
             record_commands::embed_pending,

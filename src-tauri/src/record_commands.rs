@@ -7,6 +7,7 @@
 use crate::db::record::{Fragment, FindHit, HeldFragment, LineMoment, Revision};
 use crate::db::material::{Encounter, PageMaterials, VoiceCapture};
 use crate::db::meaning::Guess;
+use crate::db::returns::Return;
 use crate::db::Db;
 
 /// Mirrors a fragment into the legacy `entries` row the sync protocol reads.
@@ -184,7 +185,18 @@ pub fn record_span(db: tauri::State<Db>) -> Result<Option<(String, String)>, Str
     db.record_span().map_err(|e| e.to_string())
 }
 
+/// At most one Return, or none. None is the ordinary answer: silence is valid.
+#[tauri::command]
+pub fn select_return(db: tauri::State<Db>) -> Result<Option<Return>, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    db.select_return(&now).map_err(|e| e.to_string())
+}
 
+/// 'opened' | 'continued' | 'let_go' | 'expired'. Letting go is an outcome, not a delete.
+#[tauri::command]
+pub fn record_return_outcome(db: tauri::State<Db>, id: i64, outcome: String) -> Result<(), String> {
+    db.record_return_outcome(id, &outcome).map_err(|e| e.to_string())
+}
 
 /// Guesses. A separate command from `find_fragments` on purpose: exact retrieval must never
 /// wait on the model, and a caller has to opt in to asking for inference.

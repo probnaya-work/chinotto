@@ -3,6 +3,7 @@ pub mod material;
 pub mod meaning;
 pub mod migrate;
 pub mod record;
+pub mod returns;
 mod schema;
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, Utc};

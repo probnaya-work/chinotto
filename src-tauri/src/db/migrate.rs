@@ -16,7 +16,7 @@ use rusqlite::{Connection, Transaction};
 use std::path::Path;
 
 /// Schema version this binary expects. Bump when adding a migration below.
-pub const TARGET_VERSION: i32 = 4;
+pub const TARGET_VERSION: i32 = 5;
 
 pub fn current_version(conn: &Connection) -> Result<i32, rusqlite::Error> {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -55,6 +55,13 @@ pub fn run(conn: &mut Connection, archive_dir: Option<&Path>) -> Result<(), rusq
         let tx = conn.transaction()?;
         migrate_to_v4(&tx)?;
         set_version(&tx, 4)?;
+        tx.commit()?;
+    }
+
+    if from < 5 {
+        let tx = conn.transaction()?;
+        migrate_to_v5(&tx)?;
+        set_version(&tx, 5)?;
         tx.commit()?;
     }
 
@@ -185,6 +192,24 @@ fn migrate_to_v4(tx: &Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// v5: a Return says which act caused it.
+///
+/// `schema_v2.sql` gained `return_evidence.related_id`, but that file only runs when the
+/// Record is first created — `CREATE TABLE IF NOT EXISTS` does not alter a table that is
+/// already there. A database built by an earlier build of this branch is already at v4, so
+/// `run()` returns early and the column never arrives; `select_return` then fails on every
+/// read with "no such column", and the person loses Returns entirely.
+///
+/// Additive and nullable: existing evidence rows simply have no cause recorded, which is
+/// the truth about them — they were written before the product asked for one.
+fn migrate_to_v5(tx: &Transaction) -> Result<(), rusqlite::Error> {
+    if table_exists(tx, "return_evidence")? && !column_exists(tx, "return_evidence", "related_id")? {
+        tx.execute_batch(
+            "ALTER TABLE return_evidence ADD COLUMN related_id TEXT REFERENCES fragments(id) ON DELETE SET NULL",
+        )?;
+    }
+    Ok(())
+}
 
 fn table_exists(tx: &Transaction, name: &str) -> Result<bool, rusqlite::Error> {
     let n: i32 = tx.query_row(
@@ -1077,5 +1102,66 @@ mod regression_tests {
         assert!(density_ms < 250, "density took {density_ms}ms");
     }
 
+    /// A database built by an earlier build of THIS branch is already at v4, so `run()`
+    /// used to return early and `return_evidence.related_id` never arrived. Every
+    /// `select_return` then failed on "no such column" and Returns vanished silently.
+    #[test]
+    fn a_v4_record_still_gains_the_returns_cause_column() {
+        let path = std::env::temp_dir().join(format!(
+            "chinotto-v4-upgrade-{}.sqlite3",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
 
+        {
+            // Build the Record as the earlier build left it: v4, and no `related_id`.
+            let mut conn = Connection::open(&path).unwrap();
+            super::run(&mut conn, None).unwrap();
+            conn.execute_batch(
+                "DROP TABLE return_evidence;
+                 CREATE TABLE return_evidence (
+                   id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                   return_id    INTEGER NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+                   kind         TEXT NOT NULL,
+                   detail       TEXT NOT NULL,
+                   occurred_at  TEXT
+                 );
+                 PRAGMA user_version = 4;",
+            )
+            .unwrap();
+            assert!(!column_exists_conn(&conn, "return_evidence", "related_id"));
+        }
+
+        // Opening the way the app does runs the ladder.
+        let db = super::super::Db::open(path.clone()).unwrap();
+        {
+            let conn = db.0.lock().unwrap();
+            assert_eq!(current_version(&conn).unwrap(), TARGET_VERSION);
+            assert!(
+                column_exists_conn(&conn, "return_evidence", "related_id"),
+                "a Return could not say what caused it, so it could not be shown at all"
+            );
+        }
+
+        // And the read path works, rather than merely the column existing.
+        assert!(db
+            .select_return("2026-09-19T17:10:00+00:00")
+            .unwrap()
+            .is_none());
+
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn column_exists_conn(conn: &Connection, table: &str, column: &str) -> bool {
+        let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})")).unwrap();
+        let mut rows = stmt.query([]).unwrap();
+        while let Some(row) = rows.next().unwrap() {
+            let name: String = row.get(1).unwrap();
+            if name == column {
+                return true;
+            }
+        }
+        false
+    }
 }

@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS return_evidence (
   return_id    INTEGER NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
   kind         TEXT NOT NULL CHECK (kind IN ('shared_phrase','url','date','continuation','hold')),
   detail       TEXT NOT NULL,
-  occurred_at  TEXT
+  occurred_at  TEXT,
+  related_id   TEXT REFERENCES fragments(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS return_evidence_return ON return_evidence (return_id);
