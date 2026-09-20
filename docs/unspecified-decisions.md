@@ -384,3 +384,44 @@ would set the wordmark in Helvetica. It now refuses rather than substituting a t
 the one window someone sees before the product has said anything. The committed PNG was
 rendered in the app's own webview with the real variable font. Dropping an `Archivo-Medium.ttf`
 into `scripts/` makes the generator self-sufficient again.
+
+---
+
+## 12. Voice (phase 11)
+
+The canonical rule — **retained audio is the source, the transcript is derived from it** —
+was not what the code did. The old pipeline fed the microphone to the recogniser, kept the
+string and discarded the audio, so a fragment's material was a machine's reading of
+something that no longer existed. The tap now writes an `AVAudioFile` as the buffers
+arrive, and the recogniser is a second consumer of the same buffers.
+
+What follows from that, and is now true: a recogniser that is unauthorised, fails, times
+out or hears nothing costs the words and never the recording. `run_capture` returns the
+path and duration regardless, `capture_voice` runs before `record_transcript`, and a failed
+transcript is recorded as a failed *reading* rather than a failed capture.
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 12.1 | Audio format | the input's own format, `.caf` | `speech.rs` | invented |
+| 12.2 | Where recordings live | `<app data>/audio/<uuid>.caf` | `lib.rs` `audio_dir` | invented |
+| 12.3 | Ceiling on one recording | `120s` | `lib.rs` | invented |
+| 12.4 | A release shorter than this is a slip | `800ms` | `useVoice.ts` `DROP_UNDER_MS` | **from the prototype** |
+| 12.5 | How a hold ends | an atomic flag polled every 16ms; `max_ms` is only a ceiling | `speech.rs` | invented |
+| 12.6 | Microphone state is only ever learned by trying | never probed, never assumed | `RecordApp.tsx` | inferred |
+| 12.7 | `⌘⇧V` is removed | hold is the only voice gesture | `lib.rs` | **from the prototype** |
+
+12.1: the input format rather than a re-encode. This is the source, and resampling on the
+way in would mean the thing we kept is already a derivation. `.caf` because it is what
+`AVAudioFile` writes natively and it survives arbitrary sample rates.
+
+12.6 is a small honesty point with a visible consequence: there is no API that reports
+microphone permission without asking for it, so settings says "the mac hasn't been asked
+yet" until a recording actually succeeds or is refused. It never claims to know an answer
+it has not been given.
+
+**Not done, and why.** Re-transcribing an existing recording ("try again" on a failed
+transcript, in `Material.tsx`) is wired to a callback that nothing supplies yet: it needs a
+file-input recognition path rather than the live-buffer one, which is a separate piece of
+Speech-framework work. The audio is retained, so this can be added later against material
+that already exists — which is the point of keeping the source. Until it is, a failed
+transcript offers "type it" only.

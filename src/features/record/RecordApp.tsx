@@ -9,7 +9,15 @@
  * fragment or a line, and the utility surfaces. Only one is visible at a time.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { listen } from "@tauri-apps/api/event";
 import * as api from "../../lib/recordApi";
 import type { Fragment, HeldFragment } from "../../lib/recordApi";
@@ -21,6 +29,7 @@ import { QuietLine } from "./QuietLine";
 import { Settings, type MicrophoneState } from "./Settings";
 import { Sync, type SyncState } from "./Sync";
 import { Launch, useLaunch } from "./Launch";
+import { useVoice } from "./useVoice";
 import { useNow } from "./useNow";
 import { useAppleSyncOAuth } from "@/lib/useAppleSyncOAuth";
 import { metaStyle } from "../../design/tiers";
@@ -85,6 +94,38 @@ function backupLine(iso: string | null, now: Date): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "never";
   return `${dayLabel(at, now)} ${clockLabel(at)}`;
+}
+
+/**
+ * The one sentence the edge says about the microphone, and the verb that answers it.
+ *
+ * The product cannot grant itself the microphone, so when the mac has refused the only
+ * honest affordance is the door to where the answer lives.
+ */
+function micNotice(
+  notice: "ask" | "denied" | "failed" | null,
+  onOpenSettings: () => void,
+): ReactNode {
+  if (!notice) return null;
+  if (notice === "denied") {
+    return (
+      <>
+        chinotto can’t hear — the mac isn’t allowing the microphone. system settings ›
+        privacy › microphone, then hold space again.{" "}
+        <span
+          className="chinotto-verb"
+          onClick={onOpenSettings}
+          style={{ color: "var(--ink)", cursor: "pointer" }}
+        >
+          open system settings ›
+        </span>
+      </>
+    );
+  }
+  if (notice === "ask") {
+    return <>the mac will ask once whether chinotto may hear you.</>;
+  }
+  return <>that recording didn’t start. nothing was lost; hold space again.</>;
 }
 
 /**
@@ -167,7 +208,21 @@ export function RecordApp() {
   const [analyticsOn, setAnalyticsOn] = useState(() => isOptIn());
   const [exportNote, setExportNote] = useState("");
   const [backupAt, setBackupAt] = useState<string | null>(null);
-  const [microphone] = useState<MicrophoneState>("ask");
+  const voice = useVoice(() => void reload());
+  /**
+   * What the mac has said about the microphone.
+   *
+   * It only ever moves away from "ask" because something actually happened: a recording
+   * that worked, or one that was refused. The product cannot read the answer without
+   * asking, so it does not claim to know it.
+   */
+  const [microphone, setMicrophone] = useState<MicrophoneState>("ask");
+  useEffect(() => {
+    if (voice.notice === "denied") setMicrophone("denied");
+  }, [voice.notice]);
+  useEffect(() => {
+    if (voice.recording) setMicrophone("granted");
+  }, [voice.recording]);
 
   // ---- sync ------------------------------------------------------------------------------
   const [devices, setDevices] = useState<SyncDevice[] | null>(null);
@@ -420,6 +475,19 @@ export function RecordApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack, surface, changeTextScale]);
+
+  /**
+   * `⌥space` anywhere on the mac. The window is brought forward by the Rust side before
+   * this fires, so the recording is always visible while it is happening.
+   */
+  useEffect(() => {
+    const start = listen("chinotto-voice-hold-start", () => voice.start());
+    const stop = listen("chinotto-voice-hold-stop", () => voice.stop());
+    return () => {
+      void start.then((f) => f());
+      void stop.then((f) => f());
+    };
+  }, [voice]);
 
   /**
    * Something was captured from the menu bar while this window was elsewhere.
@@ -932,6 +1000,14 @@ export function RecordApp() {
                   findCount={wordHits}
                   meaningOn={meaningOn}
                   onToggleMeaning={() => setMeaningOn((m) => !m)}
+                  speaking={voice.recording}
+                  speakingSeconds={voice.seconds}
+                  onStartSpeaking={voice.start}
+                  onStopSpeaking={voice.stop}
+                  notice={micNotice(voice.notice, () => {
+                    voice.dismissNotice();
+                    void api.openMicrophoneSettings().catch(() => {});
+                  })}
                 />
               </div>
             )}

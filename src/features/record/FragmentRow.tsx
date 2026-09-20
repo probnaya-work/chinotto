@@ -292,7 +292,20 @@ export function FragmentRow(props: FragmentRowProps) {
                   {durationLabel(voice.durationMs / 1000)}
                 </button>
               ) : null}
-              <Marked text={expanded ? displayText : paragraphs[0]} mark={mark} />
+              {voice && !hasOwnWords ? (
+                // The recording exists; the reading of it does not, or failed. Saying which
+                // is the whole point — the audio is safe either way, and a blank row would
+                // imply the opposite.
+                <span style={{ ...metaStyle("var(--size-voice-chip)"), fontStyle: "normal" }}>
+                  {voice.transcriptState === "failed"
+                    ? voice.audioMissing
+                      ? "couldn’t transcribe · the audio is not on this device"
+                      : "couldn’t transcribe · the audio is safe"
+                    : "listening back…"}
+                </span>
+              ) : (
+                <Marked text={expanded ? displayText : paragraphs[0]} mark={mark} />
+              )}
             </div>
 
             {expanded && moreParagraphs > 0
@@ -311,6 +324,10 @@ export function FragmentRow(props: FragmentRowProps) {
               <Meta onClick={() => props.onOpen?.(fragment)}>
                 {sourceLine(encounter, hasOwnWords)}
               </Meta>
+            ) : null}
+
+            {voice?.audioMissing && hasOwnWords ? (
+              <Meta>the audio is no longer on this device · these words remain</Meta>
             ) : null}
 
             {lineMeta ? <Meta>{lineMeta}</Meta> : null}

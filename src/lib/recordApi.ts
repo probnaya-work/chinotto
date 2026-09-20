@@ -592,3 +592,61 @@ export function resolveWordingConflict(
 ): Promise<void> {
   return invoke<void>("resolve_wording_conflict", { fragmentId, shows });
 }
+
+// ---- voice ------------------------------------------------------------------------------
+
+/**
+ * What one recording left behind.
+ *
+ * `transcript` may be null, and that is a complete outcome rather than a failure: the
+ * recording is the material, the transcript is a machine's reading of it, and a reading can
+ * be absent, late or wrong without the recording being any of those things.
+ */
+export interface VoiceCaptureResult {
+  audioPath: string;
+  durationMs: number;
+  transcript: string | null;
+}
+
+/** Hold to speak. Records to a file, and transcribes it if it can. */
+export function recordVoice(maxMs?: number): Promise<VoiceCaptureResult> {
+  return invoke<VoiceCaptureResult>("run_native_speech_recognition", { maxMs });
+}
+
+/** The hold was released. `maxMs` is only a ceiling; this is what normally ends a recording. */
+export function stopVoiceCapture(): Promise<void> {
+  return invoke<void>("stop_voice_capture");
+}
+
+/** The recording becomes a fragment. Called whether or not any words came back. */
+export function captureVoice(
+  audioPath: string,
+  durationMs: number,
+  captureOrigin = "desktop",
+): Promise<Fragment> {
+  return invoke<Fragment>("capture_voice", { audioPath, durationMs, captureOrigin }).then(
+    (f) => {
+      carryToSync(f);
+      return f;
+    },
+  );
+}
+
+/** Attaches what the machine heard. Derived material: it never moves or replaces the audio. */
+export function recordTranscript(
+  fragmentId: string,
+  transcript: string | null,
+  failure?: string | null,
+): Promise<void> {
+  return invoke<void>("record_transcript", {
+    fragmentId,
+    transcript,
+    model: "apple-speech",
+    failure: failure ?? null,
+  });
+}
+
+/** The audio was looked for and is not there. The words, if any, remain. */
+export function markAudioMissing(fragmentId: string): Promise<void> {
+  return invoke<void>("mark_audio_missing", { fragmentId });
+}

@@ -1607,18 +1607,42 @@ struct ResurfacedPayload {
 #[cfg(target_os = "macos")]
 struct SpeechCommandTx(Arc<mpsc::SyncSender<speech::SpeechCommand>>);
 
+/// What a finished capture left behind, for the surface to turn into a fragment.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceCaptureResult {
+    pub audio_path: String,
+    pub duration_ms: u64,
+    /// `null` when nothing was transcribed. The recording is still there.
+    pub transcript: Option<String>,
+}
+
+/// Where recordings live. Beside the record, because they are part of it.
+fn audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("audio");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Hold to speak. Records to a file and transcribes it if it can.
+///
+/// The recording is the material and it is written as it arrives, so a recogniser that is
+/// unauthorised, fails or times out costs the words but never the audio. Only a failure to
+/// record at all is an error here.
 #[tauri::command]
 fn run_native_speech_recognition(
     app: tauri::AppHandle,
     max_ms: Option<u64>,
-) -> Result<Option<String>, String> {
+) -> Result<VoiceCaptureResult, String> {
     #[cfg(target_os = "macos")]
     {
-        if !EXPERIMENTAL_VOICE_CAPTURE {
-            return Err("Voice capture is not enabled".to_string());
-        }
-        eprintln!("[Speech] hotkey triggered / command invoked");
-        let max_ms = max_ms.unwrap_or(10_000);
+        let max_ms = max_ms.unwrap_or(120_000);
+        let path = audio_dir(&app)?.join(format!("{}.caf", uuid::Uuid::new_v4()));
+
         let (result_tx, result_rx) = mpsc::sync_channel(1);
         let (event_tx, event_rx) = mpsc::sync_channel(4);
         let app_handle = app.clone();
@@ -1629,17 +1653,31 @@ fn run_native_speech_recognition(
         });
         let cmd_tx = app.state::<SpeechCommandTx>().0.clone();
         cmd_tx
-            .send((max_ms, result_tx, Some(event_tx)))
-            .map_err(|_| "Speech channel closed".to_string())?;
-        match result_rx.recv_timeout(std::time::Duration::from_secs(60)) {
-            Ok(inner) => inner,
-            Err(_) => Err("Speech recognition timed out".to_string()),
+            .send((max_ms, path, result_tx, Some(event_tx)))
+            .map_err(|_| "the voice pipeline is not running".to_string())?;
+        match result_rx.recv_timeout(std::time::Duration::from_secs(180)) {
+            Ok(Ok(capture)) => Ok(VoiceCaptureResult {
+                audio_path: capture.audio_path.to_string_lossy().into_owned(),
+                duration_ms: capture.duration_ms,
+                transcript: capture.transcript,
+            }),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err("the recording did not come back".to_string()),
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, max_ms);
-    #[cfg(not(target_os = "macos"))]
-    Err("Native speech recognition is only available on macOS".to_string())
+    {
+        let _ = (app, max_ms);
+        Err("Voice capture is only available on macOS".to_string())
+    }
+}
+
+/// The hold was released. Ends the recording that is running, if any.
+#[tauri::command]
+fn stop_voice_capture() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    speech::request_stop();
+    Ok(())
 }
 
 #[tauri::command]
@@ -1683,10 +1721,11 @@ fn set_macos_dock_icon(png_bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Voice capture is disabled in the main flow. Set to true to re-enable as an experimental feature.
-const EXPERIMENTAL_VOICE_CAPTURE: bool = false;
-
-const VOICE_SHORTCUT: &str = "CommandOrControl+Shift+V";
+/// Speak from anywhere on the mac.
+///
+/// Hold is the model, so there is one voice chord and it is a hold. `⌘⇧V` is gone: a
+/// press-to-start/press-to-stop shortcut taught a different gesture from the one at the
+/// edge, and two gestures for one action is one too many.
 const VOICE_HOLD: &str = "Alt+Space";
 const CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+K";
 
@@ -1733,7 +1772,6 @@ pub fn run() {
     use tauri::Manager;
     use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
-    let voice_shortcut_id = Shortcut::from_str(VOICE_SHORTCUT).ok().map(|s| s.id());
     let voice_hold_id = Shortcut::from_str(VOICE_HOLD).ok().map(|s| s.id());
     let capture_shortcut_id = Shortcut::from_str(CAPTURE_SHORTCUT).ok().map(|s| s.id());
 
@@ -1742,14 +1780,14 @@ pub fn run() {
               shortcut: &tauri_plugin_global_shortcut::Shortcut,
               event: tauri_plugin_global_shortcut::ShortcutEvent| {
             let id = shortcut.id();
-            let _ = match (voice_shortcut_id, voice_hold_id, &event.state) {
-                (Some(sid), _, ShortcutState::Pressed) if id == sid => {
-                    app.emit("chinotto-voice-shortcut", ())
-                }
-                (_, Some(hid), ShortcutState::Pressed) if id == hid => {
+            // Hold is the model: press starts the recording, release ends it. There is no
+            // press-to-start/press-to-stop variant, here or at the edge.
+            let _ = match (voice_hold_id, &event.state) {
+                (Some(hid), ShortcutState::Pressed) if id == hid => {
+                    ensure_main_window_focus(app);
                     app.emit("chinotto-voice-hold-start", ())
                 }
-                (_, Some(hid), ShortcutState::Released) if id == hid => {
+                (Some(hid), ShortcutState::Released) if id == hid => {
                     app.emit("chinotto-voice-hold-stop", ())
                 }
                 _ => Ok(()),
@@ -1761,11 +1799,7 @@ pub fn run() {
             }
         };
 
-    let mut shortcuts: Vec<&str> = vec![CAPTURE_SHORTCUT];
-    if EXPERIMENTAL_VOICE_CAPTURE {
-        shortcuts.push(VOICE_SHORTCUT);
-        shortcuts.push(VOICE_HOLD);
-    }
+    let shortcuts: Vec<&str> = vec![CAPTURE_SHORTCUT, VOICE_HOLD];
     let plugin_builder = tauri_plugin_global_shortcut::Builder::new()
         .with_shortcuts(shortcuts)
         .expect("shortcuts")
@@ -1798,7 +1832,7 @@ pub fn run() {
             let db = Db::open(db_path).map_err(|e| e.to_string())?;
             app.manage(db);
             #[cfg(target_os = "macos")]
-            if EXPERIMENTAL_VOICE_CAPTURE {
+            {
                 let (cmd_tx, cmd_rx) = mpsc::sync_channel(0);
                 app.manage(SpeechCommandTx(Arc::new(cmd_tx)));
                 std::thread::spawn(move || speech::run_speech_loop(cmd_rx));
@@ -1889,6 +1923,7 @@ pub fn run() {
             jump_anchor_for_local_date,
             search_entries,
             run_native_speech_recognition,
+            stop_voice_capture,
             generate_embedding,
             classify_entry_theme,
             get_entry_theme,

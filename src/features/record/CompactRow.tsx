@@ -70,7 +70,13 @@ export function CompactRow({ fragment, tier, onOpen, mark, encounter, voice }: C
       {encounter?.selectedText ? (
         <span style={{ color: "var(--meta)" }}>“{encounter.selectedText}” </span>
       ) : null}
-      <Marked text={text.replace(/\n+/g, " ")} mark={mark} />
+      {voice && !hasOwnWords ? (
+        <span style={{ fontStyle: "normal", color: "var(--meta)" }}>
+          {voice.transcriptState === "failed" ? "not transcribed" : "listening back…"}
+        </span>
+      ) : (
+        <Marked text={text.replace(/\n+/g, " ")} mark={mark} />
+      )}
       {encounter?.domain && hasOwnWords ? (
         <span style={{ color: "var(--meta)" }}> {encounter.domain}</span>
       ) : null}
