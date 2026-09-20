@@ -526,3 +526,34 @@ export function recordSpan(): Promise<[string, string] | null> {
   if (devOnly()) return Promise.resolve(dev.devRecordSpan());
   return invoke<[string, string] | null>("record_span");
 }
+
+// ---- this mac ---------------------------------------------------------------------------
+
+/**
+ * The whole Record as plain text and audio, zipped into Downloads. Returns the file name.
+ *
+ * Plain text on purpose: an export exists so the record can outlive this program, and a
+ * format only this program reads is not an escape hatch.
+ */
+export function exportRecord(): Promise<string> {
+  return invoke<string>("export_record");
+}
+
+/** When the last automatic backup was taken, or null if there has never been one. */
+export function lastBackupAt(): Promise<string | null> {
+  return invoke<string | null>("last_backup_at");
+}
+
+export function createBackup(): Promise<void> {
+  return invoke<void>("create_backup");
+}
+
+/** System Settings › Privacy › Microphone. The product cannot grant itself the microphone. */
+export function openMicrophoneSettings(): Promise<void> {
+  return invoke<void>("open_microphone_settings");
+}
+
+/** Shows the menu-bar panel, for settings' "try it". */
+export function openTrayCapture(): Promise<void> {
+  return invoke<void>("open_tray_capture");
+}

@@ -17,11 +17,12 @@ import { Capture } from "./Capture";
 import { FragmentFocus } from "./FragmentFocus";
 import { ReturnBlock } from "./ReturnBlock";
 import { QuietLine } from "./QuietLine";
+import { Settings, type MicrophoneState } from "./Settings";
 import { useNow } from "./useNow";
 import { metaStyle } from "../../design/tiers";
 import { suggestContinuation, type ContinuationOffer } from "./continuation";
 import { resolveAnchor, type ParsedAnchor } from "./anchors";
-import { MONTHS, firstLineOf } from "./format";
+import { MONTHS, clockLabel, dayLabel, firstLineOf } from "./format";
 import { runEnrichmentPass } from "./enrichment";
 import {
   flushSyncTombstoneOutbox,
@@ -29,7 +30,25 @@ import {
   startLocalEntriesFirestoreUploadOnAuth,
 } from "@/lib/desktopFirestoreSync";
 import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
+import { deleteCloudAccount, isSignedInForSync } from "@/lib/desktopFirestoreSync";
 import { parseTextWithUrls } from "@/lib/urlInText";
+import {
+  applyAppearance,
+  applyTextScale,
+  clampTextScale,
+  readAppearance,
+  readLiftContrast,
+  readTextScale,
+  writeAppearance,
+  writeLiftContrast,
+  writeTextScale,
+  ZOOM_STEP,
+  type Appearance,
+} from "@/lib/appearance";
+import { isOptIn, setOptIn } from "@/lib/analytics";
+import { getStoredIconVariantId, setStoredIconVariantId } from "@/lib/iconVariants";
+import { setDesktopIcon } from "@/lib/setDesktopIcon";
+import { APP_VERSION } from "@/lib/appVersion";
 import { useAppUpdater } from "@/lib/appUpdater";
 import "../../design/tokens.css";
 
@@ -42,6 +61,19 @@ import "../../design/tokens.css";
  */
 const EDIT_WINDOW_SECONDS = 12;
 const UNDO_WINDOW_SECONDS = 8;
+
+/**
+ * "today 09:12", "yesterday 22:04", "3 sep 08:40" — when the last backup was taken.
+ *
+ * "never" is a real answer on a first run and is said plainly rather than hidden: a backup
+ * line that claims a time it does not have is worse than one that admits there is none.
+ */
+function backupLine(iso: string | null, now: Date): string {
+  if (!iso) return "never";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "never";
+  return `${dayLabel(at, now)} ${clockLabel(at)}`;
+}
 
 /** Where you are standing, and what was here when you left the edge. */
 interface Anchored extends ParsedAnchor {
@@ -87,6 +119,20 @@ export function RecordApp() {
   const [focusContinuing, setFocusContinuing] = useState(false);
   /** Whether the keyboard is in the record rather than at the edge. */
   const [keyboardInRecord, setKeyboardInRecord] = useState(false);
+  /** A utility surface, which replaces the column rather than covering it. */
+  const [surface, setSurface] = useState<"settings" | "sync" | null>(null);
+
+  // ---- what this mac looks like ---------------------------------------------------------
+  const [appearance, setAppearance] = useState<Appearance>(() => readAppearance());
+  const [liftContrast, setLiftContrast] = useState(() => readLiftContrast());
+  const [textScale, setTextScale] = useState(() => readTextScale());
+  const [iconVariant, setIconVariant] = useState<"dark" | "light">(() =>
+    getStoredIconVariantId() === "light" ? "light" : "dark",
+  );
+  const [analyticsOn, setAnalyticsOn] = useState(() => isOptIn());
+  const [exportNote, setExportNote] = useState("");
+  const [backupAt, setBackupAt] = useState<string | null>(null);
+  const [microphone] = useState<MicrophoneState>("ask");
 
   // ---- what the record is doing --------------------------------------------------------
   const [justSaved, setJustSaved] = useState<{
@@ -157,6 +203,23 @@ export function RecordApp() {
     void reload();
   }, [reload]);
 
+  const changeTextScale = useCallback((delta: number) => {
+    setTextScale((current) => writeTextScale(clampTextScale(current + delta)));
+  }, []);
+
+  // The window's own appearance, applied before anything is read from it.
+  useEffect(() => {
+    applyAppearance(appearance, liftContrast);
+  }, [appearance, liftContrast]);
+
+  useEffect(() => {
+    applyTextScale(textScale);
+  }, [textScale]);
+
+  useEffect(() => {
+    void api.lastBackupAt().then(setBackupAt).catch(() => setBackupAt(null));
+  }, []);
+
   const bringBack = useCallback(async () => {
     const u = undo;
     if (!u) return;
@@ -214,11 +277,25 @@ export function RecordApp() {
       }
       if (mod && e.key === ",") {
         e.preventDefault();
-        // Settings is Phase 6; the chord is bound so it is not swallowed by the field.
+        // A toggle, not a push: pressing it again from settings puts you back at the edge.
+        setSurface((s) => (s ? null : "settings"));
+        setFocusId(null);
         return;
+      }
+      if (mod && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        return changeTextScale(ZOOM_STEP);
+      }
+      if (mod && e.key === "-") {
+        e.preventDefault();
+        return changeTextScale(-ZOOM_STEP);
       }
       if (e.key !== "Escape") return;
       if (editing) return setEditing(null);
+      // A utility surface is deeper than focus: sync steps back to settings, settings to
+      // the edge, and only then does the edge's own ladder start.
+      if (surface === "sync") return setSurface("settings");
+      if (surface) return setSurface(null);
       if (focusId) {
         setFocusContinuing(false);
         return setFocusId(null);
@@ -229,7 +306,7 @@ export function RecordApp() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack]);
+  }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack, surface, changeTextScale]);
 
   useEffect(() => {
     if (!notice) return;
@@ -550,7 +627,94 @@ export function RecordApp() {
       }}
     >
       <div style={{ maxWidth: "var(--column-width)", display: "flex", flexDirection: "column" }}>
-        {atEdge ? (
+        {surface === "settings" ? (
+          <Settings
+            version={APP_VERSION}
+            syncLine={
+              isFirebaseSyncConfigured()
+                ? "on · this mac."
+                : "off · the record is only on this mac."
+            }
+            syncVerb={isFirebaseSyncConfigured() ? "manage" : "set up"}
+            onOpenSync={() => setSurface("sync")}
+            hasAccount={isSignedInForSync()}
+            microphone={microphone}
+            onOpenSystemSettings={() => {
+              void api.openMicrophoneSettings().catch(() => {});
+            }}
+            onTryMenuBar={() => {
+              void api.openTrayCapture().catch(() => {});
+            }}
+            appearance={appearance}
+            onAppearance={(a) => {
+              writeAppearance(a);
+              setAppearance(a);
+            }}
+            liftContrast={liftContrast}
+            onLiftContrast={(on) => {
+              writeLiftContrast(on);
+              setLiftContrast(on);
+            }}
+            textScale={textScale}
+            onTextScale={(p) => setTextScale(writeTextScale(clampTextScale(p)))}
+            iconVariant={iconVariant}
+            onIconVariant={(v) => {
+              setStoredIconVariantId(v);
+              setIconVariant(v);
+              void setDesktopIcon(v).catch(() => {});
+            }}
+            onExport={() => {
+              void api
+                .exportRecord()
+                .then((name) => {
+                  setExportNote(`saved to downloads · ${name}`);
+                  setTimeout(() => setExportNote(""), 4000);
+                })
+                .catch(() => {
+                  setExportNote("the export could not be written");
+                  setTimeout(() => setExportNote(""), 4000);
+                });
+            }}
+            exportNote={exportNote}
+            backupLine={backupLine(backupAt, now)}
+            onBackUpNow={() => {
+              void api
+                .createBackup()
+                .then(() => api.lastBackupAt())
+                .then(setBackupAt)
+                .catch(() => {});
+            }}
+            analyticsOn={analyticsOn}
+            onAnalytics={(on) => {
+              setOptIn(on);
+              setAnalyticsOn(on);
+            }}
+            updateLine={
+              updater.phase === "available" && updater.version
+                ? `${updater.version} is out.`
+                : updater.phase === "downloading"
+                  ? "downloading…"
+                  : updater.phase === "ready"
+                    ? "downloaded."
+                    : "up to date · checked at launch"
+            }
+            updateVerb={
+              updater.phase === "available"
+                ? "download"
+                : updater.phase === "ready"
+                  ? "restart"
+                  : null
+            }
+            onUpdate={() => {
+              if (updater.phase === "available") void updater.download();
+              else if (updater.phase === "ready") void updater.installAndRestart();
+            }}
+            onDeleteAccount={async () => {
+              await deleteCloudAccount();
+            }}
+            onLeave={() => setSurface(null)}
+          />
+        ) : atEdge ? (
           <>
             {anchor ? (
               /*
@@ -803,7 +967,8 @@ export function RecordApp() {
                   ? { text: "update ready · restart to finish", onClick: () => void updater.installAndRestart() }
                   : null
           }
-          onSettings={() => {}}
+          surfaceOpen={surface !== null}
+          onSettings={() => setSurface("settings")}
         />
 
         {error ? (

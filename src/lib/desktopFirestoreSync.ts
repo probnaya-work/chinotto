@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   enableNetwork,
@@ -1505,4 +1506,46 @@ export async function fetchChinottoUserSyncAccessActive(uid: string): Promise<{
     console.error("[chinotto sync] fetch user sync access failed", e);
     return { active: false, permissionDenied: false };
   }
+}
+
+
+/** Whether this mac is actually signed in, as opposed to merely configured for sync. */
+export function isSignedInForSync(): boolean {
+  if (!isFirebaseSyncConfigured()) return false;
+  try {
+    const user = getAuth(getOrInitApp()).currentUser;
+    return user != null && !user.isAnonymous;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Deletes the copy of the record in the cloud, and the account it belonged to.
+ *
+ * The record on this mac and on the phone is untouched — they just stop meeting. Apple
+ * requires a recent sign-in before it will delete an account, and when it asks for one this
+ * throws rather than reporting a deletion that did not happen: an account-deletion screen
+ * that lies is worse than one that fails.
+ */
+export async function deleteCloudAccount(): Promise<void> {
+  if (!isFirebaseSyncConfigured()) {
+    throw new Error("sync is not set up on this mac");
+  }
+  const auth = getAuth(getOrInitApp());
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("this mac is not signed in");
+  }
+  const db = getOrInitFirestore();
+
+  // The entries first: deleting the auth user revokes the credential that authorises this.
+  const entries = await getDocs(collection(db, "users", user.uid, "entries"));
+  for (const d of entries.docs) {
+    await deleteDoc(d.ref);
+  }
+  await deleteDoc(doc(db, "users", user.uid)).catch(() => {
+    // A user document that was never written is not an error.
+  });
+  await user.delete();
 }

@@ -372,3 +372,48 @@ input[aria-label="Find"]:focus-visible {
 :root #root {
   background: var(--surface);
 }
+
+/*
+  Text size. The whole column scales from one number so the ladder keeps its proportions —
+  a larger D0 must still be exactly as much larger than D1 as it was at 100%.
+*/
+:root {
+  --text-scale: 1;
+  zoom: var(--text-scale);
+}
+
+/*
+  Lift contrast in bright light.
+
+  Not a fourth appearance and not a dimmed one: it raises only the quiet end of the ladder,
+  where sunlight actually takes legibility away, and leaves ink, the rules and the washes
+  alone. The ordering between the tiers survives, which is the thing that must not break.
+*/
+:root[data-lift-contrast] {
+  --ink-far: #c6c6c3;
+  --ink-dim: #bcbbb7;
+  --meta: #a3a29c;
+  --faint: #8b8a85;
+  --faint-text: #9d9c97;
+}
+
+:root[data-lift-contrast][data-theme="light"],
+:root[data-lift-contrast]:not([data-theme="dark"]) {
+  --ink-far: #333336;
+  --ink-dim: #45443f;
+  --meta: #56554f;
+  --faint: #56554f;
+  --faint-text: #56554f;
+}
+
+/*
+  Utility surfaces collapse to one column when the window can no longer hold a label beside
+  a measure. The label stays above its section rather than shrinking, because a 120px column
+  that is 60px wide is neither a label nor a layout.
+*/
+@media (max-width: 720px) {
+  .chinotto-utility-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+}

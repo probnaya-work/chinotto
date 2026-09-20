@@ -1242,6 +1242,112 @@ fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// The whole Record, as plain text and audio, in one zip in Downloads.
+///
+/// Plain text on purpose. An export exists so the record can outlive this program, and a
+/// format only this program reads is not an escape hatch. The audio travels beside it
+/// because the recording is the material — the transcript is derived from it, and an export
+/// that kept only the derivation would be throwing the original away.
+#[tauri::command]
+fn export_record(db: tauri::State<Db>, app: tauri::AppHandle) -> Result<String, String> {
+    let mut fragments = db.recent_fragments(1_000_000).map_err(|e| e.to_string())?;
+    // Oldest first: an export is read forwards.
+    fragments.reverse();
+    let ids: Vec<String> = fragments.iter().map(|f| f.id.clone()).collect();
+    let (_encounters, voices) = db.materials_for(&ids).map_err(|e| e.to_string())?;
+
+    let downloads = app
+        .path()
+        .download_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;
+    let name = "chinotto-record.zip".to_string();
+    let dest = downloads.join(&name);
+
+    let file = File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let opts =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    let mut text = String::new();
+    for f in &fragments {
+        text.push_str(&f.captured_at);
+        text.push_str(" · ");
+        text.push_str(&f.capture_method);
+        if let Some(origin) = &f.capture_origin {
+            text.push_str(" · ");
+            text.push_str(origin);
+        }
+        if f.correction_count > 0 {
+            text.push_str(" · wording corrected");
+        }
+        text.push('\n');
+        text.push_str(&f.body);
+        text.push_str("\n\n");
+    }
+    zip.start_file("chinotto-record/record.txt", opts)
+        .map_err(|e| e.to_string())?;
+    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+
+    for v in &voices {
+        // A recording whose file is gone is simply not in the export; the words for it are
+        // already in record.txt, and writing an empty file would claim otherwise.
+        let src = PathBuf::from(&v.audio_path);
+        let Ok(bytes) = fs::read(&src) else { continue };
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("m4a");
+        zip.start_file(format!("chinotto-record/audio/{}.{}", v.fragment_id, ext), opts)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+/// When the most recent automatic backup was taken, so settings can say so truthfully.
+#[tauri::command]
+fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (_db_path, backups_dir) = backup_paths(&app)?;
+    let Ok(entries) = fs::read_dir(&backups_dir) else {
+        return Ok(None);
+    };
+    let mut newest: Option<std::time::SystemTime> = None;
+    for e in entries.flatten() {
+        let Ok(meta) = e.metadata() else { continue };
+        let Ok(modified) = meta.modified() else { continue };
+        if newest.is_none_or(|n| modified > n) {
+            newest = Some(modified);
+        }
+    }
+    Ok(newest.map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()))
+}
+
+/// Opens System Settings at the microphone pane.
+///
+/// The product cannot grant itself the microphone and must not pretend otherwise: when the
+/// mac has said no, the only honest affordance is the door to where the answer lives.
+#[tauri::command]
+fn open_microphone_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Shows the menu-bar capture panel, for settings' "try it".
+#[tauri::command]
+fn open_tray_capture(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("chinotto-capture-shortcut", ());
+    Ok(())
+}
+
 const BACKUP_RETENTION_COUNT: usize = 7;
 const AUTO_BACKUP_COOLDOWN_HOURS: i64 = 24;
 
@@ -1801,6 +1907,10 @@ pub fn run() {
             delete_entry,
             delete_all_entries,
             export_entries,
+            export_record,
+            last_backup_at,
+            open_microphone_settings,
+            open_tray_capture,
             create_share_thread,
             get_share_thread,
             list_share_threads,

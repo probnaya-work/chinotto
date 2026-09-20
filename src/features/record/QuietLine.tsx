@@ -20,6 +20,14 @@ export interface QuietLineProps {
   /** Only when sync is actually configured and running, never invented. */
   syncOn: boolean;
   update: { text: string; onClick: () => void } | null;
+  /**
+   * A utility surface is open.
+   *
+   * Sync's own state goes quiet while you are looking at sync — repeating it under the
+   * surface that explains it is the line talking over itself. Undo and the update still
+   * speak, because both are about something that happened elsewhere and is still true.
+   */
+  surfaceOpen?: boolean;
   onSettings: () => void;
 }
 
@@ -29,6 +37,7 @@ export function QuietLine({
   offline,
   syncOn,
   update,
+  surfaceOpen = false,
   onSettings,
 }: QuietLineProps) {
   return (
@@ -61,11 +70,11 @@ export function QuietLine({
         </span>
       ) : null}
 
-      {notice && !undo ? (
+      {notice && !undo && !surfaceOpen ? (
         <span style={{ color: "var(--ink-verb)", pointerEvents: "auto" }}>{notice}</span>
       ) : null}
 
-      {offline && !undo ? (
+      {offline && !undo && !surfaceOpen ? (
         <span style={{ color: "var(--ink-far)", pointerEvents: "auto" }}>offline</span>
       ) : null}
 
@@ -80,7 +89,7 @@ export function QuietLine({
       ) : null}
 
       <span style={{ marginLeft: "auto", display: "flex", gap: "var(--quiet-gap)", pointerEvents: "auto" }}>
-        {syncOn ? (
+        {syncOn && !surfaceOpen ? (
           <span style={{ cursor: "default" }}>● sync on</span>
         ) : null}
         <span className="chinotto-verb" onClick={onSettings} style={{ cursor: "pointer" }}>
