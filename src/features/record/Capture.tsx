@@ -28,9 +28,13 @@ export interface CaptureProps {
   /** A date phrase, resolved. `null` means "back to today". */
   onStand: (anchor: ParsedAnchor | null) => void;
 
-  /** Held `space` on an empty field. */
+  /**
+   * Held `space` on an empty field, or the mouse on the hint.
+   *
+   * Only the press is here. The release is listened for on the window, in `useVoice`,
+   * because it does not reliably arrive at whatever took the press.
+   */
   onStartSpeaking?: () => void;
-  onStopSpeaking?: () => void;
   speaking?: boolean;
   speakingSeconds?: number;
   /** The live transcript, while speaking. */
@@ -56,7 +60,6 @@ export function Capture({
   onLeave,
   onStand,
   onStartSpeaking,
-  onStopSpeaking,
   speaking = false,
   speakingSeconds = 0,
   transcript = "",
@@ -199,9 +202,6 @@ export function Capture({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          onKeyUp={(e) => {
-            if (e.key === " ") onStopSpeaking?.();
-          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           aria-label="Leave a fragment"
@@ -228,7 +228,6 @@ export function Capture({
         {!hasText ? (
           <span
             onMouseDown={onStartSpeaking}
-            onMouseUp={onStopSpeaking}
             className="chinotto-hint"
             style={{
               ...metaStyle("var(--size-meta-lg)"),

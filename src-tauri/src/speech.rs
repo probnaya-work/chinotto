@@ -24,6 +24,7 @@ use objc2_foundation::NSURL;
 use objc2_foundation::NSError;
 use objc2_speech::{
     SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionResult, SFSpeechRecognizer,
+    SFSpeechRecognizerAuthorizationStatus,
 };
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,6 +33,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const AUTHORIZED_STATUS: isize = 3;
+const NOT_DETERMINED_STATUS: isize = 0;
 
 /// Set when the hold is released. `max_ms` is a ceiling, not the length of the recording.
 pub static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -39,6 +41,41 @@ pub static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 /// Ends the current recording, if there is one. Idempotent.
 pub fn request_stop() {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// Clears any leftover release, at the moment a capture is asked for.
+///
+/// This has to happen here — before the command reaches the speech thread — and not inside
+/// the capture. Starting a capture is slow the first time: the recogniser is created, the
+/// audio engine starts, and the mac puts up its microphone prompt. That is precisely when a
+/// person lets go of the key, and clearing the flag after all that threw their release away
+/// and recorded until the two-minute ceiling instead. A release is never early; it is only
+/// ever ahead of the machine.
+pub fn arm_stop() {
+    STOP_REQUESTED.store(false, Ordering::SeqCst);
+}
+
+/// Asks the mac, once, whether this app may read recordings back as words.
+///
+/// Speech recognition is a separate permission from the microphone, and an app that has
+/// never asked does not appear under System Settings › Privacy & Security › Speech
+/// Recognition at all — so telling somebody to go and enable it there, which is what this
+/// used to do, sent them to a list they could not be on. The only way out of "not
+/// determined" is to ask.
+///
+/// It does not wait for the answer. The prompt is the person's to take their time over, and
+/// the recording is already running; this capture keeps its audio and gets no transcript,
+/// and the next one gets both.
+pub fn ask_for_speech_if_undecided() {
+    let status = unsafe { SFSpeechRecognizer::authorizationStatus() };
+    if status.0 != NOT_DETERMINED_STATUS {
+        return;
+    }
+    eprintln!("[Speech] speech authorisation not determined — asking");
+    let handler = RcBlock::new(|answered: SFSpeechRecognizerAuthorizationStatus| {
+        eprintln!("[Speech] speech authorisation answered: {}", answered.0);
+    });
+    unsafe { SFSpeechRecognizer::requestAuthorization(&handler) };
 }
 
 /// Long-lived speech pipeline: authorization and recognizer created once.
@@ -78,33 +115,29 @@ impl SpeechManager {
                 t0.elapsed().as_millis()
             );
             AUTHORIZED_STATUS
-        } else if current_status.0 == 0 {
-            // Status 0 = not determined, need to request authorization
-            // However, requestAuthorization callback requires the main thread's run loop.
-            // From a background thread, the callback never fires.
-            // Instead of hanging, return an error with instructions.
+        } else if current_status.0 == NOT_DETERMINED_STATUS {
+            // The asking itself is done on the main thread, at the moment the capture was
+            // asked for (see `lib.rs`). Nothing is waited for here: an answer that has not
+            // arrived yet is not a failure of the recording.
             eprintln!(
-                "[Speech] {} ms - warm-up: authorization not determined, needs user action",
+                "[Speech] {} ms - warm-up: asked for authorisation; this recording keeps its audio",
                 t0.elapsed().as_millis()
             );
-            return Err("Speech recognition permission is required. \n\n\
-                Please go to:\n\
-                System Settings > Privacy & Security > Speech Recognition\n\n\
-                Enable access for Chinotto, then try again."
-                .to_string());
+            return Err(
+                "the mac is being asked whether chinotto may read recordings back as words"
+                    .to_string(),
+            );
         } else {
             // Already denied (2) or restricted (1)
             current_status.0
         };
 
         if status != AUTHORIZED_STATUS {
-            return Err(format!(
-                "Speech recognition not authorized (status: {}).\n\n\
-                Please go to:\n\
-                System Settings > Privacy & Security > Speech Recognition\n\n\
-                Enable access for Chinotto, then try again.",
-                status
-            ));
+            return Err(
+                "the mac is not allowing chinotto to read recordings back as words \
+                 · system settings › privacy & security › speech recognition"
+                    .to_string(),
+            );
         }
 
         eprintln!(
@@ -167,10 +200,14 @@ impl SpeechManager {
         // Recognition is optional. If the Speech framework will not authorise — which is a
         // different permission from the microphone — the recording still happens and the
         // fragment is a voice fragment with no transcript yet.
+        let mut transcript_failure: Option<String> = None;
         let recognizer = match self.ensure_recognizer() {
             Ok(r) => Some(r),
             Err(e) => {
                 eprintln!("[Speech] recogniser unavailable, recording anyway: {e}");
+                // Kept, and handed back. "not transcribed" is true but says nothing about
+                // what to do; the reason is the only part that is actionable.
+                transcript_failure = Some(e);
                 None
             }
         };
@@ -323,8 +360,9 @@ impl SpeechManager {
         }
 
         // Hold is the model, so the recording ends when the hold does. `max_ms` is only a
-        // ceiling, so a key that never reports its release cannot record forever.
-        STOP_REQUESTED.store(false, Ordering::SeqCst);
+        // ceiling, so a key that never reports its release cannot record forever. The flag
+        // was armed by `arm_stop()` before this thread was even asked — see there for why
+        // it must not be cleared here.
         let deadline = Instant::now() + Duration::from_millis(max_ms);
         while Instant::now() < deadline {
             if STOP_REQUESTED.swap(false, Ordering::SeqCst) {
@@ -376,6 +414,7 @@ impl SpeechManager {
             Ok(Ok(t)) => t,
             Ok(Err(e)) => {
                 eprintln!("[Speech] recognition failed, audio kept: {e}");
+                transcript_failure.get_or_insert(e);
                 None
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -390,11 +429,15 @@ impl SpeechManager {
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => None,
         };
+        if transcript.is_none() && transcript_failure.is_none() {
+            transcript_failure = Some("nothing was heard in this recording".to_string());
+        }
 
         Ok(VoiceCapture {
             audio_path: audio_path.to_path_buf(),
             duration_ms,
             transcript,
+            transcript_failure,
         })
     }
 }
@@ -406,6 +449,8 @@ pub struct VoiceCapture {
     pub duration_ms: u64,
     /// `None` means nothing was transcribed — not that the recording failed.
     pub transcript: Option<String>,
+    /// Why there are no words, when that is known. Never a reason the *audio* failed.
+    pub transcript_failure: Option<String>,
 }
 
 /// Command for the speech thread: (max_ms, where to write the audio, result, state events).
@@ -423,5 +468,33 @@ pub fn run_speech_loop(rx: mpsc::Receiver<SpeechCommand>) {
     while let Ok((max_ms, audio_path, result_tx, event_tx)) = rx.recv() {
         let result = manager.run_capture(max_ms, &audio_path, event_tx);
         let _ = result_tx.send(result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A release belongs to the capture that was asked for before it.
+    ///
+    /// This ordering is the whole of the fix. `arm_stop` runs when the capture is *asked
+    /// for*; everything after it is a release of that capture, including one that arrives
+    /// while the recogniser is still being built or the mac is still asking about the
+    /// microphone. Clearing the flag after all that — which is what the capture itself used
+    /// to do — threw the release away and recorded to the two-minute ceiling instead.
+    #[test]
+    fn arming_clears_a_stale_release_and_keeps_every_later_one() {
+        request_stop();
+        arm_stop();
+        assert!(
+            !STOP_REQUESTED.load(Ordering::SeqCst),
+            "a release from a previous capture must not end this one"
+        );
+
+        request_stop();
+        assert!(
+            STOP_REQUESTED.swap(false, Ordering::SeqCst),
+            "a release asked for after arming must still be there when the loop looks"
+        );
     }
 }

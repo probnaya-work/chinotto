@@ -563,3 +563,49 @@ the same step past `--ink` in the other direction.
 
 Not carried over: the voice chip's `border-color:#8f8e89` on hover, which is a fifth
 register for one element.
+
+## 15. Voice, the first time it was actually held (post-dogfood)
+
+Three symptoms, four causes. The audio was never at risk in any of them — every recording
+made it to disk, which is what the pipeline was rebuilt for — but two of them left it there
+with nothing pointing at it.
+
+| # | Decision | Chosen behaviour | Where | Kind |
+| - | -------- | ---------------- | ----- | ---- |
+| 15.1 | The stop flag is armed when a capture is *asked for* | `arm_stop()` before the command is queued | `lib.rs`, `speech.rs` | correctness fix |
+| 15.2 | The release is listened for on the window | `keyup` (space), `mouseup`, `blur` | `useVoice.ts` | correctness fix |
+| 15.3 | Speech permission is asked for, not pointed at | `requestAuthorization` on the main thread, not awaited | `speech.rs`, `lib.rs` | correctness fix |
+| 15.4 | A missing transcript carries the mac's own reason | `transcript_failure` through to `voice_transcripts.failure` | `speech.rs` → `useVoice.ts` | invented |
+
+**15.1.** `run_capture` cleared `STOP_REQUESTED` *after* creating the recogniser and starting
+the audio engine — which, the first time, is also when the mac puts up its microphone
+prompt. That is exactly when somebody lets go. Their release set the flag, the clear wiped
+it, and the recording ran to the 120-second ceiling. A release is never early; it is only
+ever ahead of the machine. The flag is now armed before the command is even queued, so
+everything after that point belongs to the capture being started.
+
+Compounding it: until §14.1 every command ran on the main thread, and
+`run_native_speech_recognition` blocks for the length of the recording — so
+`stop_voice_capture` could not be dispatched *at all* while one was running. The recording
+was literally unstoppable, by construction.
+
+**15.2.** Both gestures that start a recording are presses, and both listened for the
+release on the element that took the press: `onKeyUp` on the textarea, `onMouseUp` on
+`◌ hold space to speak`. Slide the pointer off the words before letting go, or let the field
+lose focus mid-hold, and the release lands somewhere else and is never seen. The press stays
+on the element; the release is the window's. `blur` counts as one, because a window that is
+no longer frontmost will not be told when the key comes up.
+
+**15.3.** Speech recognition is a separate permission from the microphone. On "not
+determined" the code returned an error telling the person to enable Chinotto under System
+Settings › Privacy & Security › Speech Recognition — but **an app that has never called
+`requestAuthorization` is not in that list**, so the only route out of "not determined" was
+the one thing the code would not do. It asks now, on the main thread, and does not wait:
+the prompt is the person's to answer in their own time, this recording keeps its audio and
+has no words, and the next one has both.
+
+**15.4.** "not transcribed" is true and useless. The reason is the only actionable part, and
+it is the mac's, not ours — *not allowing*, *being asked*, *nothing was heard* — so it is
+carried from `run_capture` through to `voice_transcripts.failure` rather than flattened on
+the way. Never a reason the *audio* failed: those are different events and the product's
+whole claim is that they are.

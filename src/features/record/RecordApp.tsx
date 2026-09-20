@@ -1031,7 +1031,6 @@ export function RecordApp() {
                   speaking={voice.recording}
                   speakingSeconds={voice.seconds}
                   onStartSpeaking={voice.start}
-                  onStopSpeaking={voice.stop}
                   notice={micNotice(voice.notice, () => {
                     voice.dismissNotice();
                     void api.openMicrophoneSettings().catch(() => {});

@@ -1615,6 +1615,8 @@ pub struct VoiceCaptureResult {
     pub duration_ms: u64,
     /// `null` when nothing was transcribed. The recording is still there.
     pub transcript: Option<String>,
+    /// Why there are none, when the mac said. Attached to the fragment as the reason.
+    pub transcript_failure: Option<String>,
 }
 
 /// Where recordings live. Beside the record, because they are part of it.
@@ -1651,6 +1653,13 @@ fn run_native_speech_recognition(
                 let _ = app_handle.emit("chinotto-speech-state", state);
             }
         });
+        // Before the command is queued, so a release that arrives while the recogniser is
+        // being created or the mac is asking about the microphone is still seen.
+        speech::arm_stop();
+        // And, once ever, the other permission. On the main thread because that is where a
+        // system prompt is presented from; it is not waited for, so this recording keeps its
+        // audio and simply has no words. See `speech::ask_for_speech_if_undecided`.
+        let _ = app.run_on_main_thread(speech::ask_for_speech_if_undecided);
         let cmd_tx = app.state::<SpeechCommandTx>().0.clone();
         cmd_tx
             .send((max_ms, path, result_tx, Some(event_tx)))
@@ -1660,6 +1669,7 @@ fn run_native_speech_recognition(
                 audio_path: capture.audio_path.to_string_lossy().into_owned(),
                 duration_ms: capture.duration_ms,
                 transcript: capture.transcript,
+                transcript_failure: capture.transcript_failure,
             }),
             Ok(Err(e)) => Err(e),
             Err(_) => Err("the recording did not come back".to_string()),

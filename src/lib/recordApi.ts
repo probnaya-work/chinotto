@@ -623,6 +623,8 @@ export interface VoiceCaptureResult {
   audioPath: string;
   durationMs: number;
   transcript: string | null;
+  /** Why there are no words, when the mac said. Never a reason the audio failed. */
+  transcriptFailure: string | null;
 }
 
 /** Hold to speak. Records to a file, and transcribes it if it can. */
