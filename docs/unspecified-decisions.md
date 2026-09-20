@@ -356,3 +356,31 @@ tokens rather than a continuous function of age — which the prototype also con
 
 Listed for completeness: these were raised during the build and confirmed, unlike the rest of
 this file.
+
+---
+
+## 11. Identity across the system surfaces (phase 10)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 11.1 | Every raster is drawn, not rasterised from SVG | supersampled 4× in Pillow | `scripts/generate-identity.py` | invented |
+| 11.2 | Each icon size picks its own rung | ≥40px mark → three dots, 24–39 → two, ≤20 → one | same, `rung_for` | **from the identity spec** |
+| 11.3 | The `.ico` is one drawing downscaled | — | same | accepted limitation |
+| 11.4 | The tray icon ships at @2x | `tray_menu_template@2x.png`, 44px | `tray_capture.rs` | invented |
+| 11.5 | The DMG background is browser-rendered | 1320×800 (@2x of 660×400) | `scripts/generate-dmg-background.py` | **forced** |
+| 11.6 | The microphone and speech usage strings | product voice, not legal register | `Info.plist` | inferred from the identity file |
+
+11.2 is the rule the identity spec calls the only way to get this wrong. The 1024 master is
+*not* downscaled to 16px: `icon_16x16.png` is drawn at the ≤20px rung, `icon_32x32@2x.png`
+at the 24–39px rung, and so on. Downscaling the three-dot drawing turns the ring into a
+hairline and loses the far dots, which is exactly the failure the ladder exists to prevent.
+
+11.3: per-size artwork inside an `.ico` has to be assembled by hand, and this product does
+not ship on Windows. Recorded rather than quietly pretended otherwise.
+
+11.5 is a real constraint, not a preference. `@fontsource-variable/archivo` ships woff2
+only, Pillow cannot read woff2, and no Archivo TTF is installed — so the Python generator
+would set the wordmark in Helvetica. It now refuses rather than substituting a typeface in
+the one window someone sees before the product has said anything. The committed PNG was
+rendered in the app's own webview with the real variable font. Dropping an `Archivo-Medium.ttf`
+into `scripts/` makes the generator self-sufficient again.

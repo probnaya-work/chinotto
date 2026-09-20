@@ -13,22 +13,24 @@ import type { IconVariant } from "./iconVariants";
 const ICON_CANVAS_PX = 1024;
 
 /**
- * Empty margin inside the canvas so the glyph does not run to the edge of the Dock tile.
- * Align with bundle `icon.svg`: ~82% visual fill (same inset as the scaled group there).
+ * The squircle is drawn at 824 inside the 1024 canvas with corner radius 185, and the mark
+ * occupies 0.62 of that tile. Same numbers as `src-tauri/icons/icon.svg` and
+ * `scripts/generate-identity.py` — this is the runtime path for switching the Dock icon, and
+ * it has to produce the same drawing as the bundled one or the two disagree at a glance.
  */
-const CONTENT_INSET_RATIO = (1 - 0.82) / 2;
+const TILE_PX = 824;
+const TILE_RADIUS = 185;
+const MARK_OF_TILE = 0.62;
 
-/** Logo paths match bundle icon.svg (circles only; background is drawn on canvas). */
-const VIEWBOX = "0 0 80 80";
-
-function chinottoLogoSvg(foreground: string): string {
+/** The >=40px rung, at the app icon's heavier ring. */
+function chinottoMarkSvg(foreground: string): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${esc(VIEWBOX)}" fill="none">
-  <circle cx="40" cy="40" r="22" stroke="${esc(foreground)}" stroke-width="2" fill="none"/>
-  <circle cx="40" cy="31" r="5" fill="${esc(foreground)}"/>
-  <circle cx="32" cy="42" r="4" fill="${esc(foreground)}"/>
-  <circle cx="48" cy="42" r="4" fill="${esc(foreground)}"/>
-  <circle cx="40" cy="49" r="3" fill="${esc(foreground)}"/>
+  const ink = esc(foreground);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <circle cx="32" cy="32" r="28" stroke="${ink}" stroke-width="3" fill="none"/>
+  <circle cx="32" cy="23" r="8" fill="${ink}"/>
+  <circle cx="32" cy="38" r="4.5" fill="${ink}"/>
+  <circle cx="32" cy="47.5" r="2.5" fill="${ink}"/>
 </svg>`;
 }
 
@@ -63,12 +65,10 @@ function canvasToPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   });
 }
 
-/** Corner radius scales with canvas (~22% of side) so shape matches prior 256px proportions at 1024px. */
-const CORNER_RADIUS = Math.round((56 / 256) * ICON_CANVAS_PX);
-
 /**
- * Renders the given variant to a 1024×1024 PNG: rounded-rect background (transparent corners) + logo ~55% centered.
- * Corners are transparent so the image isn’t a full square; dock shows the rounded shape. Used for the dock icon in Tauri.
+ * Renders a variant to a 1024×1024 PNG for the Dock: the squircle at 824 with radius 185,
+ * the mark at 0.62 of it, transparent margin. The same drawing the bundle ships, so the
+ * runtime switch and the bundled icon cannot disagree.
  */
 export async function variantToPngBytes(variant: IconVariant): Promise<Uint8Array> {
   const canvas = document.createElement("canvas");
@@ -77,35 +77,25 @@ export async function variantToPngBytes(variant: IconVariant): Promise<Uint8Arra
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2d not available");
 
-  const pad = ICON_CANVAS_PX * CONTENT_INSET_RATIO;
-  const inner = ICON_CANVAS_PX - 2 * pad;
-  const scale = inner / ICON_CANVAS_PX;
-
-  ctx.save();
-  ctx.translate(pad, pad);
-  ctx.scale(scale, scale);
-
+  // The tile, inset inside the canvas: macOS expects the icon to bring its own shape and
+  // leave the margin transparent, not to fill the square.
+  const off = (ICON_CANVAS_PX - TILE_PX) / 2;
   ctx.beginPath();
-  ctx.roundRect(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX, CORNER_RADIUS);
-  if (variant.id === "gradient") {
-    const g = ctx.createLinearGradient(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX);
-    g.addColorStop(0, "rgba(100,120,180,0.35)");
-    g.addColorStop(1, "rgba(80,100,150,0.3)");
-    ctx.fillStyle = g;
-  } else {
-    ctx.fillStyle = variant.background;
-  }
+  ctx.roundRect(off, off, TILE_PX, TILE_PX, TILE_RADIUS);
+  ctx.fillStyle = variant.background;
   ctx.fill();
 
-  const svg = chinottoLogoSvg(variant.foreground);
+  const markPx = TILE_PX * MARK_OF_TILE;
+  const markOff = (ICON_CANVAS_PX - markPx) / 2;
+  const svg = chinottoMarkSvg(variant.foreground);
   const blob = new Blob([svg], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
   try {
     const img = await loadImage(url);
-    ctx.drawImage(img, 0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX);
-    ctx.restore();
+    ctx.drawImage(img, markOff, markOff, markPx, markPx);
     return canvasToPngBytes(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+

@@ -1,7 +1,15 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="2" fill="none"/>
-  <circle cx="32" cy="20" r="6" fill="currentColor"/>
-  <circle cx="22" cy="34" r="5" fill="currentColor"/>
-  <circle cx="42" cy="34" r="5" fill="currentColor"/>
-  <circle cx="32" cy="44" r="4" fill="currentColor"/>
+<!--
+  The lockup: the mark and the wordmark, and nothing else. Never with a tagline attached,
+  and never below 22px of wordmark. The gap is 0.38 x the wordmark size.
+
+  The canonical file both repos reference.
+-->
+<svg width="196" height="40" viewBox="0 0 196 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(4 5) scale(0.46875)" fill="none">
+    <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="3.5"/>
+    <circle cx="32" cy="23" r="9" fill="currentColor"/>
+    <circle cx="32" cy="40" r="5" fill="currentColor"/>
+  </g>
+  <text x="46" y="29" font-family="Archivo, -apple-system, sans-serif" font-size="28"
+        font-weight="500" letter-spacing="-0.28" fill="currentColor">chinotto</text>
 </svg>

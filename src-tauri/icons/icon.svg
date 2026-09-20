@@ -1,20 +1,22 @@
-<svg width="1024" height="1024" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Clip to outer rounded plate: opaque pixels follow rx (not a square bbox). Desktop/Finder show a rounded silhouette even when squircle masking differs by surface. -->
-  <defs>
-    <clipPath id="chinotto-app-icon-plate">
-      <rect width="80" height="80" rx="22" ry="22"/>
-    </clipPath>
-  </defs>
-  <g clip-path="url(#chinotto-app-icon-plate)">
-    <rect width="80" height="80" fill="#0a0a0e"/>
-    <!-- ~82% scale about center: safe-area padding per Apple app icon templates (unchanged motif). -->
-    <g transform="translate(40 40) scale(0.82) translate(-40 -40)">
-      <rect width="80" height="80" rx="14" fill="#0a0a0e"/>
-      <circle cx="40" cy="40" r="22" stroke="#8a94c8" stroke-width="2" fill="none"/>
-      <circle cx="40" cy="31" r="5" fill="#8a94c8"/>
-      <circle cx="32" cy="42" r="4" fill="#8a94c8"/>
-      <circle cx="48" cy="42" r="4" fill="#8a94c8"/>
-      <circle cx="40" cy="49" r="3" fill="#8a94c8"/>
-    </g>
+<!--
+  The Chinotto app icon, at the >=40px rung.
+
+  The squircle is drawn at 824 inside a 1024 canvas with corner radius 185 — macOS expects
+  the icon to bring its own shape rather than fill the square — and the mark occupies 0.62
+  of that tile, tighter than it sits inside the app, where it breathes.
+
+  The ring goes 2.5 -> 3 here so it holds at icon scale against the tile's own edge.
+
+  This file is the description. The shipped rasters are drawn by
+  `scripts/generate-identity.py`, which picks the rung for each size rather than scaling
+  this one drawing down: at 32px and 16px the icon is drawn with one dot, not three.
+-->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="#141416"/>
+  <g transform="translate(256.5 256.5) scale(7.984)" fill="none">
+    <circle cx="32" cy="32" r="28" stroke="#e6e6e3" stroke-width="3"/>
+    <circle cx="32" cy="23" r="8" fill="#e6e6e3"/>
+    <circle cx="32" cy="38" r="4.5" fill="#e6e6e3"/>
+    <circle cx="32" cy="47.5" r="2.5" fill="#e6e6e3"/>
   </g>
 </svg>

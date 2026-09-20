@@ -1,11 +1,16 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- ChinottoLogo + optical scale for menu bar. Black on transparent (template). PNG: python3 scripts/gen_tray_menu_template.py -->
-<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 64 64" fill="none">
-  <g transform="translate(32 32) scale(1.32) translate(-32 -32)">
-    <circle cx="32" cy="32" r="22" stroke="#000000" stroke-width="2"/>
-    <circle cx="32" cy="23" r="5" fill="#000000"/>
-    <circle cx="24" cy="34" r="4" fill="#000000"/>
-    <circle cx="40" cy="34" r="4" fill="#000000"/>
-    <circle cx="32" cy="41" r="3" fill="#000000"/>
+<!--
+  The menu-bar glyph: the <=20px rung, pure black on transparency, 17pt inside a 22pt box.
+
+  Shipped as a real macOS template image, so the system tints it with the bar, inverts it
+  under a light bar and turns it white while the popover is open. It is drawn at final size
+  — the old 1.32x optical upscale is gone, because a glyph that is scaled is a glyph at the
+  wrong rung.
+
+  PNG: python3 scripts/generate-identity.py
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22" fill="none">
+  <g transform="translate(2.5 2.5) scale(0.265625)">
+    <circle cx="32" cy="32" r="27" stroke="#000000" stroke-width="6" fill="none"/>
+    <circle cx="32" cy="27" r="11" fill="#000000"/>
   </g>
 </svg>

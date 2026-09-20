@@ -1,10 +1,9 @@
 import "@fontsource-variable/archivo/wdth.css";
 import "@fontsource/open-sauce-one/400.css";
 import "@fontsource/open-sauce-one/500.css";
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { TrayCapture } from "./features/record/TrayCapture";
-import { IconVariantShowcase } from "./components/IconVariantShowcase";
 import { RecordApp } from "./features/record/RecordApp";
 import { HostingDesktopOnly } from "./components/HostingDesktopOnly";
 import { OAuthBridge } from "./components/OAuthBridge";
@@ -22,19 +21,6 @@ if (import.meta.env.DEV) {
 setUmami(umamiUrl, umamiWebsiteId);
 
 function Root() {
-  const [hash, setHash] = useState(() => window.location.hash);
-
-  useEffect(() => {
-    const onHash = () => setHash(window.location.hash);
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  // Identity-asset tooling, dev only. Not part of the product.
-  if (import.meta.env.DEV && hash === "#icon-variants") {
-    return <IconVariantShowcase />;
-  }
-
   // The Record is the product. There is no other home, and no route to the old one.
   return <RecordApp />;
 }

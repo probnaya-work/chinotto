@@ -79,9 +79,11 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     #[cfg(target_os = "linux")]
     let tray_menu = Menu::new(app)?;
 
-    // Monochrome template glyph (36×36 @2x); black on transparent. See `icons/tray_menu_template.svg`.
-    let icon = Image::from_bytes(include_bytes!("../icons/tray_menu_template.png"))
-        .expect("icons/tray_menu_template.png must decode for menu bar tray");
+    // The <=20px rung: 17pt inside a 22pt box, pure black on transparency, shipped @2x so
+    // it is crisp on retina. `icon_as_template` below is what makes the system tint it with
+    // the bar, invert it under a light bar, and turn it white while the popover is open.
+    let icon = Image::from_bytes(include_bytes!("../icons/tray_menu_template@2x.png"))
+        .expect("icons/tray_menu_template@2x.png must decode for menu bar tray");
 
     let builder = TrayIconBuilder::with_id("chinotto-tray")
         .tooltip("Chinotto — capture a thought")
