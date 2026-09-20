@@ -3,6 +3,12 @@
 //! Thin by design: these translate arguments and errors and nothing else. Every rule about
 //! what capture, Continue and Correct mean lives in `db::record`, so the guarantees hold
 //! whether a call arrives from the window, the tray, or a test.
+//!
+//! Every command here is `#[tauri::command(async)]`, which is not decoration. A plain
+//! `#[tauri::command]` runs on the app's main thread, so the window stops answering for as
+//! long as the call takes — and these calls read the whole Record, walk it for a Return, and
+//! (in `find_by_meaning`) run a model over it. The work is the same; what changes is that
+//! the window keeps drawing and the person keeps typing while it happens.
 
 use crate::db::bridge::WordingConflict;
 use crate::db::record::{Fragment, FindHit, HeldFragment, LineMoment, Revision};
@@ -24,7 +30,7 @@ fn bridge(db: &tauri::State<Db>, fragment_id: &str) {
 
 /// Capture cannot fail for a reason the person has to care about, so the only rejection
 /// here is material with nothing in it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn capture_fragment(
     db: tauri::State<Db>,
     body: String,
@@ -48,7 +54,7 @@ pub fn capture_fragment(
     Ok(fragment)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn continue_fragment(
     db: tauri::State<Db>,
     continues_id: String,
@@ -76,7 +82,7 @@ pub fn continue_fragment(
 }
 
 /// "yes, that continues yesterday's note" — the capture already happened and stays valid.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn link_continuation(
     db: tauri::State<Db>,
     fragment_id: String,
@@ -86,7 +92,7 @@ pub fn link_continuation(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn correct_fragment(
     db: tauri::State<Db>,
     id: String,
@@ -107,45 +113,45 @@ pub fn correct_fragment(
         .ok_or_else(|| "fragment vanished during correction".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fragment_history(db: tauri::State<Db>, id: String) -> Result<Vec<Revision>, String> {
     db.fragment_history(&id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn line_for(db: tauri::State<Db>, id: String) -> Result<Vec<LineMoment>, String> {
     db.line_for(&id).map_err(|e| e.to_string())
 }
 
 /// Returns `(held_count, taken)`. `taken = false` means the bound was reached and nothing
 /// was changed — the caller says so rather than silently doing nothing.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn hold_fragment(db: tauri::State<Db>, id: String) -> Result<(i64, bool), String> {
     db.hold_fragment(&id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn max_held() -> i64 {
     crate::db::record::MAX_HELD
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn release_fragment(db: tauri::State<Db>, id: String) -> Result<(), String> {
     db.release_fragment(&id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn held_fragments(db: tauri::State<Db>) -> Result<Vec<HeldFragment>, String> {
     db.held_fragments().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recent_fragments(db: tauri::State<Db>, limit: Option<i64>) -> Result<Vec<Fragment>, String> {
     db.recent_fragments(limit.unwrap_or(50).clamp(1, 500))
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fragments_before(
     db: tauri::State<Db>,
     before: Option<String>,
@@ -155,7 +161,7 @@ pub fn fragments_before(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fragments_between(
     db: tauri::State<Db>,
     from: String,
@@ -166,7 +172,7 @@ pub fn fragments_between(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn find_fragments(
     db: tauri::State<Db>,
     query: String,
@@ -176,32 +182,32 @@ pub fn find_fragments(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn month_density(db: tauri::State<Db>, year: i32) -> Result<Vec<i64>, String> {
     db.month_density(year).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_span(db: tauri::State<Db>) -> Result<Option<(String, String)>, String> {
     db.record_span().map_err(|e| e.to_string())
 }
 
 /// At most one Return, or none. None is the ordinary answer: silence is valid.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn select_return(db: tauri::State<Db>) -> Result<Option<Return>, String> {
     let now = chrono::Utc::now().to_rfc3339();
     db.select_return(&now).map_err(|e| e.to_string())
 }
 
 /// 'opened' | 'continued' | 'let_go' | 'expired'. Letting go is an outcome, not a delete.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_return_outcome(db: tauri::State<Db>, id: i64, outcome: String) -> Result<(), String> {
     db.record_return_outcome(id, &outcome).map_err(|e| e.to_string())
 }
 
 /// Guesses. A separate command from `find_fragments` on purpose: exact retrieval must never
 /// wait on the model, and a caller has to opt in to asking for inference.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn find_by_meaning(
     db: tauri::State<Db>,
     query: String,
@@ -212,18 +218,18 @@ pub fn find_by_meaning(
 }
 
 /// "not this".
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reject_guess(db: tauri::State<Db>, fragment_id: String, related_id: String) -> Result<(), String> {
     db.reject_guess(&fragment_id, &related_id).map_err(|e| e.to_string())
 }
 
 /// Embeds a slice of whatever still needs it. Called opportunistically, never blocking.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn embed_pending(db: tauri::State<Db>, limit: Option<i64>) -> Result<usize, String> {
     db.embed_pending(limit.unwrap_or(32).clamp(1, 512))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pending_embedding_count(db: tauri::State<Db>) -> Result<i64, String> {
     db.pending_embedding_count().map_err(|e| e.to_string())
 }
@@ -232,7 +238,7 @@ pub fn pending_embedding_count(db: tauri::State<Db>) -> Result<i64, String> {
 
 /// Captures a URL. Local and immediate; no network call happens on this path, so sharing a
 /// link behaves identically offline.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn capture_encounter(
     db: tauri::State<Db>,
     url_raw: String,
@@ -256,13 +262,13 @@ pub fn capture_encounter(
     .inspect(|f| bridge(&db, &f.id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn encounter_for(db: tauri::State<Db>, fragment_id: String) -> Result<Option<Encounter>, String> {
     db.encounter_for(&fragment_id).map_err(|e| e.to_string())
 }
 
 /// Every other time this source was met. Reads the key stored at capture.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn same_source_encounters(
     db: tauri::State<Db>,
     fragment_id: String,
@@ -270,7 +276,7 @@ pub fn same_source_encounters(
     db.same_source_encounters(&fragment_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn encounters_awaiting_enrichment(
     db: tauri::State<Db>,
     limit: Option<i64>,
@@ -280,7 +286,7 @@ pub fn encounters_awaiting_enrichment(
 }
 
 /// Records the outcome of a metadata fetch. Failure is a result, not an error to retry forever.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_enrichment(
     db: tauri::State<Db>,
     encounter_id: i64,
@@ -299,7 +305,7 @@ pub fn record_enrichment(
 // ------------------------------------------------------------------ voice
 
 /// Records that a recording exists. The audio is the fragment; a transcript may follow.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn capture_voice(
     db: tauri::State<Db>,
     audio_path: String,
@@ -311,7 +317,7 @@ pub fn capture_voice(
 }
 
 /// What the machine heard, or why it could not hear anything.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_transcript(
     db: tauri::State<Db>,
     fragment_id: String,
@@ -332,18 +338,18 @@ pub fn record_transcript(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_for(db: tauri::State<Db>, fragment_id: String) -> Result<Option<VoiceCapture>, String> {
     db.voice_for(&fragment_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mark_audio_missing(db: tauri::State<Db>, fragment_id: String) -> Result<(), String> {
     db.mark_audio_missing(&fragment_id).map_err(|e| e.to_string())
 }
 
 /// Material for a page of fragments, in one pass.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn materials_for(
     db: tauri::State<Db>,
     ids: Vec<String>,
@@ -354,25 +360,25 @@ pub fn materials_for(
 // ------------------------------------------------------------------ legacy bridge
 
 /// Removes a fragment: soft in the Record, hard on the legacy row, tombstoned for sync.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_fragment(db: tauri::State<Db>, id: String) -> Result<(), String> {
     db.remove_fragment(&id).map_err(|e| e.to_string())
 }
 
 /// Undo for a removal made on this device.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_fragment(db: tauri::State<Db>, id: String) -> Result<(), String> {
     db.restore_fragment(&id).map_err(|e| e.to_string())
 }
 
 /// Projects any legacy entries that have arrived over sync into the Record.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn project_entries_into_record(db: tauri::State<Db>) -> Result<usize, String> {
     db.project_entries_into_record().map_err(|e| e.to_string())
 }
 
 /// Soft-removes fragments whose legacy rows were deleted by another device.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn absorb_remote_deletes(db: tauri::State<Db>, ids: Vec<String>) -> Result<usize, String> {
     db.absorb_remote_deletes(&ids).map_err(|e| e.to_string())
 }
@@ -381,7 +387,7 @@ pub fn absorb_remote_deletes(db: tauri::State<Db>, ids: Vec<String>) -> Result<u
 ///
 /// Read-only on purpose: the sync surface states a number, and a status read that also
 /// performs the work it is reporting on can never show a steady figure.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fragments_awaiting_mirror(db: tauri::State<Db>, limit: Option<i64>) -> Result<usize, String> {
     db.fragments_awaiting_mirror(limit.unwrap_or(500).clamp(1, 5000))
         .map(|ids| ids.len())
@@ -389,7 +395,7 @@ pub fn fragments_awaiting_mirror(db: tauri::State<Db>, limit: Option<i64>) -> Re
 }
 
 /// Fragments the bridge still owes the legacy table, e.g. after an upgrade or time offline.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mirror_pending_fragments(db: tauri::State<Db>, limit: Option<i64>) -> Result<usize, String> {
     let ids = db
         .fragments_awaiting_mirror(limit.unwrap_or(200).clamp(1, 2000))
@@ -405,19 +411,19 @@ pub fn mirror_pending_fragments(db: tauri::State<Db>, limit: Option<i64>) -> Res
 
 
 /// This install's own id and name, for the cloud's device list.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn this_device(db: tauri::State<Db>) -> Result<(String, String), String> {
     db.this_device().map_err(|e| e.to_string())
 }
 
 /// Moments that were worded in two places and have not been settled yet.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_wording_conflicts(db: tauri::State<Db>) -> Result<Vec<WordingConflict>, String> {
     db.open_wording_conflicts().map_err(|e| e.to_string())
 }
 
 /// Chooses which wording shows. The other stays under the moment as earlier wording.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resolve_wording_conflict(
     db: tauri::State<Db>,
     fragment_id: String,

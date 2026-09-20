@@ -147,7 +147,7 @@ struct FirestoreEntryIn {
 }
 
 /// Ingest remote entries (Firestore pull). Idempotent per mobile sync.md: existing `id` skipped.
-#[tauri::command]
+#[tauri::command(async)]
 fn ingest_firestore_entries(
     db: tauri::State<Db>,
     entries: Vec<FirestoreEntryIn>,
@@ -167,17 +167,17 @@ fn ingest_firestore_entries(
     Ok(inserted)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn enqueue_sync_tombstone(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.enqueue_sync_tombstone(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_sync_tombstone_outbox(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_sync_tombstone_outbox().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_due_sync_tombstone_outbox(
     db: tauri::State<Db>,
     min_age_secs: i64,
@@ -186,24 +186,24 @@ fn list_due_sync_tombstone_outbox(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn remove_sync_tombstone_outbox(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.remove_sync_tombstone_outbox(&entry_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_sync_tombstone_outbox_all(db: tauri::State<Db>) -> Result<(), String> {
     db.clear_sync_tombstone_outbox_all().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_firestore_ingest_suppression(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.clear_firestore_ingest_suppression(&entry_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_local_entries_for_sync(
     db: tauri::State<Db>,
     entry_ids: Vec<String>,
@@ -235,7 +235,7 @@ struct ApplyRemoteEntryThemeIn {
     theme: Option<RemoteEntryThemeIn>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn apply_remote_entry_theme(
     db: tauri::State<Db>,
     input: ApplyRemoteEntryThemeIn,
@@ -258,7 +258,7 @@ struct RemoteUserThemeIn {
     sort_order: i32,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn ingest_remote_user_themes(
     db: tauri::State<Db>,
     rows: Vec<RemoteUserThemeIn>,
@@ -271,7 +271,7 @@ fn ingest_remote_user_themes(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn apply_remote_user_theme_tombstones(
     db: tauri::State<Db>,
     theme_ids: Vec<String>,
@@ -289,7 +289,7 @@ struct UserThemeOutboxRowOut {
     sort_order: Option<i32>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_sync_user_theme_outbox(db: tauri::State<Db>) -> Result<Vec<UserThemeOutboxRowOut>, String> {
     db.list_sync_user_theme_outbox()
         .map(|rows| {
@@ -305,31 +305,31 @@ fn list_sync_user_theme_outbox(db: tauri::State<Db>) -> Result<Vec<UserThemeOutb
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn remove_sync_user_theme_outbox(db: tauri::State<Db>, theme_id: String) -> Result<(), String> {
     db.remove_sync_user_theme_outbox(&theme_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_sync_user_theme_outbox_all(db: tauri::State<Db>) -> Result<(), String> {
     db.clear_sync_user_theme_outbox_all()
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_user_theme_ingest_suppression(db: tauri::State<Db>, theme_id: String) -> Result<(), String> {
     db.clear_user_theme_ingest_suppression(&theme_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn enqueue_all_local_user_themes_for_sync(db: tauri::State<Db>) -> Result<(), String> {
     db.enqueue_all_local_user_themes_for_sync()
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_entry_ids_with_themes(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_entry_ids_with_themes()
         .map_err(|e| e.to_string())
@@ -366,7 +366,7 @@ fn validated_space_for_write(db: &Db, space_id: &Option<String>) -> Result<Optio
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_entry(db: tauri::State<Db>, input: CreateEntryIn) -> Result<String, String> {
     let trimmed = input.text.trim();
     if trimmed.is_empty() {
@@ -380,7 +380,7 @@ fn create_entry(db: tauri::State<Db>, input: CreateEntryIn) -> Result<String, St
     Ok(id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn restore_entry(db: tauri::State<Db>, input: RestoreEntryIn) -> Result<String, String> {
     let trimmed = input.text.trim();
     if trimmed.is_empty() {
@@ -402,7 +402,7 @@ fn restore_entry(db: tauri::State<Db>, input: RestoreEntryIn) -> Result<String, 
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_embedding(app: tauri::AppHandle, entry_id: String) -> Result<(), String> {
     let text = {
         let db = app.state::<Db>();
@@ -456,12 +456,12 @@ fn classify_entry_theme_for_entry(db: &Db, entry_id: &str) -> Result<(), String>
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn classify_entry_theme(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     classify_entry_theme_for_entry(&db, &entry_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_entry_theme(
     db: tauri::State<Db>,
     entry_id: String,
@@ -483,7 +483,7 @@ struct SetEntryThemeIn {
     locked: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_entry_theme(db: tauri::State<Db>, input: SetEntryThemeIn) -> Result<(), String> {
     if let Some(theme_id) = input.theme_id.as_deref() {
         if !db.theme_id_valid(theme_id).map_err(|e| e.to_string())? {
@@ -514,7 +514,7 @@ fn user_theme_out(row: crate::db::UserThemeRow) -> UserThemeOut {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_user_themes(db: tauri::State<Db>) -> Result<Vec<UserThemeOut>, String> {
     let rows = db.list_user_themes().map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(user_theme_out).collect())
@@ -526,7 +526,7 @@ struct CreateUserThemeIn {
     label: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_user_theme(
     db: tauri::State<Db>,
     input: CreateUserThemeIn,
@@ -544,7 +544,7 @@ struct UpdateUserThemeIn {
     label: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn update_user_theme(
     db: tauri::State<Db>,
     input: UpdateUserThemeIn,
@@ -555,7 +555,7 @@ fn update_user_theme(
     Ok(user_theme_out(row))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_user_theme(db: tauri::State<Db>, id: String) -> Result<(), String> {
     db.delete_user_theme(&id).map_err(|e| e.to_string())
 }
@@ -567,7 +567,7 @@ struct ThemeCountOut {
     count: i64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_theme_counts(db: tauri::State<Db>) -> Result<Vec<ThemeCountOut>, String> {
     let rows = db
         .list_theme_counts(crate::db::THEME_RECALL_MIN_CONFIDENCE)
@@ -578,7 +578,7 @@ fn list_theme_counts(db: tauri::State<Db>) -> Result<Vec<ThemeCountOut>, String>
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_theme_counts_recent(
     db: tauri::State<Db>,
     days: Option<u32>,
@@ -658,7 +658,7 @@ fn top_related_ids(mut with_sim: Vec<(String, f32)>, min_sim: f32, limit: usize)
     with_sim.into_iter().take(limit).map(|(id, _)| id).collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn find_similar_entries(
     db: tauri::State<Db>,
     entry_id: String,
@@ -696,7 +696,7 @@ fn find_similar_entries(
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_entries(
     db: tauri::State<Db>,
     space_filter: Option<String>,
@@ -708,7 +708,7 @@ fn list_entries(
     Ok(rows.into_iter().map(|r| entry_row_to_payload(&r)).collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_spaces(db: tauri::State<Db>) -> Result<Vec<SpacePayload>, String> {
     let rows = db.list_spaces().map_err(|e| e.to_string())?;
     Ok(rows
@@ -721,7 +721,7 @@ fn list_spaces(db: tauri::State<Db>) -> Result<Vec<SpacePayload>, String> {
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_entry(db: tauri::State<Db>, entry_id: String) -> Result<Option<EntryPayload>, String> {
     let row = db
         .get_entry_by_id(&entry_id)
@@ -729,7 +729,7 @@ fn get_entry(db: tauri::State<Db>, entry_id: String) -> Result<Option<EntryPaylo
     Ok(row.as_ref().map(entry_row_to_payload))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn jump_dates_in_month(
     db: tauri::State<Db>,
     year: i32,
@@ -744,7 +744,7 @@ fn jump_dates_in_month(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn jump_anchor_for_local_date(
     db: tauri::State<Db>,
     local_date: String,
@@ -759,7 +759,7 @@ fn jump_anchor_for_local_date(
 
 /// Temporal recall: try 24h, 7d, 30d anchors (±3h window); fallback to random past entry.
 /// Delegates to recall::select_entry_for_resurface (pure, testable).
-#[tauri::command]
+#[tauri::command(async)]
 fn get_resurfaced_entry(
     db: tauri::State<Db>,
     exclude_ids: Vec<String>,
@@ -846,7 +846,7 @@ pub(crate) fn get_resurfaced_entry_impl<R: rand::RngCore>(
 
 /// Thought trail: related entries ordered as earlier → current → later.
 /// Scores by similarity (IDF-weighted keyword overlap) + temporal proximity; importance is a small boost.
-#[tauri::command]
+#[tauri::command(async)]
 fn get_thought_trail(db: tauri::State<Db>, entry_id: String) -> Result<Vec<EntryPayload>, String> {
     let current = db
         .get_entry_by_id(&entry_id)
@@ -872,7 +872,7 @@ fn get_thought_trail(db: tauri::State<Db>, entry_id: String) -> Result<Vec<Entry
 }
 
 /// Entry ids with enough keyword overlap for a stream trail dot (fast pairwise scan).
-#[tauri::command]
+#[tauri::command(async)]
 fn list_thought_trail_entry_ids(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     let all = db.list_entries().map_err(|e| e.to_string())?;
     Ok(entries_with_trail_link_ids(&all).into_iter().collect())
@@ -919,7 +919,7 @@ struct CaptureContinuationHintPayload {
 }
 
 /// Recent entry that strongly overlaps capture text (continuation nudge after save).
-#[tauri::command]
+#[tauri::command(async)]
 fn get_capture_continuation_hint(
     db: tauri::State<Db>,
     text: String,
@@ -978,7 +978,7 @@ fn get_capture_continuation_hint(
     }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn search_entries(
     db: tauri::State<Db>,
     query: String,
@@ -1010,7 +1010,7 @@ fn search_entries(
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn pin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -1018,17 +1018,17 @@ fn pin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.insert_pinned(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn unpin_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.remove_pinned(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_pinned_entry_ids(db: tauri::State<Db>) -> Result<Vec<String>, String> {
     db.list_pinned_entry_ids().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_entry_continuation(
     db: tauri::State<Db>,
     entry_id: String,
@@ -1088,7 +1088,7 @@ fn share_thread_to_payload(row: db::ShareThreadRow) -> ShareThreadPayload {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_share_thread(
     db: tauri::State<Db>,
     input: CreateShareThreadInput,
@@ -1129,7 +1129,7 @@ fn create_share_thread(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_share_thread(
     db: tauri::State<Db>,
     token: String,
@@ -1142,7 +1142,7 @@ fn get_share_thread(
         .map(share_thread_to_payload))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_share_threads(db: tauri::State<Db>) -> Result<Vec<ShareThreadPayload>, String> {
     let rows = db.list_share_thread_rows().map_err(|e| e.to_string())?;
     Ok(rows
@@ -1152,7 +1152,7 @@ fn list_share_threads(db: tauri::State<Db>) -> Result<Vec<ShareThreadPayload>, S
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn revoke_share_thread(db: tauri::State<Db>, token: String) -> Result<(), String> {
     if db.revoke_share_thread(&token).map_err(|e| e.to_string())? {
         Ok(())
@@ -1161,12 +1161,12 @@ fn revoke_share_thread(db: tauri::State<Db>, token: String) -> Result<(), String
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn write_utf8_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn update_entry(db: tauri::State<Db>, entry_id: String, text: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -1176,7 +1176,7 @@ fn update_entry(db: tauri::State<Db>, entry_id: String, text: String) -> Result<
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_entry_space(
     db: tauri::State<Db>,
     entry_id: String,
@@ -1190,12 +1190,12 @@ fn set_entry_space(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn record_entry_open(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.record_entry_open(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.get_entry_by_id(&entry_id)
         .map_err(|e| e.to_string())?
@@ -1203,12 +1203,12 @@ fn delete_entry(db: tauri::State<Db>, entry_id: String) -> Result<(), String> {
     db.delete_entry(&entry_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_all_entries(db: tauri::State<Db>) -> Result<(), String> {
     db.delete_all_entries().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
     let mut rows = db.list_entries().map_err(|e| e.to_string())?;
     rows.reverse();
@@ -1248,7 +1248,7 @@ fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
 /// format only this program reads is not an escape hatch. The audio travels beside it
 /// because the recording is the material — the transcript is derived from it, and an export
 /// that kept only the derivation would be throwing the original away.
-#[tauri::command]
+#[tauri::command(async)]
 fn export_record(db: tauri::State<Db>, app: tauri::AppHandle) -> Result<String, String> {
     let mut fragments = db.recent_fragments(1_000_000).map_err(|e| e.to_string())?;
     // Oldest first: an export is read forwards.
@@ -1308,7 +1308,7 @@ fn export_record(db: tauri::State<Db>, app: tauri::AppHandle) -> Result<String, 
 }
 
 /// When the most recent automatic backup was taken, so settings can say so truthfully.
-#[tauri::command]
+#[tauri::command(async)]
 fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (_db_path, backups_dir) = backup_paths(&app)?;
     let Ok(entries) = fs::read_dir(&backups_dir) else {
@@ -1329,7 +1329,7 @@ fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
 ///
 /// The product cannot grant itself the microphone and must not pretend otherwise: when the
 /// mac has said no, the only honest affordance is the door to where the answer lives.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_microphone_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -1342,7 +1342,7 @@ fn open_microphone_settings() -> Result<(), String> {
 }
 
 /// Shows the menu-bar capture panel, for settings' "try it".
-#[tauri::command]
+#[tauri::command(async)]
 fn open_tray_capture(app: tauri::AppHandle) -> Result<(), String> {
     let _ = app.emit("chinotto-capture-shortcut", ());
     Ok(())
@@ -1387,7 +1387,7 @@ fn prune_old_backups(backups_dir: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_backup(app: tauri::AppHandle) -> Result<(), String> {
     let (db_path, backups_dir) = backup_paths(&app)?;
     if !db_path.exists() {
@@ -1402,7 +1402,7 @@ fn create_backup(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_backup_if_needed(app: tauri::AppHandle) -> Result<(), String> {
     let (db_path, backups_dir) = backup_paths(&app)?;
     if !db_path.exists() {
@@ -1633,7 +1633,7 @@ fn audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// The recording is the material and it is written as it arrives, so a recogniser that is
 /// unauthorised, fails or times out costs the words but never the audio. Only a failure to
 /// record at all is an error here.
-#[tauri::command]
+#[tauri::command(async)]
 fn run_native_speech_recognition(
     app: tauri::AppHandle,
     max_ms: Option<u64>,
@@ -1673,7 +1673,7 @@ fn run_native_speech_recognition(
 }
 
 /// The hold was released. Ends the recording that is running, if any.
-#[tauri::command]
+#[tauri::command(async)]
 fn stop_voice_capture() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     speech::request_stop();
@@ -1831,6 +1831,10 @@ pub fn run() {
             let db_path = path.join("chinotto.db");
             let db = Db::open(db_path).map_err(|e| e.to_string())?;
             app.manage(db);
+            // Before anything can ask for a guess. fastembed would otherwise cache the
+            // weights beside the working directory, which for an app opened from Finder is
+            // `/` — so they would be fetched, fail to store, and be fetched again forever.
+            embeddings::set_cache_dir(path.join("models"));
             #[cfg(target_os = "macos")]
             {
                 let (cmd_tx, cmd_rx) = mpsc::sync_channel(0);
