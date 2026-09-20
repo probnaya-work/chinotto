@@ -1,0 +1,817 @@
+/**
+ * The Record application shell.
+ *
+ * Nothing here is a container. There is no header, no sidebar, no tabs and no navigation:
+ * there is one column of material, and the states below replace its contents rather than
+ * wrapping it. `esc` always steps back toward the edge, one level at a time.
+ *
+ * The states are the edge (which is also find, and also standing in a month), focus on a
+ * fragment or a line, and the utility surfaces. Only one is visible at a time.
+ */
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as api from "../../lib/recordApi";
+import type { Fragment, HeldFragment } from "../../lib/recordApi";
+import { Record } from "./Record";
+import { Capture } from "./Capture";
+import { FragmentFocus } from "./FragmentFocus";
+import { ReturnBlock } from "./ReturnBlock";
+import { QuietLine } from "./QuietLine";
+import { useNow } from "./useNow";
+import { metaStyle } from "../../design/tiers";
+import { suggestContinuation, type ContinuationOffer } from "./continuation";
+import { resolveAnchor, type ParsedAnchor } from "./anchors";
+import { MONTHS, firstLineOf } from "./format";
+import { runEnrichmentPass } from "./enrichment";
+import {
+  flushSyncTombstoneOutbox,
+  startDesktopFirestoreIngest,
+  startLocalEntriesFirestoreUploadOnAuth,
+} from "@/lib/desktopFirestoreSync";
+import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
+import { parseTextWithUrls } from "@/lib/urlInText";
+import { useAppUpdater } from "@/lib/appUpdater";
+import "../../design/tokens.css";
+
+/**
+ * How long a fragment stays "still yours to change" after it lands.
+ *
+ * Not an undo window and not a grace period before saving — the save already happened,
+ * locally and instantly. It is the few seconds in which correcting is still part of
+ * writing rather than a separate act of revision.
+ */
+const EDIT_WINDOW_SECONDS = 12;
+const UNDO_WINDOW_SECONDS = 8;
+
+/** Where you are standing, and what was here when you left the edge. */
+interface Anchored extends ParsedAnchor {
+  arrivedAt: number;
+  /** How much the record held when you left, so the way back can say what is waiting. */
+  countOnLeaving: number;
+}
+
+export function RecordApp() {
+  const now = useNow();
+  const updater = useAppUpdater();
+
+  const [fragments, setFragments] = useState<Fragment[]>([]);
+  const [held, setHeld] = useState<HeldFragment[]>([]);
+  const [materials, setMaterials] = useState<api.Materials>({
+    encounters: new Map(),
+    voices: new Map(),
+  });
+  const [returned, setReturned] = useState<api.ReturnValue | null>(null);
+  const [retLeaving, setRetLeaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /**
+   * Until the first read returns we do not know whether the Record is empty. Rendering the
+   * empty state meanwhile would flash "type anything and press return" on every launch and
+   * then replace it with the record — so the surface waits instead of guessing.
+   */
+  const [loaded, setLoaded] = useState(false);
+
+  // ---- where you are ------------------------------------------------------------------
+  /** What is in the field. `/` makes it find; a date phrase makes it a destination. */
+  const [input, setInput] = useState("");
+  /** Standing in a month, or at the edge. */
+  const [anchor, setAnchor] = useState<Anchored | null>(null);
+  /** Focused on a fragment or the line it belongs to. */
+  const [focusId, setFocusId] = useState<string | null>(null);
+  /**
+   * Whether focus was reached by `continue` rather than by opening the fragment.
+   *
+   * It decides one thing — whether the continuation field takes the caret — and that one
+   * thing is the whole difference between the two verbs: `continue` means you already know
+   * what you want to add, `open` means you came to read.
+   */
+  const [focusContinuing, setFocusContinuing] = useState(false);
+  /** Whether the keyboard is in the record rather than at the edge. */
+  const [keyboardInRecord, setKeyboardInRecord] = useState(false);
+
+  // ---- what the record is doing --------------------------------------------------------
+  const [justSaved, setJustSaved] = useState<{
+    id: string;
+    at: number;
+    suggestion: ContinuationOffer | null;
+  } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [meaningOn, setMeaningOn] = useState(false);
+  const [guesses, setGuesses] = useState<api.Guess[]>([]);
+  const [rejectedGuesses, setRejectedGuesses] = useState<Set<string>>(() => new Set());
+  /** One short line, in the quiet line, that clears itself. Never a dialog. */
+  const [notice, setNotice] = useState<string | null>(null);
+  /** The last removal, so it can be brought back from the quiet line. */
+  const [undo, setUndo] = useState<{ fragment: api.Fragment; at: number } | null>(null);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  /** Ticks the edit window's countdown; the value is derived from `justSaved.at`. */
+  const [, setTick] = useState(0);
+
+  /**
+   * Where the edge was when you left it.
+   *
+   * "esc returns you to the edge where you were" is a promise the product makes in
+   * writing. Coming back to the top of the record would break it, and would lose your
+   * place in a corpus that is meant to be traversed.
+   */
+  const edgeScroll = useRef(0);
+  const retLeavingRef = useRef(false);
+
+  const leaveEdge = useCallback((go: () => void) => {
+    edgeScroll.current = document.scrollingElement?.scrollTop ?? 0;
+    go();
+  }, []);
+
+  const isFind = input.startsWith("/");
+  const query = isFind ? input.slice(1).trim().toLowerCase() : "";
+  const atEdge = focusId === null;
+
+  const reload = useCallback(async () => {
+    try {
+      const [all, holds, ret] = await Promise.all([
+        // The whole record: standing in a month re-measures distance from there, so the
+        // surface cannot work from a recent page.
+        api.allFragments(),
+        api.heldFragments(),
+        api.selectReturn(),
+      ]);
+      setReturned((current) => (retLeavingRef.current ? current : ret));
+      setFragments(all);
+      setHeld(holds);
+      // One pass for everything, rather than a query per row.
+      setMaterials(
+        await api.materialsFor([...all.map((f) => f.id), ...holds.map((h) => h.fragment.id)]),
+      );
+      setError(null);
+      setLoaded(true);
+    } catch (e) {
+      setLoaded(true);
+      // Reading the Record can fail; capture cannot. Surfacing this quietly rather than
+      // blocking the surface keeps that distinction true.
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const bringBack = useCallback(async () => {
+    const u = undo;
+    if (!u) return;
+    await api.restoreFragment(u.fragment.id);
+    setUndo(null);
+    await reload();
+  }, [undo, reload]);
+
+  // Before paint, so returning never flashes at the top and then jumps.
+  useLayoutEffect(() => {
+    if (!atEdge) return;
+    const el = document.scrollingElement;
+    if (el) el.scrollTop = edgeScroll.current;
+  }, [atEdge]);
+
+  /**
+   * Enrichment and embedding both run after the fact, on a timer, and neither is allowed to
+   * be in the way of anything. A pass that fails is simply a pass that did nothing.
+   */
+  useEffect(() => {
+    let stopped = false;
+    async function pass() {
+      if (stopped) return;
+      try {
+        const enriched = await runEnrichmentPass(5);
+        await api.embedPending(24);
+        if (enriched > 0 && !stopped) await reload();
+      } catch {
+        // Background work never surfaces an error; the Record is readable either way.
+      }
+    }
+    void pass();
+    const id = setInterval(() => void pass(), 60_000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [reload]);
+
+  /**
+   * `esc`, once, globally — so it always steps back by exactly one level.
+   *
+   * The order is the order the levels were entered in. Handling it per surface is how you
+   * end up with an `esc` that drops a draft from inside a month, or closes two things at
+   * once because both were listening.
+   */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        if (!undo) return;
+        e.preventDefault();
+        void bringBack();
+        return;
+      }
+      if (mod && e.key === ",") {
+        e.preventDefault();
+        // Settings is Phase 6; the chord is bound so it is not swallowed by the field.
+        return;
+      }
+      if (e.key !== "Escape") return;
+      if (editing) return setEditing(null);
+      if (focusId) {
+        setFocusContinuing(false);
+        return setFocusId(null);
+      }
+      if (input) return setInput("");
+      if (anchor) return setAnchor(null);
+      if (keyboardInRecord) return setKeyboardInRecord(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!undo) return;
+    const id = setInterval(() => {
+      if (Date.now() - undo.at > UNDO_WINDOW_SECONDS * 1000) {
+        setUndo(null);
+        void flushSyncTombstoneOutbox();
+      } else {
+        setTick((t) => t + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [undo]);
+
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+
+  /**
+   * Sync, carried across from the surface this replaced.
+   *
+   * The Record is canonical here, but the phone and the sync protocol still speak legacy
+   * `entries`, so the bridge runs at both ends of every exchange: anything that arrives is
+   * projected into the Record, and anything the Record wrote that has not reached the
+   * legacy table yet is mirrored out. Sync's own UI is pending, but the capability must
+   * not disappear with it.
+   */
+  useEffect(() => {
+    if (!isFirebaseSyncConfigured()) return;
+
+    let stopped = false;
+    const stopIngest = startDesktopFirestoreIngest(() => {
+      // Something arrived from another device; make it part of the Record.
+      void (async () => {
+        try {
+          await api.projectEntriesIntoRecord();
+          if (!stopped) await reload();
+        } catch (e) {
+          console.warn("[bridge] projecting after ingest failed", e);
+        }
+      })();
+    });
+    const stopUpload = startLocalEntriesFirestoreUploadOnAuth();
+
+    // Catch up on anything captured while this was not running, e.g. across the upgrade.
+    void (async () => {
+      try {
+        await api.mirrorPendingFragments(500);
+        await api.projectEntriesIntoRecord();
+        await flushSyncTombstoneOutbox();
+        if (!stopped) await reload();
+      } catch (e) {
+        console.warn("[bridge] catch-up failed", e);
+      }
+    })();
+
+    return () => {
+      stopped = true;
+      stopIngest();
+      stopUpload();
+    };
+  }, [reload]);
+
+  // ---- leaving a fragment ---------------------------------------------------------------
+
+  const handleLeave = useCallback(async (body: string) => {
+    // A link typed or pasted into capture is an encounter, not a string that happens to
+    // look like one — so it gets a source row, a durable url_key and the chance of a
+    // title later. The URL is stored exactly as written; nothing is canonicalised here.
+    const urls = parseTextWithUrls(body).segments.filter((s) => s.type === "url");
+    const left =
+      urls.length === 1
+        ? await api.captureEncounter(
+            urls[0].value,
+            // Only the person's own words; if the fragment is just the link, there are none.
+            body.trim() === urls[0].value.trim() ? "" : body,
+            // No source app: nothing handed us one. Typing is not a share.
+            null,
+            null,
+          )
+        : await api.captureFragment(body, "typed", "desktop");
+
+    setFragments((prev) => {
+      setJustSaved({
+        id: left.id,
+        at: Date.now(),
+        // Looking back over material already in memory: an offer must never be the reason
+        // a capture takes a millisecond longer than it has to.
+        suggestion: suggestContinuation(left, prev, new Date()),
+      });
+      return [left, ...prev];
+    });
+  }, []);
+
+  /**
+   * The edit window, counting itself down and then clearing itself.
+   *
+   * One interval for both the countdown and the expiry, so the number on screen and the
+   * moment the offer disappears can never disagree.
+   */
+  useEffect(() => {
+    if (!justSaved) return;
+    const id = setInterval(() => {
+      if ((Date.now() - justSaved.at) / 1000 > EDIT_WINDOW_SECONDS) setJustSaved(null);
+      else setTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [justSaved]);
+
+  const justSavedView = justSaved
+    ? {
+        id: justSaved.id,
+        secondsLeft: Math.max(
+          0,
+          EDIT_WINDOW_SECONDS - Math.floor((Date.now() - justSaved.at) / 1000),
+        ),
+        // `settle` runs once, on arrival — not on every tick of the countdown.
+        landing: Date.now() - justSaved.at < 1200,
+        suggestion: justSaved.suggestion,
+      }
+    : null;
+
+  const acceptSuggestion = useCallback(() => {
+    const s = justSaved;
+    if (!s?.suggestion) return;
+    setJustSaved({ ...s, suggestion: null });
+    void api
+      .linkContinuation(s.id, s.suggestion.id)
+      .then(() => reload())
+      // Declining to link is recoverable; saying it failed is not worth a surface.
+      .catch(() => {});
+  }, [justSaved, reload]);
+
+  // ---- acting on a fragment -------------------------------------------------------------
+
+  /**
+   * Keeping present is bounded. When the bound refuses, the surface says so once, quietly,
+   * and asks for a release — it does not drop something the person chose to keep.
+   */
+  const handleHold = useCallback(async (f: Fragment) => {
+    const [, taken] = await api.holdFragment(f.id);
+    if (!taken) {
+      setNotice(`${api.MAX_HELD} things are already held · release one to keep this`);
+      return;
+    }
+    setNotice(null);
+    setHeld(await api.heldFragments());
+  }, []);
+
+  const handleRelease = useCallback(async (f: Fragment) => {
+    await api.releaseFragment(f.id);
+    setNotice(null);
+    setHeld(await api.heldFragments());
+  }, []);
+
+  const handleOpen = useCallback(
+    (f: Fragment) =>
+      leaveEdge(() => {
+        setFocusContinuing(false);
+        setFocusId(f.id);
+      }),
+    [leaveEdge],
+  );
+
+  const handleContinue = useCallback(
+    (f: Fragment) =>
+      leaveEdge(() => {
+        setFocusContinuing(true);
+        setFocusId(f.id);
+      }),
+    [leaveEdge],
+  );
+
+  const startCorrecting = useCallback((f: Fragment) => {
+    setEditing({ id: f.id, text: f.body });
+  }, []);
+
+  const saveCorrection = useCallback(async () => {
+    const e = editing;
+    if (!e) return;
+    const body = e.text.trim();
+    setEditing(null);
+    if (!body) return;
+    const updated = await api.correctFragment(e.id, body);
+    if (updated) setFragments((prev) => prev.map((f) => (f.id === e.id ? updated : f)));
+  }, [editing]);
+
+  const handleRemove = useCallback(
+    async (f: Fragment) => {
+      await api.removeFragment(f.id);
+      setUndo({ fragment: f, at: Date.now() });
+      setNotice(null);
+      if (focusId === f.id) {
+        setFocusId(null);
+        setFocusContinuing(false);
+      }
+      await reload();
+    },
+    [reload, focusId],
+  );
+
+  const copyText = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard?.writeText(text);
+    } catch {
+      // A clipboard that refuses is not worth a surface; the words are still on screen.
+    }
+  }, []);
+
+  // ---- standing ---------------------------------------------------------------------------
+
+  const stand = useCallback(
+    (parsed: ParsedAnchor | null) => {
+      if (!parsed) {
+        setAnchor(null);
+        return;
+      }
+      const resolved = resolveAnchor(
+        parsed,
+        fragments.map((f) => f.capturedAt),
+      );
+      setAnchor({ ...resolved, arrivedAt: Date.now(), countOnLeaving: fragments.length });
+      setFocusId(null);
+      window.scrollTo({ top: 0 });
+    },
+    [fragments],
+  );
+
+  // ---- find --------------------------------------------------------------------------------
+
+  const wordHits = useMemo(() => {
+    if (!query) return 0;
+    return fragments.filter((f) => f.body.toLowerCase().includes(query)).length;
+  }, [fragments, query]);
+
+  useEffect(() => {
+    if (!meaningOn || !query || wordHits > 0) {
+      setGuesses([]);
+      return;
+    }
+    let stale = false;
+    void api
+      .findByMeaning(query, [], 3)
+      .then((g) => {
+        if (!stale) setGuesses(g.filter((x) => !rejectedGuesses.has(x.fragment.id)));
+      })
+      .catch(() => setGuesses([]));
+    return () => {
+      stale = true;
+    };
+  }, [meaningOn, query, wordHits, rejectedGuesses]);
+
+  // ---- the line a fragment belongs to, for its meta line -------------------------------------
+
+  const [lineMeta, setLineMeta] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    // Only D0 shows this, so only the newest material is asked about.
+    const recent = fragments.slice(0, 40);
+    let stale = false;
+    void (async () => {
+      const out = new Map<string, string>();
+      for (const f of recent) {
+        try {
+          const line = await api.lineFor(f.id);
+          if (line.length < 2) continue;
+          const i = line.findIndex((m) => m.fragment.id === f.id);
+          if (i < 0) continue;
+          const first = new Date(line[0].fragment.capturedAt);
+          out.set(
+            f.id,
+            i === 0
+              ? `↳ first moment of a line · continued ${line.length - 1} times`
+              : `↳ moment ${i + 1} of a line · since ${MONTHS[first.getMonth()]} ${first.getFullYear()}`,
+          );
+        } catch {
+          // A line that cannot be read is simply not annotated.
+        }
+      }
+      if (!stale) setLineMeta(out);
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [fragments]);
+
+  // ---- the column -----------------------------------------------------------------------------
+
+  const sinceYouLeft = anchor ? fragments.length - anchor.countOnLeaving : 0;
+  const drafting = Boolean(input) && !isFind;
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--surface)",
+        color: "var(--ink)",
+        fontFamily: "'Archivo Variable', system-ui, sans-serif",
+        fontVariationSettings: "'wdth' 100",
+        WebkitFontSmoothing: "antialiased",
+        boxSizing: "border-box",
+        paddingTop: "var(--window-pad-top)",
+        paddingRight: "var(--window-pad-right)",
+        paddingBottom: "var(--window-pad-bottom)",
+        paddingLeft: "var(--window-pad-left)",
+      }}
+    >
+      <div style={{ maxWidth: "var(--column-width)", display: "flex", flexDirection: "column" }}>
+        {atEdge ? (
+          <>
+            {anchor ? (
+              /*
+                Standing replaces the field rather than sitting above it. There is nothing
+                to capture into from inside a past month — a fragment left there would have
+                to claim a date it does not have.
+              */
+              <div
+                style={{
+                  ...metaStyle(),
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "22px",
+                }}
+              >
+                <span
+                  className="chinotto-verb"
+                  onClick={() => setAnchor(null)}
+                  style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  ▲ today · {sinceYouLeft > 0 ? `${sinceYouLeft} new since you left` : "the edge"}{" "}
+                  · esc
+                </span>
+                <span>
+                  you are in {MONTHS[anchor.month]} {anchor.year}
+                </span>
+              </div>
+            ) : (
+              <div onFocusCapture={() => setKeyboardInRecord(false)}>
+                <Capture
+                  value={input}
+                  onChange={setInput}
+                  onLeave={handleLeave}
+                  onStand={stand}
+                  onEnterRecord={() => setKeyboardInRecord(true)}
+                  findCount={wordHits}
+                  meaningOn={meaningOn}
+                  onToggleMeaning={() => setMeaningOn((m) => !m)}
+                />
+              </div>
+            )}
+
+            {/*
+              Nothing matched the words. Guesses say they are guesses — italic, and labelled
+              — and a dismissal is remembered, because being told twice is worse than not
+              being told at all.
+            */}
+            {isFind && query && wordHits === 0 ? (
+              <>
+                <div
+                  style={{
+                    marginTop: "26px",
+                    fontSize: "var(--size-d1)",
+                    color: "var(--ink-far)",
+                    fontVariationSettings: "'wdth' 94",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {meaningOn
+                    ? "nothing with those words. close in meaning, maybe:"
+                    : "nothing with those words."}
+                </div>
+                {guesses.length > 0 ? (
+                  <div
+                    style={{
+                      marginTop: "28px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "22px",
+                      fontSize: "var(--size-moment)",
+                      lineHeight: 1.28,
+                      fontVariationSettings: "'wdth' 94",
+                      color: "var(--ink-near)",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    {guesses.map((g) => (
+                      <div key={g.fragment.id} style={{ display: "flex", gap: "22px" }}>
+                        <span
+                          style={{
+                            ...metaStyle(),
+                            width: "68px",
+                            flex: "none",
+                            paddingTop: "6px",
+                            fontStyle: "normal",
+                          }}
+                        >
+                          {new Date(g.fragment.capturedAt).getDate()}{" "}
+                          {MONTHS[new Date(g.fragment.capturedAt).getMonth()]}
+                        </span>
+                        <div
+                          onClick={() => handleOpen(g.fragment)}
+                          style={{ flex: 1, cursor: "pointer" }}
+                        >
+                          {g.fragment.body}
+                        </div>
+                        <span
+                          className="chinotto-verb"
+                          onClick={() =>
+                            setRejectedGuesses((s) => new Set(s).add(g.fragment.id))
+                          }
+                          style={{
+                            ...metaStyle(),
+                            fontStyle: "normal",
+                            paddingTop: "6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          not this
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {loaded ? (
+              <Record
+                fragments={fragments}
+                held={held}
+                now={now}
+                materials={materials}
+                anchor={anchor}
+                query={query || null}
+                loaded={loaded}
+                keyboardActive={keyboardInRecord}
+                onLeaveKeyboard={() => setKeyboardInRecord(false)}
+                onOpen={handleOpen}
+                onContinue={handleContinue}
+                onHold={handleHold}
+                onRelease={handleRelease}
+                onStandIn={(year, month) => stand({ year, month })}
+                onCorrect={startCorrecting}
+                onRemove={handleRemove}
+                onCopy={(f) => void copyText(f.body)}
+                onCopyLink={(f) => void copyText(`chinotto://fragment/${f.id}`)}
+                justSaved={justSavedView}
+                onAcceptSuggestion={acceptSuggestion}
+                onRejectSuggestion={() => setJustSaved((s) => (s ? { ...s, suggestion: null } : s))}
+                editingId={editing?.id ?? null}
+                editText={editing?.text ?? ""}
+                onEditChange={(v) => setEditing((e) => (e ? { ...e, text: v } : e))}
+                onEditSave={saveCorrection}
+                onEditCancel={() => setEditing(null)}
+                lineMeta={lineMeta}
+                returnSlot={
+                  /*
+                    A return steps aside while something is being written — it must never
+                    compete with the thing the person came here to do. It collapses rather
+                    than unmounting, because letting go of a return does not remove
+                    anything and the record should not snap upward as if it had.
+                  */
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateRows: drafting ? "0fr" : "1fr",
+                      opacity: drafting ? 0 : 1,
+                      transition:
+                        "grid-template-rows var(--let-go) var(--ease), opacity var(--let-go) var(--ease)",
+                    }}
+                  >
+                    <div style={{ overflow: "hidden", minHeight: 0 }}>
+                      {returned && !anchor && !query ? (
+                        <ReturnBlock
+                          value={returned}
+                          domain={(() => {
+                            const enc = materials.encounters.get(returned.fragment.id);
+                            if (!enc) return null;
+                            return enc.title ? `${enc.domain ?? "a link"} · ${enc.title}` : enc.domain;
+                          })()}
+                          leaving={retLeaving}
+                          onOpen={(f) => {
+                            void api.recordReturnOutcome(returned.id, "opened");
+                            handleOpen(f);
+                          }}
+                          onContinue={(f) => {
+                            void api.recordReturnOutcome(returned.id, "continued");
+                            handleContinue(f);
+                          }}
+                          onHold={(f) => {
+                            void api.recordReturnOutcome(returned.id, "opened");
+                            void handleHold(f);
+                          }}
+                          onLetGo={(v) => {
+                            retLeavingRef.current = true;
+                            setRetLeaving(true);
+                            window.setTimeout(() => {
+                              void api.recordReturnOutcome(v.id, "let_go");
+                              setReturned(null);
+                              setRetLeaving(false);
+                              retLeavingRef.current = false;
+                            }, 450);
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                }
+              />
+            ) : null}
+          </>
+        ) : (
+          <FragmentFocus
+            id={focusId}
+            corpus={fragments}
+            materials={materials}
+            startContinuing={focusContinuing}
+            onLeave={() => {
+              setFocusId(null);
+              setFocusContinuing(false);
+              void reload();
+            }}
+            onChanged={() => void reload()}
+            onOpen={handleOpen}
+            onHold={handleHold}
+            onRelease={handleRelease}
+            onRemove={handleRemove}
+            heldIds={new Set(held.map((h) => h.fragment.id))}
+          />
+        )}
+
+        <QuietLine
+          undo={
+            undo
+              ? {
+                  text:
+                    firstLineOf(undo.fragment.body).slice(0, 48) +
+                    (firstLineOf(undo.fragment.body).length > 48 ? "…" : ""),
+                  secondsLeft: Math.max(
+                    0,
+                    UNDO_WINDOW_SECONDS - Math.floor((Date.now() - undo.at) / 1000),
+                  ),
+                  onBringBack: () => void bringBack(),
+                }
+              : null
+          }
+          notice={notice}
+          offline={!online}
+          syncOn={isFirebaseSyncConfigured()}
+          update={
+            updater.phase === "available" && updater.version
+              ? {
+                  text: `chinotto ${updater.version} is out · download`,
+                  onClick: () => void updater.download(),
+                }
+              : updater.phase === "downloading" && updater.version
+                ? { text: `downloading ${updater.version}…`, onClick: () => {} }
+                : updater.phase === "ready"
+                  ? { text: "update ready · restart to finish", onClick: () => void updater.installAndRestart() }
+                  : null
+          }
+          onSettings={() => {}}
+        />
+
+        {error ? (
+          <div style={{ position: "fixed", right: "48px", bottom: "36px", ...metaStyle() }}>
+            {error}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
