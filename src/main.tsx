@@ -3,7 +3,7 @@ import "@fontsource/open-sauce-one/400.css";
 import "@fontsource/open-sauce-one/500.css";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { TrayCapturePanel } from "./features/entries/TrayCapturePanel";
+import { TrayCapture } from "./features/record/TrayCapture";
 import { IconVariantShowcase } from "./components/IconVariantShowcase";
 import { RecordApp } from "./features/record/RecordApp";
 import { HostingDesktopOnly } from "./components/HostingDesktopOnly";
@@ -94,9 +94,7 @@ const hostingDesktopOnlyGate = shouldRenderHostingDesktopOnlyGate() && !oauthChi
 createRoot(document.getElementById("root")!).render(
   trayCapture ? (
     <StrictMode>
-      <div className="tray-capture-root">
-        <TrayCapturePanel />
-      </div>
+      <TrayCapture />
     </StrictMode>
   ) : oauthChild ? (
     <OAuthBridge />

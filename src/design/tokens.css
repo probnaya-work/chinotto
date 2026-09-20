@@ -420,3 +420,31 @@ input[aria-label="Find"]:focus-visible {
     gap: 8px !important;
   }
 }
+
+
+/*
+  The menu-bar panel.
+
+  A panel, not a window and not a system sheet: one hairline, a deep shadow so it reads as
+  sitting above whatever you were doing, and the record's own field inside it. It settles in
+  rather than appearing, because it arrived from somewhere.
+*/
+.tray-capture-root {
+  min-height: 100%;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+  padding: 4px 20px 20px;
+  box-sizing: border-box;
+}
+
+.tray-capture-panel {
+  width: 440px;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--rule-dim);
+  padding: 18px 20px 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
+  animation: chinotto-settle 0.2s ease-out;
+}

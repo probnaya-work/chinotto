@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import * as api from "../../lib/recordApi";
 import type { Fragment, HeldFragment } from "../../lib/recordApi";
 import { Record } from "./Record";
@@ -419,6 +420,21 @@ export function RecordApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [editing, focusId, input, anchor, keyboardInRecord, undo, bringBack, surface, changeTextScale]);
+
+  /**
+   * Something was captured from the menu bar while this window was elsewhere.
+   *
+   * The panel writes straight into the Record, so this is only about the window catching
+   * up — it is not part of the save, and a listener that never fires cannot lose anything.
+   */
+  useEffect(() => {
+    const unlisten = listen("chinotto-tray-entry-saved", () => {
+      void reload();
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [reload]);
 
   useEffect(() => {
     if (!notice) return;

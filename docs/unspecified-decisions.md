@@ -46,7 +46,7 @@ Four tiers became five: the old `d3` is the prototype's **D4**, and a real D3 (1
 | 0.5 | Which Return triggers survive "the reason is mandatory" | a because-clause per trigger; `interval` dropped | `returns.rs` | **agreed** (handoff-diff §1.3) |
 | 0.6 | Continuation offer: lookback and threshold | `3` days, score ≥ `2` with a shared run counting double | `continuation.ts` | ported from the prototype |
 | 0.7 | How many D0 rows are asked for their line membership | `40` | `RecordApp.tsx` | invented |
-| 0.8 | Provenance wording for a menu-bar capture | *undecided* — the prototype names menu bar as a source but its `sourceOf()` has no branch for it and renders `typed` | — | **open** |
+| 0.8 | Provenance wording for a menu-bar capture | `typed from the menu bar` in `⋯ where it came from`, `menu bar` as the source on a moment | `FragmentRow.tsx`, `FragmentFocus.tsx` | **decided (phase 9)** |
 | 0.9 | Standing in a month: which month a bare year lands you in | the last month that holds anything | `anchors.ts` | ported from the prototype |
 
 0.1 is the cost of the decision in handoff-diff §1.1. The surface is exactly what the prototype
@@ -56,8 +56,13 @@ numbers are tuned for "a chunk is always measured before it can be seen"; none i
 0.2 is a safety limit, not a design one: the record arranges *everything* by distance and
 standing re-measures from where you stand, so the surface cannot work from a recent page.
 
-0.8 is the one place the prototype's prose and its code disagree about behaviour rather than
-about numbers, and neither is obviously right. Left unwritten rather than guessed.
+0.8 was the one place the prototype's prose and its code disagreed about behaviour rather
+than about numbers: the README says "quick capture from the menu bar is a source here, and
+only here", while `sourceOf()` has no branch for it and renders `typed`. **Resolved in favour
+of the prose**, because the code's behaviour is indistinguishable from the branch simply not
+having been written — and because a source the product names and then does not show is the
+kind of gap that is never noticed again. The origin is recorded as `menubar` either way, so
+changing the wording later costs nothing.
 
 ### Newly open — settings (phase 6)
 
@@ -106,6 +111,20 @@ becomes a real three-way comparison; until then it is a two-way question.
 
 0.23 because a camera has to read it, and `fill` is a presentation attribute that would not
 resolve a CSS variable in any case.
+
+### Newly open — the menu-bar panel (phase 9)
+
+| # | Decision | Value | Where | Status |
+|---|---|---|---|---|
+| 0.24 | The popover window's size | `480 × 168` — the 440px panel plus room for its shadow | `tauri.conf.json` | invented |
+| 0.25 | What happens when a menu-bar save fails | the panel stays open, keeps the words, and says so | `TrayCapture.tsx` | invented |
+| 0.26 | How the main window learns about a menu-bar capture | the existing `chinotto-tray-entry-saved` event | same | inherited |
+
+0.25 is the one exception to "capture never waits". Everywhere else the field clears and the
+panel closes because the save cannot fail; here it can — the panel is a second webview and a
+command can genuinely be unavailable in a stale build. Closing anyway would destroy words
+somebody typed, so the panel holds them and says what happened. It is still not a dialog and
+still not blocking: `esc` closes it and loses only what the person chooses to lose.
 
 ---
 

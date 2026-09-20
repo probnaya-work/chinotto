@@ -27,8 +27,8 @@
       {
         "label": "capture-popover",
         "title": "",
-        "width": 380,
-        "height": 68,
+        "width": 480,
+        "height": 168,
         "resizable": false,
         "maximizable": false,
         "minimizable": false,

@@ -110,128 +110,22 @@ html {
   min-height: 100%;
 }
 
-html.tray-capture-page {
-  background: transparent !important;
-  height: 100%;
-  overflow: hidden;
-}
-
-html.tray-capture-page body {
-  background: transparent !important;
-  min-height: 100%;
-  overflow: hidden;
-}
-
+/*
+  The menu-bar panel's host window is transparent; the panel itself is the only drawn
+  thing. Everything else about it lives in tokens.css with the rest of the product.
+*/
+html.tray-capture-page,
+html.tray-capture-page body,
 html.tray-capture-page #root {
   background: transparent !important;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
 }
 
-/* Grain filter SVG is for the main app; avoid an extra compositor layer in the popover webview. */
+/* The grain filter belongs to the main window; no extra compositor layer in the popover. */
 html.tray-capture-page body > svg[aria-hidden="true"] {
   display: none;
-}
-
-.tray-capture-root {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-  width: 100%;
-  background: transparent !important;
-  overflow: hidden;
-}
-
-/* Menu bar quick capture: reads as Chinotto, not a system sheet */
-.tray-capture-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 0;
-  margin: 0;
-  border-radius: 18px;
-  overflow: hidden;
-  background: linear-gradient(
-    158deg,
-    rgb(22 22 38) 0%,
-    rgb(15 16 26) 45%,
-    rgb(10 11 18) 100%
-  );
-}
-
-.tray-capture-panel__row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px 12px 16px;
-  min-height: 0;
-}
-
-.tray-capture-field {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  width: auto;
-  min-height: 0 !important;
-  max-height: 2.5rem;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  font-size: 14px;
-  line-height: 1.35;
-  color: rgba(228, 228, 233, 0.9);
-  caret-color: rgba(168, 178, 228, 0.82);
-  transition: color 160ms ease-out;
-}
-
-button.tray-capture-open-main {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: rgba(168, 176, 210, 0.38);
-  cursor: pointer;
-  transition: color 160ms ease-out, background 160ms ease-out;
-}
-
-button.tray-capture-open-main:hover {
-  color: rgba(210, 216, 240, 0.62);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-button.tray-capture-open-main:focus-visible {
-  outline: 1px solid rgba(138, 148, 200, 0.35);
-  outline-offset: 2px;
-}
-
-.tray-capture-open-main__icon {
-  display: block;
-}
-
-.tray-capture-field::placeholder {
-  color: rgba(155, 160, 172, 0.42);
-}
-
-.tray-capture-field:focus,
-.tray-capture-field:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-.tray-capture-error {
-  margin: 0;
-  padding: 0 16px 10px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: rgba(232, 140, 140, 0.92);
 }
 
 body {
