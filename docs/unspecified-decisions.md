@@ -452,3 +452,65 @@ specifies; the buttons are for the verbs *around* it.
 the intro screen, the stream, the overlays — and went with the surfaces it styled, along
 with `tailwindcss`, `postcss`, `tailwind-merge` and `@fontsource/open-sauce-one`. The
 shipped CSS bundle is 7.8 kB.
+
+## 14. What a real record made visible (post-dogfood)
+
+The first run against a real database — 194 fragments, none newer than 22 days — surfaced
+four defects and one design gap. The defects are fixed here; the gap is §14.5, and it is
+not mine to close.
+
+| # | Decision | Chosen behaviour | Where | Kind |
+| - | -------- | ---------------- | ----- | ---- |
+| 14.1 | Every Tauri command runs off the main thread | `#[tauri::command(async)]` on all but two | `lib.rs`, `record_commands.rs` | correctness fix |
+| 14.2 | A failed model load is remembered for the run | one attempt, then meaning is simply absent | `embeddings.rs` | invented |
+| 14.3 | The model's weights live in the app's data directory | `<app data>/models`, not `./.fastembed_cache` | `embeddings.rs`, `lib.rs` | correctness fix |
+| 14.4 | Fixed-position chrome sits outside the animated column | `QuietLine` and the error line are siblings of it | `RecordApp.tsx` | correctness fix |
+| 14.5 | Distance is still measured from now, not from the record's own edge | unchanged — flagged, not decided | `tiers.ts` | **open** |
+
+**14.1.** `#[tauri::command]` without `(async)` runs on the app's main thread. All 106
+commands were plain, so reading the whole Record, selecting a Return, transcribing speech
+and running the meaning model each stopped the window from answering for as long as they
+took. The macro compiles a sync function marked `(async)` onto a thread pool, so the bodies
+are unchanged; only the thread they run on is. Two stay on the main thread on purpose:
+`set_app_icon`, which needs `MainThreadMarker` for AppKit, and `native_apple_sign_in`, which
+was already async and dispatches to the main thread itself.
+
+The cost is that two commands can now interleave, where before the main thread serialised
+them. Every `Db` method takes the connection lock for its own work, so no single statement
+can tear; what is no longer atomic is a command's *pair* of steps — a write and its mirror
+into `entries`, or a read of pending embeddings and the write that follows. Both are
+idempotent upserts keyed by id, so the worst case is repeated work, never a lost wording.
+Noted rather than hidden: a genuinely compound command added later needs its own
+transaction, not the main thread's accidental mutex.
+
+**14.2 / 14.3.** `fastembed` caches weights in `.fastembed_cache` *relative to the working
+directory*. A mac app opened from Finder has `/` for a working directory, which it cannot
+write — so the packaged app fetched ~90 MB, failed to store it, and started again on the
+next call. `embed_pending(24)` did that twenty-four times a minute, forever, on the main
+thread, and every click that opened a fragment did it once more through `find_by_meaning`.
+Every fragment stayed permanently pending: all 188 imported rows carry `body_hash = ''`, so
+the queue could never drain. The cache now lives beside the database, and the load is
+attempted once per run — a mac that cannot load the model has word-based traces, Find and
+the whole Record, and no guesses. That is a missing opinion, not a missing feature, and it
+is not worth stalling for twice.
+
+**14.4.** `position: fixed` resolves against the nearest ancestor with a transform, and the
+record column carries `chinotto-rise`. The quiet line — `● sync on`, `settings ⌘,`, the undo
+offer — was therefore pinned to the bottom of the *record* rather than the window, landing
+on top of the last rows and scrolling away with them. Nothing in its own styling said so;
+`offsetParent` did. It now renders outside the column, where `bottom: 22px` means what it
+says.
+
+**14.5 — the open one.** `levelForRecency` measures from the wall clock, exactly as the
+prototype does. On a record left alone for three weeks that puts *everything* at the floor:
+170 fragments at D4, 4 at D3, nothing at D0, D1 or D2 — a whole record at 12 px, `wdth` 76,
+one ellipsised line each. The prototype cannot show this, because its corpus is generated
+relative to its own `NOW` and so always has today's material in it; run its own `bandsFor`
+against a real stale record and it collapses the same way.
+
+This is faithful, and it is unusable. The implementation is not wrong and is left alone.
+What needs deciding is the semantics: whether "distance" is measured from now — in which
+case a record you have not written to recedes out of legibility, which may be the honest
+thing — or from the record's own edge, so the newest material you have is always near. That
+changes what the central metaphor of the product means, so it is not a decision this build
+gets to make on its own.
