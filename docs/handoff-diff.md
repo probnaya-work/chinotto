@@ -166,7 +166,7 @@ Correct as built; no work.
   indented past the gutter, and correctly withheld until the first read resolves.
 - **Correcting.** In place, `inset 0 -2px`, with the exact sentence *changes the wording only — the
   moment keeps its date and the earlier wording* and `⏎ save` / `esc cancel`.
-- **⋯ contents and order**: `correct · copy · copy link · where it came from`, `remove` pushed right.
+- **⋯ contents and order**: `correct · copy · copy link · where it came from`, `remove` set apart by a double gap (pushing it to the body column's edge landed it beside `continue · hold · ⋯`).
 - **Speaking bars.** Five 3px bars at 0.9 / 1.1 / 0.7 / 1.3 / 0.8s, held at full height under
   `prefers-reduced-motion` rather than frozen at `scaleY(0.4)`.
 - **Tauri wiring that the prototype assumes**: `⌘⇧K` is already the registered global capture

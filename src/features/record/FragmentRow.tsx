@@ -390,7 +390,11 @@ export function FragmentRow(props: FragmentRowProps) {
                   <Verb onClick={() => props.onCopyLink?.(fragment)}>copy link</Verb>
                 ) : null}
                 <Verb onClick={() => props.onToggleProvenance?.(fragment)}>where it came from</Verb>
-                <Verb quiet onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "auto" }}>remove</Verb>
+                {/*
+                  Set apart by a longer pause, not pushed to the column's edge: the edge
+                  lands it beside continue · hold · ⋯, where it reads as one of them.
+                */}
+                <Verb quiet onClick={() => props.onRemove?.(fragment)} style={{ marginLeft: "22px" }}>remove</Verb>
               </div>
             ) : null}
 
