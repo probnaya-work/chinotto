@@ -1539,9 +1539,13 @@ export async function deleteCloudAccount(): Promise<void> {
   }
   const db = getOrInitFirestore();
 
-  // The entries first: deleting the auth user revokes the credential that authorises this.
+  // The subcollections first: deleting the auth user revokes the credential that authorises this.
   const entries = await getDocs(collection(db, "users", user.uid, "entries"));
   for (const d of entries.docs) {
+    await deleteDoc(d.ref);
+  }
+  const userThemes = await getDocs(collection(db, "users", user.uid, "user_themes"));
+  for (const d of userThemes.docs) {
     await deleteDoc(d.ref);
   }
   await deleteDoc(doc(db, "users", user.uid)).catch(() => {
