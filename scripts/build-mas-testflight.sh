@@ -123,6 +123,12 @@ if [ "$MODE" = "package" ]; then
   else
     cp "$MAS_PROVISIONING_PROFILE" "$STAGED_APP/Contents/embedded.provisionprofile"
   fi
+  # `cp -X` is documented to skip extended attributes, but com.apple.quarantine survives it
+  # anyway when the source profile was itself downloaded (Gatekeeper reattaches it on copy
+  # regardless of -X). Apple's own validator rejects a quarantined embedded.provisionprofile
+  # (91109), and the blanket `xattr -cr "$STAGED_APP"` above already ran before this file
+  # existed, so strip it explicitly, once, right after the copy.
+  xattr -cr "$STAGED_APP/Contents/embedded.provisionprofile"
   export BUNDLE_ID
   python3 "$ROOT/scripts/mas-merge-signing-entitlements.py" \
     "$ENTITLEMENTS" \
