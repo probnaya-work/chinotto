@@ -34,6 +34,19 @@ npm run tauri build
 
 Packaged macOS releases are published via GitHub Releases (tag `v*`).
 
+The Mac App Store is a separate build variant. A credential-free, sandboxed archive for local
+inspection can be produced with:
+
+```bash
+npm run build:mas:prepare
+```
+
+The signed installer command is `npm run build:mas`; it requires the application certificate,
+installer certificate, and Mac App Store Connect provisioning profile described in
+`scripts/mas-testflight-env.example.sh`. Neither command uploads anything. See
+[`docs/mac-app-store-readiness.md`](mac-app-store-readiness.md) for the release gate and remaining
+App Store Connect work.
+
 When bumping app version for a release, update `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Info.plist` together (`CFBundleShortVersionString` and `CFBundleVersion`).
 
 ## Contributing

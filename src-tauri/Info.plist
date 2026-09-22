@@ -14,8 +14,10 @@
   <string>3.0.0</string>
   <key>CFBundleVersion</key>
   <string>3.0.0</string>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>So a recording you leave can also be read back as words. The audio stays on this mac either way.</string>
+  <string>So a recording you leave can also be read back as words. On-device recognition is used when it is available.</string>
   <!--
     The usage string is identity too: it is the one place macOS shows our icon at 64pt with
     our name, and it says why in the product's own voice rather than in a legal register.

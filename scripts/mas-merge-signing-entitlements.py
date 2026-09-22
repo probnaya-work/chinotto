@@ -9,6 +9,7 @@ import os
 import plistlib
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -32,6 +33,12 @@ def main() -> int:
         merged: dict = plistlib.load(f)
 
     prof = decode_provisioning_profile(prof_path)
+    expires = prof.get("ExpirationDate")
+    if isinstance(expires, datetime):
+        comparable = expires if expires.tzinfo else expires.replace(tzinfo=timezone.utc)
+        if comparable <= datetime.now(timezone.utc):
+            print(f"error: provisioning profile expired at {expires}", file=sys.stderr)
+            return 1
     team = prof.get("TeamIdentifier")
     if team is None:
         print("error: provisioning profile has no TeamIdentifier", file=sys.stderr)
@@ -60,6 +67,30 @@ def main() -> int:
             )
             return 1
         app_id = f"{team}.{bundle_id}"
+
+    bundle_id = os.environ.get("BUNDLE_ID", "").strip()
+    expected_app_id = f"{team}.{bundle_id}" if bundle_id else ""
+    if expected_app_id and app_id != expected_app_id:
+        print(
+            f"error: profile application-identifier is {app_id!r}, expected {expected_app_id!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not isinstance(ent, dict):
+        print("error: provisioning profile has no Entitlements dictionary", file=sys.stderr)
+        return 1
+    for key in ("com.apple.developer.applesignin",):
+        requested = merged.get(key)
+        if requested is not None and ent.get(key) != requested:
+            print(
+                f"error: profile does not authorize requested entitlement {key}",
+                file=sys.stderr,
+            )
+            return 1
+    if ent.get("get-task-allow") is True:
+        print("error: development provisioning profile is not valid for App Store distribution", file=sys.stderr)
+        return 1
 
     merged["com.apple.application-identifier"] = app_id
     merged["com.apple.developer.team-identifier"] = team
