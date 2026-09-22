@@ -71,6 +71,7 @@ import { getStoredIconVariantId, setStoredIconVariantId } from "@/lib/iconVarian
 import { setDesktopIcon } from "@/lib/setDesktopIcon";
 import { APP_VERSION } from "@/lib/appVersion";
 import { useAppUpdater } from "@/lib/appUpdater";
+import { IS_MAC_APP_STORE } from "@/lib/distribution";
 import "../../design/tokens.css";
 import { Verb } from "./Verb";
 
@@ -1025,7 +1026,10 @@ export function RecordApp() {
               void api
                 .exportRecord()
                 .then((name) => {
-                  setExportNote(`saved to downloads · ${name}`);
+                  if (!name) return;
+                  setExportNote(
+                    IS_MAC_APP_STORE ? `saved · ${name}` : `saved to downloads · ${name}`,
+                  );
                   setTimeout(() => setExportNote(""), 4000);
                 })
                 .catch(() => {
@@ -1048,7 +1052,9 @@ export function RecordApp() {
               setAnalyticsOn(on);
             }}
             updateLine={
-              updater.phase === "available" && updater.version
+              IS_MAC_APP_STORE
+                ? "updates arrive through the Mac App Store"
+                : updater.phase === "available" && updater.version
                 ? `${updater.version} is out.`
                 : updater.phase === "downloading"
                   ? "downloading…"
@@ -1057,7 +1063,9 @@ export function RecordApp() {
                     : "up to date · checked at launch"
             }
             updateVerb={
-              updater.phase === "available"
+              IS_MAC_APP_STORE
+                ? null
+                : updater.phase === "available"
                 ? "download"
                 : updater.phase === "ready"
                   ? "restart"

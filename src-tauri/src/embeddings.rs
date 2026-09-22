@@ -40,6 +40,16 @@ static MODEL: OnceCell<Result<Mutex<TextEmbedding>, String>> = OnceCell::new();
 fn model() -> Result<&'static Mutex<TextEmbedding>, String> {
     MODEL
         .get_or_init(|| {
+            #[cfg(feature = "mas")]
+            {
+                let dir = CACHE_DIR
+                    .get()
+                    .ok_or_else(|| "bundled meaning model directory is not configured".to_string())?;
+                let repository = dir.join("models--Qdrant--all-MiniLM-L6-v2-onnx");
+                if !repository.join("refs/main").is_file() {
+                    return Err("bundled meaning model is unavailable".to_string());
+                }
+            }
             let mut options = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
                 .with_show_download_progress(false);
             if let Some(dir) = CACHE_DIR.get() {

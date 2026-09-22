@@ -354,13 +354,29 @@ impl Db {
 
 /// What the mac calls itself, so the device list is the person's own name for it.
 fn mac_name() -> String {
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "direct-distribution"))]
     {
-        if let Ok(out) = std::process::Command::new("scutil").arg("--get").arg("ComputerName").output() {
+        if let Ok(out) = std::process::Command::new("scutil")
+            .arg("--get")
+            .arg("ComputerName")
+            .output()
+        {
             let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if !name.is_empty() {
                 return name;
             }
+        }
+    }
+    #[cfg(all(target_os = "macos", not(feature = "direct-distribution")))]
+    {
+        use objc2_foundation::NSProcessInfo;
+
+        // Use Foundation directly. Spawning `scutil` is fragile inside App Sandbox and
+        // gives the review build an unnecessary child-process dependency.
+        let name = NSProcessInfo::processInfo().hostName().to_string();
+        let name = name.trim_end_matches(".local").trim().to_string();
+        if !name.is_empty() {
+            return name;
         }
     }
     "this mac".to_string()

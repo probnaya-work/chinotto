@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { IS_MAC_APP_STORE } from "@/lib/distribution";
 
 export type AppUpdaterPhase =
   | "idle"
@@ -20,7 +21,7 @@ export function useAppUpdater() {
   const updateRef = useRef<Update | null>(null);
 
   useEffect(() => {
-    if (!import.meta.env.PROD) {
+    if (!import.meta.env.PROD || IS_MAC_APP_STORE) {
       return;
     }
 
@@ -54,6 +55,9 @@ export function useAppUpdater() {
   }, []);
 
   const download = useCallback(async () => {
+    if (IS_MAC_APP_STORE) {
+      return;
+    }
     const update = updateRef.current;
     if (!update) {
       return;
@@ -69,6 +73,9 @@ export function useAppUpdater() {
   }, []);
 
   const installAndRestart = useCallback(async () => {
+    if (IS_MAC_APP_STORE) {
+      return;
+    }
     const update = updateRef.current;
     if (!update) {
       return;

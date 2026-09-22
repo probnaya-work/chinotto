@@ -1,5 +1,90 @@
 {
+  "app": {
+    "macOSPrivateApi": false,
+    "security": {
+      "capabilities": [
+        {
+          "identifier": "mas-default",
+          "description": "Least-privilege IPC surface for the Mac App Store build.",
+          "windows": ["*"],
+          "permissions": [
+            "core:default",
+            "core:webview:allow-create-webview-window",
+            "core:webview:allow-set-webview-zoom",
+            "core:webview:allow-webview-close",
+            "core:window:allow-hide",
+            "core:window:allow-show",
+            "core:window:allow-set-focus",
+            "core:window:allow-unminimize",
+            "core:window:allow-set-icon",
+            "core:event:default",
+            "clipboard-manager:allow-write-text",
+            "dialog:allow-save",
+            "dialog:allow-message",
+            "dialog:allow-ask",
+            {
+              "identifier": "opener:allow-open-url",
+              "allow": [
+                { "url": "https://**" },
+                { "url": "http://**" }
+              ]
+            },
+            {
+              "identifier": "http:default",
+              "allow": [{ "url": "https://**" }]
+            }
+          ]
+        },
+        {
+          "identifier": "mas-desktop",
+          "platforms": ["macOS"],
+          "windows": ["main"],
+          "permissions": ["global-shortcut:default"]
+        }
+      ]
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Chinotto",
+        "width": 1200,
+        "height": 820,
+        "resizable": true,
+        "fullscreen": false,
+        "theme": "Dark",
+        "titleBarStyle": "Transparent",
+        "backgroundColor": "#0a0a0e",
+        "minWidth": 680,
+        "minHeight": 480
+      },
+      {
+        "label": "capture-popover",
+        "title": "",
+        "width": 480,
+        "height": 121,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": false,
+        "decorations": false,
+        "transparent": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "focus": true,
+        "url": "/#tray-capture",
+        "titleBarStyle": "Transparent",
+        "hiddenTitle": true,
+        "backgroundColor": "#0a0a0e"
+      }
+    ]
+  },
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "targets": ["app"],
+    "macOS": {
+      "entitlements": "Chinotto.mas.entitlements"
+    }
   }
 }

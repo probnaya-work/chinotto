@@ -2,9 +2,26 @@ mod db;
 mod record_commands;
 mod embeddings;
 mod keywords;
+#[cfg(feature = "direct-distribution")]
 mod oauth_dev_bridge;
+#[cfg(not(feature = "direct-distribution"))]
+mod oauth_dev_bridge {
+    /// Keep one invoke-handler shape across distributions while compiling the loopback
+    /// listener itself completely out of the App Store binary.
+    #[tauri::command]
+    pub fn start_oauth_dev_bridge_listener(
+        _app: tauri::AppHandle,
+        args: serde_json::Value,
+    ) -> Result<u16, String> {
+        let _ = args;
+        Err("browser-loopback sign-in is unavailable in this distribution".to_string())
+    }
+}
 mod recall;
 mod themes;
+
+#[cfg(all(feature = "direct-distribution", feature = "mas"))]
+compile_error!("direct-distribution and mas are mutually exclusive build features");
 
 #[cfg(test)]
 mod thought_trail;
@@ -1249,20 +1266,32 @@ fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
 /// because the recording is the material — the transcript is derived from it, and an export
 /// that kept only the derivation would be throwing the original away.
 #[tauri::command(async)]
-fn export_record(db: tauri::State<Db>, app: tauri::AppHandle) -> Result<String, String> {
+fn export_record(
+    db: tauri::State<Db>,
+    app: tauri::AppHandle,
+    path: Option<String>,
+) -> Result<String, String> {
     let mut fragments = db.recent_fragments(1_000_000).map_err(|e| e.to_string())?;
     // Oldest first: an export is read forwards.
     fragments.reverse();
     let ids: Vec<String> = fragments.iter().map(|f| f.id.clone()).collect();
     let (_encounters, voices) = db.materials_for(&ids).map_err(|e| e.to_string())?;
 
-    let downloads = app
-        .path()
-        .download_dir()
-        .map_err(|e| e.to_string())?;
-    fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;
-    let name = "chinotto-record.zip".to_string();
-    let dest = downloads.join(&name);
+    let dest = if let Some(path) = path {
+        PathBuf::from(path)
+    } else {
+        let downloads = app
+            .path()
+            .download_dir()
+            .map_err(|e| e.to_string())?;
+        fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;
+        downloads.join("chinotto-record.zip")
+    };
+    let name = dest
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("export destination has no file name")?
+        .to_string();
 
     let file = File::create(&dest).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
@@ -1333,10 +1362,16 @@ fn last_backup_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
 fn open_microphone_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        use objc2_app_kit::NSWorkspace;
+        use objc2_foundation::{NSString, NSURL};
+
+        let raw = NSString::from_str(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+        );
+        let url = NSURL::URLWithString(&raw).ok_or("invalid System Settings URL")?;
+        if !NSWorkspace::sharedWorkspace().openURL(&url) {
+            return Err("macOS did not open microphone settings".to_string());
+        }
     }
     Ok(())
 }
@@ -1766,6 +1801,8 @@ fn stop_voice_capture() -> Result<(), String> {
 
 #[tauri::command]
 fn set_app_icon(app: tauri::AppHandle, png_base64: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let _ = &app;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(png_base64.trim())
         .map_err(|e| e.to_string())?;
@@ -1901,14 +1938,18 @@ pub fn run() {
         .with_handler(voice_handler)
         .build();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+    #[cfg(feature = "direct-distribution")]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .plugin(plugin_builder)
+        .plugin(tauri_plugin_process::init());
+    let builder = builder.plugin(plugin_builder);
+
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -1929,7 +1970,16 @@ pub fn run() {
             // Before anything can ask for a guess. fastembed would otherwise cache the
             // weights beside the working directory, which for an app opened from Finder is
             // `/` — so they would be fetched, fail to store, and be fetched again forever.
-            embeddings::set_cache_dir(path.join("models"));
+            #[cfg(feature = "mas")]
+            let model_cache = app
+                .handle()
+                .path()
+                .resource_dir()
+                .map_err(|e| e.to_string())?
+                .join("models");
+            #[cfg(not(feature = "mas"))]
+            let model_cache = path.join("models");
+            embeddings::set_cache_dir(model_cache);
             #[cfg(target_os = "macos")]
             {
                 let (cmd_tx, cmd_rx) = mpsc::sync_channel(0);

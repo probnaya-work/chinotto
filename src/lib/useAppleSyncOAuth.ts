@@ -17,6 +17,7 @@ import {
   userMessageFromCredentialApplyError,
   userMessageOAuthTimeoutMainWindow,
 } from "@/lib/oauthDiagnostics";
+import { IS_MAC_APP_STORE } from "@/lib/distribution";
 
 function isTauriShell(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -85,6 +86,7 @@ const OAUTH_TIMEOUT_MS = 4 * 60 * 1000;
 
 type OauthSuccessPayload = { nonce: string; credential: BridgedOAuthCredentialJson };
 type OauthErrorPayload = { nonce: string; message: string };
+type NativeAppleSignInResult = { idToken: string; rawNonce: string };
 
 type UseAppleSyncOAuthOptions = {
   /** When false, auth subscription is inactive (saves work when modal is closed). */
@@ -127,6 +129,26 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
 
     inflightCleanupRef.current?.();
     inflightCleanupRef.current = null;
+
+    if (IS_MAC_APP_STORE) {
+      setBusy(true);
+      try {
+        const native = await invoke<NativeAppleSignInResult>("native_apple_sign_in");
+        await signInWithAppleCredential({
+          providerId: "apple.com",
+          signInMethod: "apple.com",
+          idToken: native.idToken,
+          nonce: native.rawNonce,
+        });
+        track({ event: "sync_oauth_completed" });
+      } catch (e) {
+        track({ event: "sync_oauth_failed", reason: "credential" });
+        setError(userMessageFromCredentialApplyError(e));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
 
     const nonce = crypto.randomUUID();
     try {

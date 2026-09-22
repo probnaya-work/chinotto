@@ -1,6 +1,3 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "app": {
-    "macOSPrivateApi": true
-  }
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json"
 }

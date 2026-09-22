@@ -7,9 +7,11 @@
  */
 
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import * as dev from "./recordDevData";
 import { isFirebaseSyncConfigured } from "./firebaseConfig";
 import { pushEntryUpsertToFirestore } from "./desktopFirestoreSync";
+import { IS_MAC_APP_STORE } from "./distribution";
 
 /**
  * Outside the Tauri shell there is no database, so in a dev browser the calls are served
@@ -547,13 +549,22 @@ export function recordSpan(): Promise<[string, string] | null> {
 // ---- this mac ---------------------------------------------------------------------------
 
 /**
- * The whole Record as plain text and audio, zipped into Downloads. Returns the file name.
+ * The whole Record as plain text and audio. Direct builds preserve the existing Downloads
+ * destination; sandboxed App Store builds ask for a destination so macOS grants access.
  *
  * Plain text on purpose: an export exists so the record can outlive this program, and a
  * format only this program reads is not an escape hatch.
  */
-export function exportRecord(): Promise<string> {
-  return invoke<string>("export_record");
+export async function exportRecord(): Promise<string | null> {
+  if (!IS_MAC_APP_STORE) {
+    return invoke<string>("export_record", { path: null });
+  }
+  const path = await save({
+    defaultPath: "chinotto-record.zip",
+    filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+  });
+  if (!path) return null;
+  return invoke<string>("export_record", { path });
 }
 
 /** When the last automatic backup was taken, or null if there has never been one. */

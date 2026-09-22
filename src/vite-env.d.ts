@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_APP_VERSION: string;
+  readonly VITE_DISTRIBUTION_CHANNEL?: "direct" | "mas";
   /** Optional; same Firebase Web config as Chinotto mobile. See docs/internal/sync.md */
   readonly VITE_FIREBASE_API_KEY?: string;
   readonly VITE_FIREBASE_PROJECT_ID?: string;

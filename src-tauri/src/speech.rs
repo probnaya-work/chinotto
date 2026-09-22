@@ -212,6 +212,24 @@ impl SpeechManager {
             }
         };
 
+        // App Store builds never send a recording to Apple's speech service. If this Mac
+        // cannot transcribe on-device, the recording remains intact and simply has no
+        // derived transcript. The direct build preserves its existing fallback behavior.
+        #[cfg(feature = "mas")]
+        let recognizer = {
+            let mut recognizer = recognizer;
+            if recognizer
+                .as_ref()
+                .is_some_and(|r| !unsafe { r.supportsOnDeviceRecognition() })
+            {
+                transcript_failure = Some(
+                    "on-device speech recognition is not available on this mac".to_string(),
+                );
+                recognizer = None;
+            }
+            recognizer
+        };
+
         let request = unsafe {
             SFSpeechAudioBufferRecognitionRequest::init(
                 SFSpeechAudioBufferRecognitionRequest::alloc(),

@@ -14,6 +14,16 @@ rust-version = "1.77.2"
 name = "chinotto_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["direct-distribution"]
+# The direct build keeps the transparent tray popover and Tauri relaunch support.
+# Neither capability is compiled into the Mac App Store build.
+direct-distribution = [
+    "tauri/macos-private-api",
+    "tauri/process-relaunch-dangerous-allow-symlink-macos",
+]
+mas = []
+
 [build-dependencies]
 tauri-build = { version = "2.5.6", features = [] }
 
@@ -22,11 +32,8 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [
-    "macos-private-api",
     "image-png",
     "tray-icon",
-    # macOS: default relaunch rejects paths whose ancestors include symlinks; restart then exits without spawning (in-app updater looks “broken”). Desktop/DMG/iCloud paths often qualify.
-    "process-relaunch-dangerous-allow-symlink-macos",
 ] }
 tauri-plugin-log = "2"
 rusqlite = { version = "0.38", features = ["bundled"] }

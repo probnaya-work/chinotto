@@ -52,6 +52,7 @@
   },
   "bundle": {
     "active": true,
+    "category": "Productivity",
     "publisher": "PROBNAYA",
     "copyright": "© 2026–present Aleksandr Malinin",
     "createUpdaterArtifacts": true,
@@ -62,6 +63,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "PrivacyInfo.xcprivacy",
+      "resources/THIRD-PARTY-NOTICES.txt"
     ],
     "macOS": {
       "bundleVersion": "3.0.0",

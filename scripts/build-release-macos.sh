@@ -23,4 +23,4 @@ if [ -n "$APPLE_API_KEY_PATH" ] && [ ! -f "$APPLE_API_KEY_PATH" ]; then
   exit 1
 fi
 
-npm run build && CI=false npx tauri build
+npm run build && CI=false ./scripts/tauri-direct.sh build
