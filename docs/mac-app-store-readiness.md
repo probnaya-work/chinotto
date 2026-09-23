@@ -75,8 +75,10 @@ uploaded.
   `~/Library/Containers/app.chinotto`; an existing direct installation's database is not imported
   automatically. The current safe path is export from the direct build, but Chinotto does not yet
   import that archive.
-- Review the sync entitlement/business model against App Review Guideline 3.1.3(b). The desktop app
-  consumes access established by the shared mobile service but currently has no Mac purchase flow.
+- Sync entitlement model confirmed: the desktop app enables sync from Sign in with Apple alone and
+  has no purchase flow and no dependency on any mobile-established entitlement (Guideline 3.1.3(b)
+  does not apply — Mac never gates a feature behind an out-of-app purchase). Core capture/search and
+  optional sync are both free on Mac; Chinotto Pro is an iOS-only purchase that unlocks sync on iOS.
 - Reconcile App Store Connect privacy answers with the manifest: optional linked email/user ID,
   linked install/device information, linked user content for sync/sharing, and unlinked opt-in product
   interaction analytics. Confirm Firebase, hosting, Umami, and Apple speech-processing practices.

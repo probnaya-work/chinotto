@@ -44,21 +44,9 @@ export type AnalyticsEvent =
       text_length: number;
     }
   | { event: "sync_apple_continue_clicked" }
-  | { event: "sync_gate_bypass_clicked" }
-  | { event: "sync_app_store_link_copy_clicked" }
   | { event: "sync_disconnect_clicked" }
   | { event: "sync_oauth_completed" }
   | { event: "sync_oauth_failed"; reason: "credential" | "oauth_bridge" | "timeout" | "window" | "start" }
-  | { event: "sync_paywall_shown" }
-  | { event: "sync_plus_continue_clicked"; package_kind: "monthly" | "yearly" | "lifetime" }
-  | {
-      event: "sync_purchase_outcome";
-      outcome: "purchased" | "already_has_sync_access" | "cancelled" | "unavailable" | "failed";
-      failure_kind?: "user_cancelled" | "network" | "unknown";
-    }
-  | { event: "sync_restore_tapped" }
-  | { event: "sync_restore_outcome"; outcome: "entitlement_active" | "no_entitlement" | "error" }
-  | { event: "sync_apple_mobile_sign_in_outcome"; outcome: "success" | "user_cancelled" | "error" }
   | { event: "sync_stop_sync_clicked" };
 
 type QueuedEvent = AnalyticsEvent & { ts: string };
@@ -148,10 +136,6 @@ function eventToData(payload: QueuedEvent): Record<string, string | number> {
   if ("age_days" in payload) data.age_days = payload.age_days;
   if ("days_ago" in payload) data.days_ago = payload.days_ago;
   if ("surface" in payload && payload.surface !== undefined) data.surface = payload.surface;
-  if ("package_kind" in payload) data.package_kind = payload.package_kind;
-  if ("outcome" in payload) data.outcome = payload.outcome;
-  if ("failure_kind" in payload && payload.failure_kind !== undefined)
-    data.failure_kind = payload.failure_kind;
   if ("reason" in payload) data.reason = payload.reason;
   if ("source" in payload) data.source = payload.source;
   return data;

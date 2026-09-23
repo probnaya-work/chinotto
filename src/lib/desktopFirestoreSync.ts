@@ -13,7 +13,6 @@ import {
   deleteDoc,
   deleteField,
   doc,
-  enableNetwork,
   getDocFromServer,
   getDocs,
   initializeFirestore,
@@ -29,7 +28,6 @@ import {
   where,
   type CollectionReference,
   type DocumentData,
-  type DocumentSnapshot,
   type Firestore,
   type Query,
   type QueryDocumentSnapshot,
@@ -91,17 +89,6 @@ const TOMBSTONE_QUERY_LIMIT = 1000;
  * Fewer watch streams on that path mitigates Firestore INTERNAL ASSERTION b815/ca9 in embedded WebKit.
  */
 const SYNC_MODAL_GATE_POLL_MS = 2500;
-/** Re-read `users/{uid}` while waiting for mobile to set `active: true` (stuck snapshot workaround). */
-const SYNC_ACCESS_WAITING_POLL_MS = 800;
-/** Extra server reads after subscribe (ms) — mobile may write `active` right after the first read. */
-const SYNC_ACCESS_WAITING_STAGGER_MS = [250, 550, 1100] as const;
-/** After `active` is true, still re-read occasionally so **turning sync off on mobile** reaches desktop if `onSnapshot` stalls. */
-const SYNC_ACCESS_WHILE_ACTIVE_POLL_MS = 30000;
-/** After focus/visibility: short burst of server reads while still waiting for `active: true` (timers are throttled in background WebViews). */
-const SYNC_ACCESS_FOCUS_BURST_MS = 1000;
-const SYNC_ACCESS_FOCUS_BURST_MAX = 15;
-/** After we have shown sync active, delay reporting inactive so focus/reattach glitches do not flip the header or modal. */
-const SYNC_ACCESS_EMIT_FALSE_DEBOUNCE_MS = 450;
 
 const FIRESTORE_RULES_SYNC_MODAL_HINT =
   "Firestore Security Rules must allow: (1) anyone may read sync_desktop_sessions/{sessionId}; " +
@@ -124,15 +111,6 @@ export function isFirestoreSessionAccessLostError(e: unknown): boolean {
   }
   return false;
 }
-
-/** Mobile-written field on `users/{uid}`; keep in sync with chinotto-mobile `firestoreSyncAccessMirror`. */
-export function isChinottoSyncAccessActiveInUserDoc(data: DocumentData | undefined): boolean {
-  return data?.chinottoSyncAccess?.active === true;
-}
-
-/**
- * Enable sync modal / header: **only** `users/{uid}.chinottoSyncAccess.active === true` (mobile mirror).
- */
 
 /**
  * Doc ids from the latest tombstone-query snapshot. Firestore already filtered `deletedAt != null`;
@@ -758,7 +736,6 @@ export function startDesktopFirestoreIngest(onIngested: () => void): () => void 
 
   const unsubAuth = onAuthStateChanged(auth, (user) => {
     detachFirestoreListeners();
-    detachIngestOnExternalSessionLoss = null;
     if (!user || user.isAnonymous) {
       return;
     }
@@ -777,10 +754,8 @@ export function startDesktopFirestoreIngest(onIngested: () => void): () => void 
 
     const handleIngestSessionAccessLost = () => {
       detachFirestoreListeners();
-      detachIngestOnExternalSessionLoss = null;
       void invalidateFirebaseSyncAfterRemoteSessionLost("ingest");
     };
-    detachIngestOnExternalSessionLoss = detachFirestoreListeners;
 
     void (async () => {
       await flushSyncTombstoneOutbox();
@@ -1037,12 +1012,6 @@ export async function signOutFirebaseSync(): Promise<void> {
 let firebaseSyncInvalidation: Promise<void> | null = null;
 
 /**
- * While Firestore ingest listeners are attached, `subscribeChinottoUserSyncAccess` can detach them when
- * the cloud session is invalid (e.g. account deleted on mobile).
- */
-let detachIngestOnExternalSessionLoss: (() => void) | null = null;
-
-/**
  * Clears the local tombstone queue and signs out of Firebase so the app stays local-only without
  * tight retries on a dead `users/{uid}` path (account removed on another client, revoked token, etc.).
  */
@@ -1093,7 +1062,7 @@ export function subscribeSyncAuth(onChange: (user: User | null) => void): () => 
 /**
  * Desktop sync modal: poll for mobile unlock on this session (`?ds=` on the QR URL).
  * Uses **getDocFromServer** polling (not cache) instead of onSnapshot to avoid extra watch streams
- * (see SYNC_MODAL_GATE_POLL_MS) and stale `chinottoSyncAccess` after mobile writes.
+ * and stale reads after mobile writes (see SYNC_MODAL_GATE_POLL_MS).
  * Rules must allow unauthenticated **read** on `sync_desktop_sessions/{sessionId}`.
  */
 export function subscribeDesktopSyncGateSession(
@@ -1155,359 +1124,6 @@ export function subscribeDesktopSyncGateSession(
     return () => {};
   }
 }
-
-/**
- * After Sign in with Apple: mobile mirrors paid sync access on `users/{uid}`.
- * Uses **`onSnapshot`** for push updates, plus **`getDocFromServer`** on focus/visibility and on a
- * timer (fast while waiting for access, slower while `active` so **revokes** from mobile still land
- * if the listener stalls) — embedded WebKit can stop delivering snapshot updates until restart.
- * On **focus / visibility**, nudges the client with `enableNetwork`, **re-attaches** the snapshot
- * listener, and (while still waiting for `active`) runs a short **burst** of server reads — background
- * tabs throttle `setInterval`, so polling alone may not run until the app is restarted.
- * Transitions to **inactive** are debounced briefly once the UI has shown active, so reattach/network
- * hiccups after restore from tray do not flash “sync off”.
- */
-export function subscribeChinottoUserSyncAccess(
-  uid: string,
-  onActive: (active: boolean) => void,
-  options?: { onPermissionDenied?: () => void; onReadSucceeded?: () => void }
-): () => void {
-  if (!isFirebaseSyncConfigured()) {
-    onActive(false);
-    return () => {};
-  }
-  if (!uid?.trim()) {
-    onActive(false);
-    return () => {};
-  }
-  try {
-    const db = getOrInitFirestore();
-    const ref = doc(db, "users", uid);
-    let stopped = false;
-    let snapshotUnsub: (() => void) | null = null;
-    let loggedPermissionDenied = false;
-    let lastActive = false;
-    let lastEmittedToUi: boolean | null = null;
-    let emitFalsePending: ReturnType<typeof setTimeout> | null = null;
-
-    const clearEmitFalsePending = () => {
-      if (emitFalsePending != null) {
-        clearTimeout(emitFalsePending);
-        emitFalsePending = null;
-      }
-    };
-
-    const emitActiveToUi = (active: boolean) => {
-      if (stopped) {
-        return;
-      }
-      if (active) {
-        clearEmitFalsePending();
-        if (lastEmittedToUi !== true) {
-          lastEmittedToUi = true;
-          onActive(true);
-        }
-        return;
-      }
-      if (lastEmittedToUi !== true) {
-        if (lastEmittedToUi !== false) {
-          lastEmittedToUi = false;
-          onActive(false);
-        }
-        return;
-      }
-      clearEmitFalsePending();
-      emitFalsePending = setTimeout(() => {
-        emitFalsePending = null;
-        if (stopped) {
-          return;
-        }
-        lastEmittedToUi = false;
-        onActive(false);
-      }, SYNC_ACCESS_EMIT_FALSE_DEBOUNCE_MS);
-    };
-
-    let serverPoll: ReturnType<typeof setInterval> | null = null;
-    const clearServerPoll = () => {
-      if (serverPoll != null) {
-        clearInterval(serverPoll);
-        serverPoll = null;
-      }
-    };
-
-    const scheduleServerPoll = () => {
-      clearServerPoll();
-      if (stopped) {
-        return;
-      }
-      const ms = lastActive ? SYNC_ACCESS_WHILE_ACTIVE_POLL_MS : SYNC_ACCESS_WAITING_POLL_MS;
-      serverPoll = setInterval(() => {
-        void refetchFromServer();
-      }, ms);
-    };
-
-    const applySnap = (snap: DocumentSnapshot) => {
-      if (stopped) {
-        return;
-      }
-      const prev = lastActive;
-      lastActive = isChinottoSyncAccessActiveInUserDoc(snap.data());
-      options?.onReadSucceeded?.();
-      emitActiveToUi(lastActive);
-      if (prev !== lastActive) {
-        scheduleServerPoll();
-      }
-    };
-
-    const applyError = (e: unknown) => {
-      if (isFirestoreSessionAccessLostError(e)) {
-        if (!loggedPermissionDenied) {
-          loggedPermissionDenied = true;
-          if (isFirestorePermissionDenied(e)) {
-            console.warn(
-              `[chinotto sync] user sync access: permission denied — ${FIRESTORE_RULES_SYNC_MODAL_HINT}`,
-              e
-            );
-          } else {
-            console.warn("[chinotto sync] user sync access: session no longer valid for Firestore.", e);
-          }
-        }
-        if (!stopped) {
-          stopped = true;
-          clearEmitFalsePending();
-          clearServerPoll();
-          if (snapshotUnsub != null) {
-            snapshotUnsub();
-            snapshotUnsub = null;
-          }
-          detachIngestOnExternalSessionLoss?.();
-          detachIngestOnExternalSessionLoss = null;
-          lastActive = false;
-          emitActiveToUi(false);
-          void invalidateFirebaseSyncAfterRemoteSessionLost("userSyncProfile");
-        }
-        return;
-      }
-      if (isFirestorePermissionDenied(e)) {
-        if (!loggedPermissionDenied) {
-          loggedPermissionDenied = true;
-          console.warn(
-            `[chinotto sync] user sync access: permission denied — ${FIRESTORE_RULES_SYNC_MODAL_HINT}`,
-            e
-          );
-          options?.onPermissionDenied?.();
-        }
-      } else {
-        console.error("[chinotto sync] user sync access listener error", e);
-      }
-      if (!stopped) {
-        const prev = lastActive;
-        lastActive = false;
-        emitActiveToUi(false);
-        if (prev !== lastActive) {
-          scheduleServerPoll();
-        }
-      }
-    };
-
-    const refetchFromServer = async () => {
-      if (stopped) {
-        return;
-      }
-      try {
-        const snap = await getDocFromServer(ref);
-        if (stopped) {
-          return;
-        }
-        applySnap(snap);
-      } catch (e) {
-        if (isFirestoreSessionAccessLostError(e)) {
-          applyError(e);
-        } else {
-          console.warn("[chinotto sync] user sync access: getDocFromServer refetch failed", e);
-        }
-      }
-    };
-
-    const attachSnapshotListener = () => {
-      if (snapshotUnsub != null) {
-        snapshotUnsub();
-        snapshotUnsub = null;
-      }
-      if (stopped) {
-        return;
-      }
-      snapshotUnsub = onSnapshot(ref, applySnap, applyError);
-    };
-
-    attachSnapshotListener();
-
-    scheduleServerPoll();
-    void refetchFromServer();
-
-    const staggerIds: number[] = [];
-    for (const ms of SYNC_ACCESS_WAITING_STAGGER_MS) {
-      staggerIds.push(
-        window.setTimeout(() => {
-          if (stopped || lastActive) {
-            return;
-          }
-          void refetchFromServer();
-        }, ms)
-      );
-    }
-
-    let focusDebounce: ReturnType<typeof setTimeout> | null = null;
-    let focusBurst: ReturnType<typeof setInterval> | null = null;
-    const clearFocusBurst = () => {
-      if (focusBurst != null) {
-        clearInterval(focusBurst);
-        focusBurst = null;
-      }
-    };
-
-    const scheduleFocusRecover = () => {
-      if (typeof window === "undefined") {
-        return;
-      }
-      if (focusDebounce != null) {
-        clearTimeout(focusDebounce);
-      }
-      focusDebounce = setTimeout(() => {
-        focusDebounce = null;
-        void (async () => {
-          try {
-            await enableNetwork(db);
-          } catch {
-            /* ignore — best-effort reconnect */
-          }
-          attachSnapshotListener();
-          await refetchFromServer();
-          clearFocusBurst();
-          let burstCount = 0;
-          focusBurst = setInterval(() => {
-            if (stopped || lastActive) {
-              clearFocusBurst();
-              return;
-            }
-            burstCount += 1;
-            if (burstCount > SYNC_ACCESS_FOCUS_BURST_MAX) {
-              clearFocusBurst();
-              return;
-            }
-            void refetchFromServer();
-          }, SYNC_ACCESS_FOCUS_BURST_MS);
-        })();
-      }, 250);
-    };
-
-    const onVisibility = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        scheduleFocusRecover();
-      }
-    };
-
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) {
-        scheduleFocusRecover();
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("focus", scheduleFocusRecover);
-      window.addEventListener("online", scheduleFocusRecover);
-      window.addEventListener("pageshow", onPageShow);
-    }
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", onVisibility);
-    }
-
-    let tauriFocusUnlisten: (() => void) | null = null;
-    void (async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const unlisten = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-          if (stopped) {
-            return;
-          }
-          if (focused) {
-            scheduleFocusRecover();
-          }
-        });
-        if (stopped) {
-          unlisten();
-          return;
-        }
-        tauriFocusUnlisten = unlisten;
-      } catch {
-        /* Web build, tests, or non-Tauri — DOM focus/visibility only */
-      }
-    })();
-
-    return () => {
-      stopped = true;
-      clearEmitFalsePending();
-      for (const id of staggerIds) {
-        clearTimeout(id);
-      }
-      clearServerPoll();
-      clearFocusBurst();
-      if (focusDebounce != null) {
-        clearTimeout(focusDebounce);
-      }
-      if (typeof window !== "undefined") {
-        window.removeEventListener("focus", scheduleFocusRecover);
-        window.removeEventListener("online", scheduleFocusRecover);
-        window.removeEventListener("pageshow", onPageShow);
-      }
-      if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", onVisibility);
-      }
-      if (tauriFocusUnlisten != null) {
-        tauriFocusUnlisten();
-        tauriFocusUnlisten = null;
-      }
-      if (snapshotUnsub != null) {
-        snapshotUnsub();
-        snapshotUnsub = null;
-      }
-    };
-  } catch (e) {
-    console.error("[chinotto sync] user sync access listener setup failed", e);
-    onActive(false);
-    return () => {};
-  }
-}
-
-/** One server read (e.g. diagnostics); modal uses {@link subscribeChinottoUserSyncAccess} for live updates. */
-export async function fetchChinottoUserSyncAccessActive(uid: string): Promise<{
-  active: boolean;
-  permissionDenied: boolean;
-}> {
-  if (!isFirebaseSyncConfigured() || !uid?.trim()) {
-    return { active: false, permissionDenied: false };
-  }
-  try {
-    const db = getOrInitFirestore();
-    const ref = doc(db, "users", uid);
-    const snap = await getDocFromServer(ref);
-    return {
-      active: isChinottoSyncAccessActiveInUserDoc(snap.data()),
-      permissionDenied: false,
-    };
-  } catch (e) {
-    if (isFirestorePermissionDenied(e)) {
-      console.warn(
-        `[chinotto sync] fetch user sync access: permission denied — ${FIRESTORE_RULES_SYNC_MODAL_HINT}`,
-        e
-      );
-      return { active: false, permissionDenied: true };
-    }
-    console.error("[chinotto sync] fetch user sync access failed", e);
-    return { active: false, permissionDenied: false };
-  }
-}
-
 
 /** Whether this mac is actually signed in, as opposed to merely configured for sync. */
 export function isSignedInForSync(): boolean {

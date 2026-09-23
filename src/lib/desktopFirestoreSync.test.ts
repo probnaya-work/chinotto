@@ -54,9 +54,10 @@ vi.mock("firebase/firestore", async (importOriginal) => {
   };
 });
 
+import * as fs from "fs";
+import * as path from "path";
 import {
   deleteCloudAccount,
-  isChinottoSyncAccessActiveInUserDoc,
   isFirestoreSessionAccessLostError,
   normalizeFirestoreCreatedAtForIngest,
 } from "./desktopFirestoreSync";
@@ -110,13 +111,17 @@ describe("isFirestoreSessionAccessLostError", () => {
   });
 });
 
-describe("isChinottoSyncAccessActiveInUserDoc", () => {
-  it("is true only when chinottoSyncAccess.active is strictly true", () => {
-    expect(isChinottoSyncAccessActiveInUserDoc(undefined)).toBe(false);
-    expect(isChinottoSyncAccessActiveInUserDoc({})).toBe(false);
-    expect(isChinottoSyncAccessActiveInUserDoc({ chinottoSyncAccess: {} })).toBe(false);
-    expect(isChinottoSyncAccessActiveInUserDoc({ chinottoSyncAccess: { active: false } })).toBe(false);
-    expect(isChinottoSyncAccessActiveInUserDoc({ chinottoSyncAccess: { active: true } })).toBe(true);
+describe("Mac sync has no purchase dependency", () => {
+  // Mac sync is enabled by Sign in with Apple alone. There is no Mac IAP, and sync must never
+  // read or depend on a mobile-written entitlement flag (App Review Guideline 3.1.3(b)).
+  const src = fs.readFileSync(path.join(__dirname, "desktopFirestoreSync.ts"), "utf8");
+
+  it("does not reference the retired chinottoSyncAccess entitlement flag", () => {
+    expect(src).not.toMatch(/chinottoSyncAccess/);
+  });
+
+  it("has no StoreKit/IAP/purchase code", () => {
+    expect(src).not.toMatch(/StoreKit|\bIAP\b|purchase/i);
   });
 });
 

@@ -375,10 +375,6 @@ export function Settings(props: SettingsProps) {
                     and on your phone stays exactly as it is — they just stop meeting. apple
                     will ask you to sign in once more.
                   </span>
-                  <span style={{ color: "var(--meta)" }}>
-                    a subscription is apple’s: cancel it in the app store first if you don’t
-                    want it to renew.
-                  </span>
                   <span>
                     <Verb
                       quiet
