@@ -34,6 +34,7 @@ use objc2_foundation::NSError;
 use objc2_speech::{
     SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionRequest, SFSpeechRecognitionResult,
     SFSpeechRecognitionTask, SFSpeechRecognizer, SFSpeechRecognizerAuthorizationStatus,
+    SFSpeechURLRecognitionRequest,
 };
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,8 +42,18 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+pub use crate::transcript_retry::Reading;
+
 const AUTHORIZED_STATUS: isize = 3;
 const NOT_DETERMINED_STATUS: isize = 0;
+
+/// True while a capture is running on the speech thread. Read-backs of retained recordings
+/// stand aside for it.
+static CAPTURING: AtomicBool = AtomicBool::new(false);
+
+pub fn is_capturing() -> bool {
+    CAPTURING.load(Ordering::SeqCst)
+}
 
 /// Set when the hold is released. `max_ms` is a ceiling, not the length of the recording.
 pub static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -129,6 +140,27 @@ fn on_device_task(
         return None;
     }
     Some(unsafe { recognizer.recognitionTaskWithRequest_resultHandler(request, handler) })
+}
+
+/// Whether this Mac could read speech back as words locally right now. Asks nothing.
+///
+/// `available` · `unavailable` · `denied` · `not_determined`.
+pub fn local_recognition_status() -> &'static str {
+    let status = unsafe { SFSpeechRecognizer::authorizationStatus() };
+    if status.0 == NOT_DETERMINED_STATUS {
+        return "not_determined";
+    }
+    if status.0 != AUTHORIZED_STATUS {
+        return "denied";
+    }
+    let Some(recognizer) = (unsafe { SFSpeechRecognizer::init(SFSpeechRecognizer::alloc()) }) else {
+        return "unavailable";
+    };
+    if unsafe { recognizer.supportsOnDeviceRecognition() && recognizer.isAvailable() } {
+        "available"
+    } else {
+        "unavailable"
+    }
 }
 
 /// Long-lived speech pipeline: authorization and recognizer created once.
@@ -531,6 +563,71 @@ impl SpeechManager {
     }
 }
 
+/// Reads a retained recording back as words — on this Mac only, and without asking for
+/// anything. Not on the speech thread: a capture must never wait behind a read-back, so the
+/// caller checks `is_capturing` between recordings instead.
+pub fn transcribe_file(audio_path: &std::path::Path) -> Reading {
+    if !audio_path.is_file() {
+        return Reading::Missing;
+    }
+    match local_recognition_status() {
+        "available" => {}
+        "unavailable" => return Reading::Unavailable,
+        _ => return Reading::Denied,
+    }
+    let Some(recognizer) = (unsafe { SFSpeechRecognizer::init(SFSpeechRecognizer::alloc()) })
+    else {
+        return Reading::Unavailable;
+    };
+
+    let url = NSURL::fileURLWithPath(&objc2_foundation::NSString::from_str(
+        &audio_path.to_string_lossy(),
+    ));
+    let request = unsafe {
+        SFSpeechURLRecognitionRequest::initWithURL(SFSpeechURLRecognitionRequest::alloc(), &url)
+    };
+    unsafe { request.setShouldReportPartialResults(false) };
+
+    let (tx, rx) = mpsc::sync_channel::<Reading>(1);
+    let handler = RcBlock::new(move |result: *mut SFSpeechRecognitionResult, error: *mut NSError| {
+        if !result.is_null() {
+            let result = unsafe { &*result };
+            if unsafe { result.isFinal() } {
+                let text = unsafe { result.bestTranscription().formattedString() }.to_string();
+                let text = text.trim().to_string();
+                let _ = tx.try_send(if text.is_empty() {
+                    Reading::NoSpeech
+                } else {
+                    Reading::Words(text)
+                });
+                return;
+            }
+        }
+        if !error.is_null() {
+            let error = unsafe { &*error };
+            // 1110: no speech detected. An answer, not a failure.
+            let no_speech = error.domain().to_string() == "kAFAssistantErrorDomain"
+                && error.code() == 1110;
+            let _ = tx.try_send(if no_speech {
+                Reading::NoSpeech
+            } else {
+                Reading::Failed
+            });
+        }
+    });
+
+    let Some(task) = on_device_task(&recognizer, &request, &handler) else {
+        return Reading::Unavailable;
+    };
+    // A recogniser that never answers must not hold the speech thread.
+    let outcome = rx
+        .recv_timeout(Duration::from_secs(120))
+        .unwrap_or(Reading::Failed);
+    unsafe { task.cancel() };
+    drop(handler);
+    outcome
+}
+
 /// Why a recording has no words when this Mac has no local recogniser for the language.
 pub const UNAVAILABLE_ON_DEVICE: &str =
     "this mac can't turn speech into words on the device for this language · the recording is kept";
@@ -580,7 +677,9 @@ pub fn run_speech_loop(rx: mpsc::Receiver<SpeechCommand>) {
     let manager = SpeechManager::new();
     eprintln!("[Speech] Speech loop started (warm-up deferred to first use)");
     while let Ok((max_ms, audio_path, result_tx, event_tx)) = rx.recv() {
+        CAPTURING.store(true, Ordering::SeqCst);
         let result = manager.run_capture(max_ms, &audio_path, event_tx);
+        CAPTURING.store(false, Ordering::SeqCst);
         let _ = result_tx.send(result);
     }
 }

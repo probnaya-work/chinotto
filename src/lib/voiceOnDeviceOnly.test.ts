@@ -61,7 +61,9 @@ describe("Mac voice recognition stays on the device", () => {
 
   it("sends every request through the gate", () => {
     expect(count("SFSpeechAudioBufferRecognitionRequest::init(")).toBe(1);
+    expect(count("SFSpeechURLRecognitionRequest::initWithURL(")).toBe(1);
     expect(count("on_device_task(r, &request")).toBe(1);
+    expect(count("on_device_task(&recognizer, &request")).toBe(1);
   });
 
   it("hands audio to Speech only through a request the gate accepted", () => {
@@ -79,5 +81,11 @@ describe("Mac voice recognition stays on the device", () => {
     expect(capture.indexOf("AVAudioFile::initForWriting_settings_error")).toBeGreaterThan(
       capture.indexOf("let recognizer = recognizer.filter("),
     );
+  });
+
+  it("a background read-back never raises a prompt", () => {
+    const readBack = bodyOf("pub fn transcribe_file(");
+    expect(readBack).not.toContain("requestAuthorization");
+    expect(bodyOf("pub fn local_recognition_status(")).not.toContain("requestAuthorization");
   });
 });

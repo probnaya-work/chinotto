@@ -19,6 +19,21 @@ use super::record::{sync_fts, Fragment};
 use super::Db;
 use rusqlite::{Connection, OptionalExtension};
 
+/// The one model label a transcript made on this Mac carries: recognised on the device.
+///
+/// A transcript with this model has had its local reading, success or not, and is never
+/// read again by `voice_retry_candidates`. Older builds wrote `apple-speech`, which makes no
+/// claim about where recognition ran — correctly, since the direct build could fall back to
+/// Apple's servers.
+pub const ON_DEVICE_MODEL: &str = "apple-on-device";
+
+/// A recording, and the fragment it belongs to, waiting for a local reading.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetryCandidate {
+    pub fragment_id: String,
+    pub audio_path: String,
+}
+
 /// Query parameters that identify a campaign rather than a page.
 const TRACKING_PARAMS: &[&str] = &[
     "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id", "gclid",
@@ -504,6 +519,93 @@ impl Db {
     ) -> Result<(), rusqlite::Error> {
         let conn = self.0.lock().unwrap();
         write_transcript(&conn, fragment_id, Err(reason.to_string()), model)
+    }
+
+    /// Recordings that have never had a local reading and could have one now.
+    ///
+    /// A failed transcript without the on-device model — no recogniser was available, speech
+    /// recognition was not allowed, or an older build tried and heard nothing — and a
+    /// `pending` one old enough to have been orphaned by a quit mid-capture. Removed moments
+    /// and missing audio are never read.
+    pub fn voice_retry_candidates(
+        &self,
+        pending_before: &str,
+        limit: i64,
+    ) -> Result<Vec<RetryCandidate>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT f.id, v.audio_path \
+               FROM fragments f \
+               JOIN voice_captures v ON v.fragment_id = f.id \
+               JOIN voice_transcripts t ON t.fragment_id = f.id \
+              WHERE f.removed_at IS NULL \
+                AND v.audio_missing = 0 \
+                AND (t.model IS NULL OR t.model <> ?1) \
+                AND (t.state = 'failed' \
+                     OR (t.state = 'pending' AND julianday(v.recorded_at) <= julianday(?2))) \
+              ORDER BY f.captured_at DESC \
+              LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![ON_DEVICE_MODEL, pending_before, limit], |r| {
+            Ok(RetryCandidate {
+                fragment_id: r.get(0)?,
+                audio_path: r.get(1)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    /// Which recogniser the transcript names, if any.
+    #[cfg(test)]
+    pub fn transcript_model(&self, fragment_id: &str) -> Result<Option<String>, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row(
+            "SELECT model FROM voice_transcripts WHERE fragment_id = ?1",
+            [fragment_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map(Option::flatten)
+    }
+
+    /// Writes a local reading back — only if the moment still wants it.
+    ///
+    /// Still in the Record, still pointing at the same recording, still without a local
+    /// reading: checked under the same lock as the write, so a removal or another reading
+    /// that landed while the file was being read wins. Returns whether anything was written.
+    pub fn record_local_reading(
+        &self,
+        candidate: &RetryCandidate,
+        result: Result<String, String>,
+    ) -> Result<bool, rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        let wanted: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM fragments f \
+               JOIN voice_captures v ON v.fragment_id = f.id \
+               JOIN voice_transcripts t ON t.fragment_id = f.id \
+              WHERE f.id = ?1 AND f.removed_at IS NULL AND v.audio_path = ?2 \
+                AND (t.model IS NULL OR t.model <> ?3)",
+            rusqlite::params![candidate.fragment_id, candidate.audio_path, ON_DEVICE_MODEL],
+            |r| r.get(0),
+        )?;
+        if wanted == 0 {
+            return Ok(false);
+        }
+        match result {
+            Ok(text) => write_transcript(
+                &conn,
+                &candidate.fragment_id,
+                Ok((text, ON_DEVICE_MODEL)),
+                None,
+            )?,
+            Err(reason) => write_transcript(
+                &conn,
+                &candidate.fragment_id,
+                Err(reason),
+                Some(ON_DEVICE_MODEL),
+            )?,
+        }
+        Ok(true)
     }
 
     pub fn voice_for(&self, fragment_id: &str) -> Result<Option<VoiceCapture>, rusqlite::Error> {

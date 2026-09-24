@@ -380,6 +380,28 @@ export function RecordApp() {
     })();
   }, [loaded, reload]);
 
+  /**
+   * Recordings still waiting for words are read back on this Mac when it can recognise
+   * locally (`retry_transcripts`), which asks nothing of the person and backs off by itself.
+   * It is offered after the first read and whenever the window comes back to the front.
+   */
+  useEffect(() => {
+    if (!loaded) return;
+    const retry = () =>
+      void api
+        .retryTranscripts()
+        .then((r) => {
+          if (r.transcribed > 0) void reload();
+        })
+        .catch(() => {});
+    const first = setTimeout(retry, 4000);
+    window.addEventListener("focus", retry);
+    return () => {
+      clearTimeout(first);
+      window.removeEventListener("focus", retry);
+    };
+  }, [loaded, reload]);
+
   const changeTextScale = useCallback((delta: number) => {
     setTextScale((current) => writeTextScale(clampTextScale(current + delta)));
   }, []);

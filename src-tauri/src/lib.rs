@@ -31,6 +31,7 @@ mod native_apple_sign_in;
 
 #[cfg(target_os = "macos")]
 mod speech;
+mod transcript_retry;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod tray_capture;
@@ -1795,6 +1796,72 @@ fn run_native_speech_recognition(
     }
 }
 
+/// What a pass over recordings still waiting for words did.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptRetryReport {
+    pub ran: bool,
+    pub why: Option<String>,
+    pub transcribed: usize,
+    pub heard_nothing: usize,
+    pub still_waiting: usize,
+}
+
+#[cfg(target_os = "macos")]
+struct MacRecogniser;
+
+#[cfg(target_os = "macos")]
+impl transcript_retry::Recogniser for MacRecogniser {
+    fn status(&self) -> &'static str {
+        speech::local_recognition_status()
+    }
+    fn read(&self, audio_path: &std::path::Path) -> transcript_retry::Reading {
+        speech::transcribe_file(audio_path)
+    }
+    fn capturing(&self) -> bool {
+        speech::is_capturing()
+    }
+}
+
+/// Reads recordings that are still waiting for words back on this Mac, once each — see
+/// `transcript_retry`. `fresh` forgets the backoff after a capture recognised locally.
+#[tauri::command(async)]
+fn retry_transcripts(db: tauri::State<Db>, fresh: Option<bool>) -> Result<TranscriptRetryReport, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let pass = transcript_retry::run_once(&db, &MacRecogniser, fresh.unwrap_or(false));
+        Ok(match pass {
+            transcript_retry::RetryPass::Skipped { why } => TranscriptRetryReport {
+                ran: false,
+                why: Some(why),
+                transcribed: 0,
+                heard_nothing: 0,
+                still_waiting: 0,
+            },
+            transcript_retry::RetryPass::Ran { transcribed, heard_nothing, still_waiting, changed } => {
+                // Words are text the legacy sync can carry, exactly as a live capture's are.
+                for id in changed {
+                    if let Err(e) = db.mirror_fragment_to_entry(&id) {
+                        eprintln!("[bridge] mirror failed for {id}: {e}");
+                    }
+                }
+                TranscriptRetryReport { ran: true, why: None, transcribed, heard_nothing, still_waiting }
+            }
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (db, fresh);
+        Ok(TranscriptRetryReport {
+            ran: false,
+            why: Some("unavailable".into()),
+            transcribed: 0,
+            heard_nothing: 0,
+            still_waiting: 0,
+        })
+    }
+}
+
 /// The hold was released. Ends the recording that is running, if any.
 #[tauri::command(async)]
 fn stop_voice_capture() -> Result<(), String> {
@@ -2033,6 +2100,7 @@ pub fn run() {
             record_commands::record_enrichment,
             record_commands::capture_voice,
             record_commands::record_transcript,
+            retry_transcripts,
             record_commands::voice_for,
             record_commands::mark_audio_missing,
             record_commands::materials_for,

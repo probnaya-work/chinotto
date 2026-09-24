@@ -21,6 +21,9 @@ vi.mock("../../lib/recordApi", () => ({
   recordTranscript: vi.fn(),
   stopVoiceCapture: vi.fn(() => Promise.resolve()),
   linkContinuation: vi.fn(() => Promise.resolve()),
+  retryTranscripts: vi.fn(() =>
+    Promise.resolve({ ran: true, why: null, transcribed: 0, heardNothing: 0, stillWaiting: 0 }),
+  ),
   ON_DEVICE_MODEL: "apple-on-device",
 }));
 
@@ -288,6 +291,7 @@ describe("how the words were made", () => {
 
   beforeEach(() => {
     vi.mocked(api.recordTranscript).mockReset();
+    vi.mocked(api.retryTranscripts).mockClear();
   });
 
   it("keeps a recording made without a local recogniser, with the Mac's reason", async () => {
@@ -305,6 +309,23 @@ describe("how the words were made", () => {
       null,
     );
     expect(captured).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.retryTranscripts)).not.toHaveBeenCalled();
+    hook.unmount();
+  });
+
+  it("after a local recognition, offers what is still waiting a fresh reading", async () => {
+    recordedWith(capture("on_device", "said on the mac"));
+    const hook = renderHook(() => useVoice(() => {}));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(vi.mocked(api.recordTranscript)).toHaveBeenCalledWith(
+      "spoken-2",
+      "said on the mac",
+      null,
+      "apple-on-device",
+    );
+    expect(vi.mocked(api.retryTranscripts)).toHaveBeenCalledWith(true);
     hook.unmount();
   });
 });

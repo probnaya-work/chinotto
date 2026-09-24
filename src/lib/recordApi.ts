@@ -734,6 +734,26 @@ export function recordTranscript(
   });
 }
 
+/** What a pass over recordings waiting for words did. */
+export interface TranscriptRetryReport {
+  ran: boolean;
+  why: string | null;
+  transcribed: number;
+  heardNothing: number;
+  stillWaiting: number;
+}
+
+/**
+ * Reads recordings that are still waiting for words back on this Mac, once each. Asks
+ * nothing of the person; does nothing when local recognition is unavailable.
+ */
+export function retryTranscripts(fresh = false): Promise<TranscriptRetryReport> {
+  if (devOnly()) {
+    return Promise.resolve({ ran: false, why: "dev", transcribed: 0, heardNothing: 0, stillWaiting: 0 });
+  }
+  return invoke<TranscriptRetryReport>("retry_transcripts", { fresh });
+}
+
 /** The audio was looked for and is not there. The words, if any, remain. */
 export function markAudioMissing(fragmentId: string): Promise<void> {
   return invoke<void>("mark_audio_missing", { fragmentId });

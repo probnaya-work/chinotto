@@ -149,6 +149,16 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
           // recording. The fragment stands.
         }
         onCaptured();
+        // This Mac just recognised locally, so recordings still waiting for words need not
+        // wait out a backoff from when it could not.
+        if (capture.recognition === "on_device") {
+          void api
+            .retryTranscripts(true)
+            .then((r) => {
+              if (r.transcribed > 0) onCaptured();
+            })
+            .catch(() => {});
+        }
       })
       .catch((e) => {
         const message = String(e);
