@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Chinotto",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "identifier": "app.chinotto",
   "build": {
     "frontendDist": "../dist",
@@ -69,7 +69,7 @@
       "resources/THIRD-PARTY-NOTICES.txt"
     ],
     "macOS": {
-      "bundleVersion": "3.0.1",
+      "bundleVersion": "3.0.2",
       "minimumSystemVersion": "12.0",
       "exceptionDomain": null,
       "infoPlist": "Info.plist",

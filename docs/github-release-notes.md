@@ -4,6 +4,12 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
+## v3.0.1
+
+- **Voice (privacy):** speech is recognised on the device only, in both the direct and Mac App Store builds — every task goes through `on_device_task` in `speech.rs`, which requires `supportsOnDeviceRecognition` and sets `requiresOnDeviceRecognition`; the direct build no longer falls back to Apple's speech service
+- **Voice (retry):** recordings kept without words are read back on the device once each when local recognition becomes available (`transcript_retry.rs`, Tauri `retry_transcripts`); transcripts are labelled `apple-on-device` only when the capture reported it
+- **Voice (removal):** a removed voice fragment's `.caf`, transcript, wordings, embedding, search entry and quoting Traces/Returns are erased a minute after removal (`db/erasure.rs`, Tauri `erase_removed_voice`); `restore_fragment` refuses past that point
+
 ## v3.0.0
 
 - **Home stream:** bounded home layout with depth zone, time strand week river, and memory-echo resurfacing card (`TimeStrand`, `MemoryEcho`, `homeStreamPartition.ts`, `timeStrandWeek.ts`)
