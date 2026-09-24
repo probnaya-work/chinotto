@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Chinotto",
-  "version": "3.0.1",
+  "version": "3.0.0",
   "identifier": "app.chinotto",
   "build": {
     "frontendDist": "../dist",

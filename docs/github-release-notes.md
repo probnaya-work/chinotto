@@ -4,7 +4,7 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
-## v3.0.1
+## Unreleased — Mac App Store 3.0.0 (build 3.0.2); direct-download version not yet decided
 
 - **Voice (privacy):** speech is recognised on the device only, in both the direct and Mac App Store builds — every task goes through `on_device_task` in `speech.rs`, which requires `supportsOnDeviceRecognition` and sets `requiresOnDeviceRecognition`; the direct build no longer falls back to Apple's speech service
 - **Voice (retry):** recordings kept without words are read back on the device once each when local recognition becomes available (`transcript_retry.rs`, Tauri `retry_transcripts`); transcripts are labelled `apple-on-device` only when the capture reported it

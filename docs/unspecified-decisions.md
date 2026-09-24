@@ -507,7 +507,7 @@ transcript is recorded as a failed *reading* rather than a failed capture.
 *requires* on-device recognition and the recogniser *supports* it; Apple ignores the requirement
 where support is missing. The App Store build already refused a recogniser without support; the
 direct build started a task anyway, which for a language without local support is a server path.
-From 3.0.1 both builds go through `on_device_task`, and `src/lib/voiceOnDeviceOnly.test.ts` reads
+From build 3.0.2 both builds go through `on_device_task`, and `src/lib/voiceOnDeviceOnly.test.ts` reads
 `speech.rs` to keep it that way.
 
 The permanent boundary is a minute because nothing needs longer: `bring back` is offered for

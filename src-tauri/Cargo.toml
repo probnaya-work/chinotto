@@ -1,6 +1,6 @@
 [package]
 name = "Chinotto"
-version = "3.0.1"
+version = "3.0.0"
 description = "A private record of thoughts, encounters, and what continues between them."
 authors = ["Aleksandr Malinin"]
 license = "SEE LICENSE IN ../LICENSE"
