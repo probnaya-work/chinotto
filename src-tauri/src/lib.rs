@@ -1656,6 +1656,9 @@ pub struct VoiceCaptureResult {
     pub transcript: Option<String>,
     /// Why there are none, when the mac said. Attached to the fragment as the reason.
     pub transcript_failure: Option<String>,
+    /// `on_device` · `unavailable` · `denied` · `failed`. Recognition never leaves the Mac,
+    /// so there is no other value; the transcript is labelled from this.
+    pub recognition: String,
 }
 
 /// Where recordings live. Beside the record, because they are part of it.
@@ -1779,6 +1782,7 @@ fn run_native_speech_recognition(
                 duration_ms: capture.duration_ms,
                 transcript: capture.transcript,
                 transcript_failure: capture.transcript_failure,
+                recognition: capture.recognition.as_str().to_string(),
             }),
             Ok(Err(e)) => Err(e),
             Err(_) => Err("the recording did not come back".to_string()),

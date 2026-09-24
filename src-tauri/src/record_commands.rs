@@ -332,13 +332,16 @@ pub fn record_transcript(
     model: Option<String>,
     failure: Option<String>,
 ) -> Result<(), String> {
-    let result = match (transcript, failure) {
-        (_, Some(reason)) => Err(reason),
-        (Some(text), None) => Ok((text, model.as_deref().unwrap_or("unknown"))),
-        (None, None) => Err("no transcript produced".to_string()),
-    };
-    db.record_transcript(&fragment_id, result)
-        .map_err(|e| e.to_string())?;
+    match (transcript, failure) {
+        // A failure names a model only when a recogniser actually listened — which is what
+        // marks the recording as read, so it is not read again (`transcript_retry`).
+        (_, Some(reason)) => db.record_transcript_failure(&fragment_id, &reason, model.as_deref()),
+        (Some(text), None) => {
+            db.record_transcript(&fragment_id, Ok((text, model.as_deref().unwrap_or("unknown"))))
+        }
+        (None, None) => db.record_transcript(&fragment_id, Err("no transcript produced".to_string())),
+    }
+    .map_err(|e| e.to_string())?;
     // A voice fragment has no text to mirror until a transcript exists. The audio itself has
     // no legacy representation and stays on this device.
     bridge(&db, &fragment_id);

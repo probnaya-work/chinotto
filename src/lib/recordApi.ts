@@ -660,7 +660,15 @@ export interface VoiceCaptureResult {
   transcript: string | null;
   /** Why there are no words, when the mac said. Never a reason the audio failed. */
   transcriptFailure: string | null;
+  /**
+   * Which path recognition took. It never leaves the Mac, so there is no server value:
+   * `on_device` · `unavailable` · `denied` · `failed`.
+   */
+  recognition: "on_device" | "unavailable" | "denied" | "failed";
 }
+
+/** The label a transcript recognised on this Mac carries. Mirrors `ON_DEVICE_MODEL` in Rust. */
+export const ON_DEVICE_MODEL = "apple-on-device";
 
 /** Hold to speak. Records to a file, and transcribes it if it can. */
 export function recordVoice(maxMs?: number): Promise<VoiceCaptureResult> {
@@ -705,16 +713,23 @@ export function orphanedRecordings(): Promise<OrphanedRecording[]> {
   return invoke<OrphanedRecording[]>("orphaned_recordings");
 }
 
-/** Attaches what the machine heard. Derived material: it never moves or replaces the audio. */
+/**
+ * Attaches what the machine heard. Derived material: it never moves or replaces the audio.
+ *
+ * `model` names the recogniser that listened, and only when one did: `ON_DEVICE_MODEL` when
+ * the Mac said recognition ran on the device, nothing otherwise. A failure with no model is
+ * a recording still waiting for its local reading.
+ */
 export function recordTranscript(
   fragmentId: string,
   transcript: string | null,
   failure?: string | null,
+  model?: string | null,
 ): Promise<void> {
   return invoke<void>("record_transcript", {
     fragmentId,
     transcript,
-    model: "apple-speech",
+    model: model ?? null,
     failure: failure ?? null,
   });
 }

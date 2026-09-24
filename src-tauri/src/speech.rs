@@ -11,6 +11,15 @@
 //! as the buffers arrive, so an aborted recognition, a denied speech authorisation or a
 //! crashed recogniser all still leave the audio behind. `run_capture` returns the path and
 //! duration whether or not any words came back.
+//!
+//! **Recognition happens on this Mac or not at all**, in every build. `SFSpeechRecognizer`
+//! sends audio to Apple's servers unless a request both *requires* on-device recognition and
+//! is made on a recogniser that *supports* it — Apple ignores the requirement where support
+//! is missing. So every recognition task here is created by `on_device_task`, which refuses
+//! unless both are true, and a request only exists once a local recogniser does: without
+//! one no buffer is handed to Speech and the recording simply has no words yet. The direct
+//! build used to fall back to the server; it no longer can.
+//! `src/lib/voiceOnDeviceOnly.test.ts` reads this file to keep it that way.
 
 #![cfg(target_os = "macos")]
 
@@ -23,8 +32,8 @@ use objc2_avf_audio::{
 use objc2_foundation::NSURL;
 use objc2_foundation::NSError;
 use objc2_speech::{
-    SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionResult, SFSpeechRecognizer,
-    SFSpeechRecognizerAuthorizationStatus,
+    SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionRequest, SFSpeechRecognitionResult,
+    SFSpeechRecognitionTask, SFSpeechRecognizer, SFSpeechRecognizerAuthorizationStatus,
 };
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -76,6 +85,50 @@ pub fn ask_for_speech_if_undecided() {
         eprintln!("[Speech] speech authorisation answered: {}", answered.0);
     });
     unsafe { SFSpeechRecognizer::requestAuthorization(&handler) };
+}
+
+/// What recognition did for one recording, or could do for one file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recognition {
+    /// Recognised on this Mac.
+    OnDevice,
+    /// No on-device recogniser for this language, or none available right now. No task was made.
+    Unavailable,
+    /// Speech recognition is not authorised (or not yet decided). No task was made.
+    Denied,
+    /// Recognised on this Mac until the recogniser failed. The audio is unaffected.
+    Failed,
+}
+
+impl Recognition {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Recognition::OnDevice => "on_device",
+            Recognition::Unavailable => "unavailable",
+            Recognition::Denied => "denied",
+            Recognition::Failed => "failed",
+        }
+    }
+}
+
+/// **The only way a recognition task is created in this module.**
+///
+/// `None` — and so no task, and no request anything is appended to — unless the recogniser
+/// supports on-device recognition and the request requires it. Setting the requirement is
+/// not enough on its own: Apple ignores it on a recogniser without support.
+fn on_device_task(
+    recognizer: &SFSpeechRecognizer,
+    request: &SFSpeechRecognitionRequest,
+    handler: &block2::DynBlock<dyn Fn(*mut SFSpeechRecognitionResult, *mut NSError)>,
+) -> Option<Retained<SFSpeechRecognitionTask>> {
+    if !unsafe { recognizer.supportsOnDeviceRecognition() } {
+        return None;
+    }
+    unsafe { request.setRequiresOnDeviceRecognition(true) };
+    if !unsafe { request.requiresOnDeviceRecognition() } {
+        return None;
+    }
+    Some(unsafe { recognizer.recognitionTaskWithRequest_resultHandler(request, handler) })
 }
 
 /// Long-lived speech pipeline: authorization and recognizer created once.
@@ -155,7 +208,7 @@ impl SpeechManager {
             available
         );
         if !available {
-            return Err("Speech recognition is not available".to_string());
+            return Err(UNAVAILABLE_ON_DEVICE.to_string());
         }
 
         let mut guard = self.recognizer.lock().map_err(|e| e.to_string())?;
@@ -201,10 +254,18 @@ impl SpeechManager {
         // different permission from the microphone — the recording still happens and the
         // fragment is a voice fragment with no transcript yet.
         let mut transcript_failure: Option<String> = None;
+        let mut recognition = Recognition::OnDevice;
         let recognizer = match self.ensure_recognizer() {
             Ok(r) => Some(r),
             Err(e) => {
                 eprintln!("[Speech] recogniser unavailable, recording anyway: {e}");
+                // Authorisation is the other reason there is no recogniser; everything else
+                // is this Mac not having one to give.
+                recognition = if e.contains("not allowing") || e.contains("being asked") {
+                    Recognition::Denied
+                } else {
+                    Recognition::Unavailable
+                };
                 // Kept, and handed back. "not transcribed" is true but says nothing about
                 // what to do; the reason is the only part that is actionable.
                 transcript_failure = Some(e);
@@ -212,38 +273,17 @@ impl SpeechManager {
             }
         };
 
-        // App Store builds never send a recording to Apple's speech service. If this Mac
-        // cannot transcribe on-device, the recording remains intact and simply has no
-        // derived transcript. The direct build preserves its existing fallback behavior.
-        #[cfg(feature = "mas")]
-        let recognizer = {
-            let mut recognizer = recognizer;
-            if recognizer
-                .as_ref()
-                .is_some_and(|r| !unsafe { r.supportsOnDeviceRecognition() })
-            {
-                transcript_failure = Some(
-                    "on-device speech recognition is not available on this mac".to_string(),
-                );
-                recognizer = None;
+        // On-device or nothing, in every build. A Mac that cannot recognise this language
+        // locally keeps the recording intact and gives it no words; nothing is sent to
+        // Apple's speech service instead.
+        let recognizer = recognizer.filter(|r| {
+            let local = unsafe { r.supportsOnDeviceRecognition() };
+            if !local {
+                recognition = Recognition::Unavailable;
+                transcript_failure = Some(UNAVAILABLE_ON_DEVICE.to_string());
             }
-            recognizer
-        };
-
-        let request = unsafe {
-            SFSpeechAudioBufferRecognitionRequest::init(
-                SFSpeechAudioBufferRecognitionRequest::alloc(),
-            )
-        };
-        unsafe {
-            request.setShouldReportPartialResults(true);
-        }
-        if let Some(ref r) = recognizer {
-            if unsafe { r.supportsOnDeviceRecognition() } {
-                unsafe { request.setRequiresOnDeviceRecognition(true) };
-                eprintln!("[Speech] on-device recognition enabled");
-            }
-        }
+            local
+        });
 
         let engine = unsafe { AVAudioEngine::new() };
         let input_node = unsafe { engine.inputNode() };
@@ -266,7 +306,11 @@ impl SpeechManager {
         let frames_written = Arc::new(Mutex::new(0u64));
         let sample_rate = unsafe { format.sampleRate() };
 
-        let request_for_tap = request.clone();
+        // The request the tap feeds. Filled in only once `on_device_task` has accepted it,
+        // so without a local recogniser the tap writes the file and hands Speech nothing.
+        let accepted: Arc<Mutex<Option<Retained<SFSpeechAudioBufferRecognitionRequest>>>> =
+            Arc::new(Mutex::new(None));
+        let request_for_tap = accepted.clone();
         let file_for_tap = audio_file.clone();
         let frames_for_tap = frames_written.clone();
         let tap_block: RcBlock<dyn Fn(NonNull<AVAudioPCMBuffer>, NonNull<AVAudioTime>) + 'static> =
@@ -281,7 +325,11 @@ impl SpeechManager {
                     } else if let Ok(mut n) = frames_for_tap.lock() {
                         *n += buf.frameLength() as u64;
                     }
-                    request_for_tap.appendAudioPCMBuffer(buf);
+                    if let Ok(guard) = request_for_tap.lock() {
+                        if let Some(request) = guard.as_ref() {
+                            request.appendAudioPCMBuffer(buf);
+                        }
+                    }
                 },
             );
 
@@ -354,9 +402,24 @@ impl SpeechManager {
 
         // No recogniser means no transcript, and that is a complete outcome rather than a
         // failure: the recording is still made, and words can be added to it later.
-        let task = recognizer.as_ref().map(|r| unsafe {
-            r.recognitionTaskWithRequest_resultHandler(&request, &result_block)
+        let task = recognizer.as_ref().and_then(|r| {
+            let request = unsafe {
+                SFSpeechAudioBufferRecognitionRequest::init(
+                    SFSpeechAudioBufferRecognitionRequest::alloc(),
+                )
+            };
+            unsafe { request.setShouldReportPartialResults(true) };
+            let task = on_device_task(r, &request, &result_block)?;
+            eprintln!("[Speech] on-device recognition started");
+            if let Ok(mut slot) = accepted.lock() {
+                *slot = Some(request);
+            }
+            Some(task)
         });
+        if recognizer.is_some() && task.is_none() {
+            recognition = Recognition::Unavailable;
+            transcript_failure = Some(UNAVAILABLE_ON_DEVICE.to_string());
+        }
 
         let start_result = unsafe { engine.startAndReturnError() };
         if let Err(err) = start_result {
@@ -397,15 +460,21 @@ impl SpeechManager {
                 }
             }
         }
-        unsafe {
-            request.endAudio();
+        let request = accepted.lock().ok().and_then(|slot| slot.clone());
+        if let Some(ref request) = request {
+            unsafe { request.endAudio() };
         }
 
         eprintln!(
             "[Speech] {} ms - waiting for final result",
             t0.elapsed().as_millis()
         );
-        let outcome = result_rx.recv_timeout(Duration::from_millis(5000));
+        // Nothing to wait for when no recogniser ran.
+        let outcome = if task.is_some() {
+            result_rx.recv_timeout(Duration::from_millis(5000))
+        } else {
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        };
 
         unsafe {
             engine.stop();
@@ -432,6 +501,7 @@ impl SpeechManager {
             Ok(Ok(t)) => t,
             Ok(Err(e)) => {
                 eprintln!("[Speech] recognition failed, audio kept: {e}");
+                recognition = Recognition::Failed;
                 transcript_failure.get_or_insert(e);
                 None
             }
@@ -456,9 +526,14 @@ impl SpeechManager {
             duration_ms,
             transcript,
             transcript_failure,
+            recognition,
         })
     }
 }
+
+/// Why a recording has no words when this Mac has no local recogniser for the language.
+pub const UNAVAILABLE_ON_DEVICE: &str =
+    "this mac can't turn speech into words on the device for this language · the recording is kept";
 
 /// How long a recording on disk actually is.
 ///
@@ -488,6 +563,8 @@ pub struct VoiceCapture {
     pub transcript: Option<String>,
     /// Why there are no words, when that is known. Never a reason the *audio* failed.
     pub transcript_failure: Option<String>,
+    /// Which path recognition took. There is no server path to report.
+    pub recognition: Recognition,
 }
 
 /// Command for the speech thread: (max_ms, where to write the audio, result, state events).

@@ -49,6 +49,20 @@ export interface VoiceOptions {
   onFragment?: (id: string) => Promise<void> | void;
 }
 
+/**
+ * The recogniser a capture's transcript names, or null.
+ *
+ * Words are labelled on-device only when the Mac said recognition ran there. A capture that
+ * the local recogniser listened to all the way through and heard nothing in is labelled too
+ * — that is an answer, and it is not asked again. Anything else is left unlabelled, which is
+ * what keeps it waiting for a local reading.
+ */
+export function transcriptModel(capture: api.VoiceCaptureResult): string | null {
+  const local = capture.recognition === "on_device" || capture.recognition === "failed";
+  if (capture.transcript) return local ? api.ON_DEVICE_MODEL : null;
+  return capture.recognition === "on_device" ? api.ON_DEVICE_MODEL : null;
+}
+
 export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
   const { origin = "desktop", releaseKey = " ", onFragment } = options;
   const [recording, setRecording] = useState(false);
@@ -128,6 +142,7 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
             capture.transcript
               ? null
               : (capture.transcriptFailure ?? "nothing was transcribed"),
+            transcriptModel(capture),
           );
         } catch {
           // A transcript that could not be stored is a missing reading, not a missing

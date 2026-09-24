@@ -17,7 +17,7 @@
 
 use super::record::{sync_fts, Fragment};
 use super::Db;
-use rusqlite::OptionalExtension;
+use rusqlite::{Connection, OptionalExtension};
 
 /// Query parameters that identify a campaign rather than a page.
 const TRACKING_PARAMS: &[&str] = &[
@@ -488,44 +488,22 @@ impl Db {
         result: Result<(String, &str), String>,
     ) -> Result<(), rusqlite::Error> {
         let conn = self.0.lock().unwrap();
-        let now = chrono::Utc::now().to_rfc3339();
+        write_transcript(&conn, fragment_id, result, None)
+    }
 
-        match result {
-            Ok((text, model)) => {
-                conn.execute(
-                    "UPDATE voice_transcripts SET machine_transcript = ?1, state = 'ok', \
-                     model = ?2, transcribed_at = ?3, failure = NULL WHERE fragment_id = ?4",
-                    rusqlite::params![text, model, now, fragment_id],
-                )?;
-
-                let current: String = conn.query_row(
-                    "SELECT body FROM fragments WHERE id = ?1",
-                    [fragment_id],
-                    |r| r.get(0),
-                )?;
-                let corrections: i64 = conn.query_row(
-                    "SELECT correction_count FROM fragments WHERE id = ?1",
-                    [fragment_id],
-                    |r| r.get(0),
-                )?;
-                if current.trim().is_empty() && corrections == 0 {
-                    conn.execute(
-                        "UPDATE fragments SET body = ?1 WHERE id = ?2",
-                        rusqlite::params![text, fragment_id],
-                    )?;
-                }
-            }
-            Err(reason) => {
-                // "couldn't transcribe · the audio is safe" — the fragment is untouched.
-                conn.execute(
-                    "UPDATE voice_transcripts SET state = 'failed', transcribed_at = ?1, failure = ?2 \
-                     WHERE fragment_id = ?3",
-                    rusqlite::params![now, reason, fragment_id],
-                )?;
-            }
-        }
-        sync_fts(&conn, fragment_id)?;
-        Ok(())
+    /// A reading that produced no words, made by a recogniser that `model` names.
+    ///
+    /// With `ON_DEVICE_MODEL` this records that the local recogniser actually listened —
+    /// which is what stops the recording being read again. Without a model the recording
+    /// stays waiting for its local reading.
+    pub fn record_transcript_failure(
+        &self,
+        fragment_id: &str,
+        reason: &str,
+        model: Option<&str>,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = self.0.lock().unwrap();
+        write_transcript(&conn, fragment_id, Err(reason.to_string()), model)
     }
 
     pub fn voice_for(&self, fragment_id: &str) -> Result<Option<VoiceCapture>, rusqlite::Error> {
@@ -572,6 +550,54 @@ impl Db {
         )?;
         Ok(())
     }
+}
+
+/// The one place a transcript is written. `failed_model` is only used on a failure — a
+/// success always names the model that produced it.
+fn write_transcript(
+    conn: &Connection,
+    fragment_id: &str,
+    result: Result<(String, &str), String>,
+    failed_model: Option<&str>,
+) -> Result<(), rusqlite::Error> {
+    let now = chrono::Utc::now().to_rfc3339();
+
+    match result {
+        Ok((text, model)) => {
+            conn.execute(
+                "UPDATE voice_transcripts SET machine_transcript = ?1, state = 'ok', \
+                 model = ?2, transcribed_at = ?3, failure = NULL WHERE fragment_id = ?4",
+                rusqlite::params![text, model, now, fragment_id],
+            )?;
+
+            let current: String = conn.query_row(
+                "SELECT body FROM fragments WHERE id = ?1",
+                [fragment_id],
+                |r| r.get(0),
+            )?;
+            let corrections: i64 = conn.query_row(
+                "SELECT correction_count FROM fragments WHERE id = ?1",
+                [fragment_id],
+                |r| r.get(0),
+            )?;
+            if current.trim().is_empty() && corrections == 0 {
+                conn.execute(
+                    "UPDATE fragments SET body = ?1 WHERE id = ?2",
+                    rusqlite::params![text, fragment_id],
+                )?;
+            }
+        }
+        Err(reason) => {
+            // "couldn't transcribe · the audio is safe" — the fragment is untouched.
+            conn.execute(
+                "UPDATE voice_transcripts SET state = 'failed', transcribed_at = ?1, failure = ?2, \
+                 model = COALESCE(?3, model) WHERE fragment_id = ?4",
+                rusqlite::params![now, reason, failed_model, fragment_id],
+            )?;
+        }
+    }
+    sync_fts(conn, fragment_id)?;
+    Ok(())
 }
 
 #[cfg(test)]

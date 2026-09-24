@@ -10,7 +10,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useVoice } from "./useVoice";
+import { transcriptModel, useVoice } from "./useVoice";
 import * as api from "../../lib/recordApi";
 
 vi.mock("../../lib/recordApi", () => ({
@@ -21,6 +21,7 @@ vi.mock("../../lib/recordApi", () => ({
   recordTranscript: vi.fn(),
   stopVoiceCapture: vi.fn(() => Promise.resolve()),
   linkContinuation: vi.fn(() => Promise.resolve()),
+  ON_DEVICE_MODEL: "apple-on-device",
 }));
 
 const stopped = () => vi.mocked(api.stopVoiceCapture).mock.calls.length;
@@ -244,6 +245,66 @@ describe("the same recorder, held from the menu bar", () => {
       hook.result.current.start();
     });
     expect(vi.mocked(api.captureVoice)).toHaveBeenCalledTimes(1);
+    hook.unmount();
+  });
+});
+
+describe("how the words were made", () => {
+  const capture = (
+    recognition: api.VoiceCaptureResult["recognition"],
+    transcript: string | null,
+  ): api.VoiceCaptureResult => ({
+    audioPath: "/tmp/said.caf",
+    durationMs: 4200,
+    transcript,
+    transcriptFailure: transcript ? null : "why",
+    recognition,
+  });
+
+  it("labels words on-device only when the Mac said recognition ran there", () => {
+    expect(transcriptModel(capture("on_device", "said on the mac"))).toBe("apple-on-device");
+    expect(transcriptModel(capture("failed", "half of it"))).toBe("apple-on-device");
+  });
+
+  it("marks a recording the local recogniser heard nothing in as read", () => {
+    expect(transcriptModel(capture("on_device", null))).toBe("apple-on-device");
+  });
+
+  it("leaves a recording with no local recogniser unlabelled, so it waits for one", () => {
+    expect(transcriptModel(capture("unavailable", null))).toBeNull();
+    expect(transcriptModel(capture("denied", null))).toBeNull();
+    expect(transcriptModel(capture("failed", null))).toBeNull();
+  });
+
+  function recordedWith(result: api.VoiceCaptureResult) {
+    vi.mocked(api.recordVoice).mockReturnValueOnce(
+      Promise.resolve(result) as ReturnType<typeof api.recordVoice>,
+    );
+    vi.mocked(api.captureVoice).mockResolvedValue({
+      id: "spoken-2",
+    } as Awaited<ReturnType<typeof api.captureVoice>>);
+    vi.mocked(api.recordTranscript).mockResolvedValue(undefined);
+  }
+
+  beforeEach(() => {
+    vi.mocked(api.recordTranscript).mockReset();
+  });
+
+  it("keeps a recording made without a local recogniser, with the Mac's reason", async () => {
+    recordedWith({ ...capture("unavailable", null), transcriptFailure: "no local recogniser" });
+    const captured = vi.fn();
+    const hook = renderHook(() => useVoice(captured));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    expect(vi.mocked(api.captureVoice)).toHaveBeenCalled();
+    expect(vi.mocked(api.recordTranscript)).toHaveBeenCalledWith(
+      "spoken-2",
+      null,
+      "no local recogniser",
+      null,
+    );
+    expect(captured).toHaveBeenCalledTimes(1);
     hook.unmount();
   });
 });
