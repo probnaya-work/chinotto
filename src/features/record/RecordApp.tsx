@@ -381,12 +381,18 @@ export function RecordApp() {
   }, [loaded, reload]);
 
   /**
-   * Recordings still waiting for words are read back on this Mac when it can recognise
-   * locally (`retry_transcripts`), which asks nothing of the person and backs off by itself.
-   * It is offered after the first read and whenever the window comes back to the front.
+   * Voice upkeep, in the background and never in the way.
+   *
+   * Removals that can no longer be undone take their recording and words with them
+   * (`erase_removed_voice`, which waits well past the eight seconds `bring back` offers),
+   * checked on a slow timer. Recordings still waiting for words are read back on this Mac
+   * when it can recognise locally (`retry_transcripts`), which asks nothing of the person
+   * and backs off by itself; it is offered after the first read and whenever the window
+   * comes back to the front.
    */
   useEffect(() => {
     if (!loaded) return;
+    const erase = () => void api.eraseRemovedVoice().catch(() => {});
     const retry = () =>
       void api
         .retryTranscripts()
@@ -394,10 +400,15 @@ export function RecordApp() {
           if (r.transcribed > 0) void reload();
         })
         .catch(() => {});
-    const first = setTimeout(retry, 4000);
+    const first = setTimeout(() => {
+      erase();
+      retry();
+    }, 4000);
+    const eraseTimer = setInterval(erase, 60_000);
     window.addEventListener("focus", retry);
     return () => {
       clearTimeout(first);
+      clearInterval(eraseTimer);
       window.removeEventListener("focus", retry);
     };
   }, [loaded, reload]);

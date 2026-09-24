@@ -158,13 +158,23 @@ impl Db {
     /// Clears the suppression and the pending tombstone so the restored fragment can mirror
     /// out again. If the tombstone has already been delivered this will not reach other
     /// devices — an honest limit of the legacy protocol, not something to paper over.
+    ///
+    /// Only inside the removal's window: past `erasure::PERMANENT_AFTER_SECS` a removal is
+    /// permanent and a voice moment's content may already be erased, so nothing is restored
+    /// and the tombstone still goes.
     pub fn restore_fragment(&self, fragment_id: &str) -> Result<(), rusqlite::Error> {
+        let cutoff = super::erasure::permanence_cutoff(chrono::Utc::now());
         {
             let conn = self.0.lock().unwrap();
-            conn.execute(
-                "UPDATE fragments SET removed_at = NULL WHERE id = ?1",
-                [fragment_id],
+            let restored = conn.execute(
+                "UPDATE fragments SET removed_at = NULL \
+                  WHERE id = ?1 AND removed_at IS NOT NULL \
+                    AND julianday(removed_at) > julianday(?2)",
+                rusqlite::params![fragment_id, cutoff],
             )?;
+            if restored == 0 {
+                return Ok(());
+            }
             super::record::sync_fts(&conn, fragment_id)?;
             conn.execute(
                 "DELETE FROM firestore_ingest_suppressed_ids WHERE id = ?1",

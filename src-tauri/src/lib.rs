@@ -1862,6 +1862,18 @@ fn retry_transcripts(db: tauri::State<Db>, fresh: Option<bool>) -> Result<Transc
     }
 }
 
+/// Finishes removals that can no longer be undone: a voice moment's recording, then its
+/// words. See `db::erasure`. Idempotent; safe to call on a timer.
+#[tauri::command(async)]
+fn erase_removed_voice(
+    app: tauri::AppHandle,
+    db: tauri::State<Db>,
+) -> Result<db::erasure::ErasureReport, String> {
+    let dir = audio_dir(&app)?;
+    let cutoff = db::erasure::permanence_cutoff(chrono::Utc::now());
+    Ok(db::erasure::erase_removed_voice(&db, &dir, &cutoff))
+}
+
 /// The hold was released. Ends the recording that is running, if any.
 #[tauri::command(async)]
 fn stop_voice_capture() -> Result<(), String> {
@@ -2101,6 +2113,7 @@ pub fn run() {
             record_commands::capture_voice,
             record_commands::record_transcript,
             retry_transcripts,
+            erase_removed_voice,
             record_commands::voice_for,
             record_commands::mark_audio_missing,
             record_commands::materials_for,

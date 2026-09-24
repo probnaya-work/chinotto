@@ -754,6 +754,12 @@ export function retryTranscripts(fresh = false): Promise<TranscriptRetryReport> 
   return invoke<TranscriptRetryReport>("retry_transcripts", { fresh });
 }
 
+/** Finishes removals that can no longer be undone — see `db::erasure` in Rust. */
+export function eraseRemovedVoice(): Promise<{ erased: number; deletedFiles: number; kept: string[] }> {
+  if (devOnly()) return Promise.resolve({ erased: 0, deletedFiles: 0, kept: [] });
+  return invoke("erase_removed_voice");
+}
+
 /** The audio was looked for and is not there. The words, if any, remain. */
 export function markAudioMissing(fragmentId: string): Promise<void> {
   return invoke<void>("mark_audio_missing", { fragmentId });
