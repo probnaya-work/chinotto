@@ -19,7 +19,8 @@ The `mas` Cargo feature plus `src-tauri/tauri.mas-build.json` is the store varia
 - uses native AuthenticationServices instead of opening a loopback network listener;
 - disables GitHub update checks and updater actions in the UI;
 - exports through a save panel;
-- permits speech transcription only when macOS supports on-device recognition; and
+- permits speech transcription only when macOS supports on-device recognition (as the direct build
+  now does too); and
 - loads the meaning model only from the signed app bundle.
 
 ## Repository gate
@@ -54,7 +55,7 @@ uploaded.
 | Network server | Removed from MAS; the native Apple sign-in flow does not bind localhost. |
 | Files | Database, backups, audio, and preferences stay in the app container. Export uses a save-panel grant. |
 | Microphone | Both sandbox and hardened-runtime audio entitlements are present. The app shows a recording surface and requests permission only on use. |
-| Speech | Usage description is present. MAS recognition is on-device-only; recordings remain available when transcription is unsupported. |
+| Speech | Usage description is present. Recognition is on-device-only in both builds (`speech.rs` `on_device_task`); recordings remain available when transcription is unsupported, and are read back locally later. |
 | Updates | MAS UI and runtime do not invoke Tauri's GitHub updater. Store updates must come only from the Mac App Store. |
 | Meaning model | Pinned model data is embedded before signing; the MAS runtime refuses a missing bundle cache instead of downloading it. |
 | Menu bar | NSStatusItem behavior is public API. Close hides the main window; Dock reopen restores it; the tray menu provides Quit. Verify global shortcuts and the opaque popover in a signed sandbox smoke test. |

@@ -498,6 +498,24 @@ transcript is recorded as a failed *reading* rather than a failed capture.
 | 12.5 | How a hold ends | an atomic flag polled every 16ms; `max_ms` is only a ceiling | `speech.rs` | invented |
 | 12.6 | Microphone state is only ever learned by trying | never probed, never assumed | `RecordApp.tsx` | inferred |
 | 12.7 | `⌘⇧V` is removed | hold is the only voice gesture | `lib.rs` | **from the prototype** |
+| 12.8 | Speech is recognised on this Mac or not at all, in both builds | a task only when `supportsOnDeviceRecognition`, always with `requiresOnDeviceRecognition` | `speech.rs` `on_device_task` | **product rule** (2026-09-24) |
+| 12.9 | A transcript is `apple-on-device` only when the capture said recognition ran there | older `apple-speech` labels are left: they never claimed a path | `useVoice.ts` `transcriptModel` | correctness fix |
+| 12.10 | Recordings without words are read back later, locally, once each | availability checked first; 5 min backoff doubling to 24 h; `model` marks a reading done; never on the speech thread | `transcript_retry.rs` | **product rule** (2026-09-24); numbers invented |
+| 12.11 | Where a removal becomes permanent | `removed_at` older than `60s`; `restore_fragment` refuses past it | `db/erasure.rs` | derived from the undo window |
+
+**12.8–12.11.** `SFSpeechRecognizer` sends audio to Apple's servers unless the request
+*requires* on-device recognition and the recogniser *supports* it; Apple ignores the requirement
+where support is missing. The App Store build already refused a recogniser without support; the
+direct build started a task anyway, which for a language without local support is a server path.
+From 3.0.1 both builds go through `on_device_task`, and `src/lib/voiceOnDeviceOnly.test.ts` reads
+`speech.rs` to keep it that way.
+
+The permanent boundary is a minute because nothing needs longer: `bring back` is offered for
+eight seconds and checked once a second, it is the only caller of `restore_fragment`, remote
+tombstones never reach the Record (`absorb_remote_deletes` has no caller), and the bridge never
+re-projects a removed id. At that boundary a voice moment's `.caf` is deleted **first** and its
+content after — the other order would let `orphaned_recordings` adopt the file back into the
+Record at the next launch.
 
 12.1: the input format rather than a re-encode. This is the source, and resampling on the
 way in would mean the thing we kept is already a derivation. `.caf` because it is what

@@ -5,9 +5,14 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 ## Your data
 
 - **Entry text** is stored locally only. It is not sent to analytics or included in crash-style telemetry.
-- **Voice recordings** are stored in Chinotto's local app data. The Mac App Store build only
-  transcribes on-device. The direct-download build also prefers on-device recognition, but macOS
-  may use Apple's speech-recognition service when on-device recognition is unavailable.
+- **Voice recordings** are stored in Chinotto's local app data and are not synced. Both the Mac App
+  Store and the direct-download builds transcribe only on-device: when macOS has no on-device
+  recogniser for the language, or speech recognition is not allowed, the recording is kept without
+  a transcript and nothing is sent anywhere. It is read back on this Mac later, once, if on-device
+  recognition becomes available. Time Machine may include the app's local data.
+- **Removing a voice entry** deletes its recording and transcript from this Mac a minute after
+  removal, once it can no longer be brought back. Backups you make yourself and exports are yours
+  and are not changed.
 - **Export** — Export the record writes a ZIP of plain text and audio to a location you control.
 - **Backup** — automatic local backups in `chinotto-backups/` (last 7 kept).
 - **Meaning model** — the Mac App Store build includes its local meaning model. The direct-download
