@@ -34,6 +34,9 @@ mod speech;
 mod transcript_retry;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod window_lifecycle;
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod tray_capture;
 
 use base64::Engine;
@@ -1936,34 +1939,7 @@ const CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+K";
 /// Show `main` or recreate it from config if the webview was torn down.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub(crate) fn ensure_main_window_focus(app: &tauri::AppHandle) {
-    use tauri::WebviewWindowBuilder;
-
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.unminimize();
-        let _ = main.show();
-        let _ = main.set_focus();
-        return;
-    }
-    let Some(cfg) = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "main")
-    else {
-        log::warn!("ensure_main_window_focus: missing main window config");
-        return;
-    };
-    match WebviewWindowBuilder::from_config(app, cfg) {
-        Ok(builder) => match builder.build() {
-            Ok(w) => {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-            Err(e) => log::warn!("ensure_main_window_focus: failed to build main window: {e}"),
-        },
-        Err(e) => log::warn!("ensure_main_window_focus: invalid main window builder: {e}"),
-    }
+    window_lifecycle::reopen_main_window(app);
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -2031,6 +2007,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
     let builder = builder.plugin(plugin_builder);
+    #[cfg(all(target_os = "macos", feature = "mas"))]
+    let builder = builder
+        .menu(window_lifecycle::mas_menu)
+        .on_menu_event(window_lifecycle::on_mas_menu_event);
 
     builder
         .setup(|app| {
@@ -2206,9 +2186,7 @@ pub fn run() {
                 {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = win_evt {
                         api.prevent_close();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
+                        window_lifecycle::hide_main_window(app);
                     }
                 }
                 _ => {}

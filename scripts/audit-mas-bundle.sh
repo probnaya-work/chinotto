@@ -42,6 +42,10 @@ expect_plist "$INFO" LSApplicationCategoryType "public.app-category.productivity
 expect_plist "$INFO" LSMinimumSystemVersion "12.0"
 expect_plist "$INFO" ITSAppUsesNonExemptEncryption "false"
 expect_plist "$PRIVACY" NSPrivacyTracking "false"
+[ -n "$(plist_raw "$INFO" NSMicrophoneUsageDescription || true)" ] \
+  || fail "NSMicrophoneUsageDescription is missing"
+[ -n "$(plist_raw "$INFO" NSSpeechRecognitionUsageDescription || true)" ] \
+  || fail "NSSpeechRecognitionUsageDescription is missing"
 
 ARCHS="$(lipo -archs "$EXECUTABLE")"
 case " $ARCHS " in
@@ -62,7 +66,8 @@ fi
 
 codesign --verify --strict --verbose=2 "$APP_PATH"
 ENT_CHECK="$(mktemp -t chinotto-mas-audit-entitlements).plist"
-trap 'rm -f "$ENT_CHECK"' EXIT
+PROFILE_CHECK=""
+trap 'rm -f "$ENT_CHECK"; [ -z "${PROFILE_CHECK:-}" ] || rm -f "$PROFILE_CHECK"' EXIT
 # `codesign` 27 writes a diagnostic tree when passed a filesystem output path.
 # Its stdout plist form remains machine-readable across the supported toolchains.
 codesign -d --entitlements :- "$APP_PATH" >"$ENT_CHECK" 2>/dev/null
@@ -76,11 +81,33 @@ codesign -d --entitlements :- "$APP_PATH" >"$ENT_CHECK" 2>/dev/null
   || fail "audio-input entitlement is missing"
 [ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.device.microphone || true)" = "true" ] \
   || fail "microphone entitlement is missing"
+[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.developer.applesignin:0 || true)" = "Default" ] \
+  || fail "Sign in with Apple entitlement is missing"
 if plist_literal_key_raw "$ENT_CHECK" com.apple.security.network.server >/dev/null 2>&1; then
   fail "incoming-network entitlement must not be present"
 fi
 if [ "$(plist_literal_key_raw "$ENT_CHECK" get-task-allow || true)" = "true" ]; then
   fail "get-task-allow must not be enabled"
+fi
+
+PROFILE="$APP_PATH/Contents/embedded.provisionprofile"
+if [ -f "$PROFILE" ]; then
+  PROFILE_CHECK="$(mktemp -t chinotto-mas-audit-profile).plist"
+  security cms -D -i "$PROFILE" >"$PROFILE_CHECK" 2>/dev/null \
+    || fail "embedded provisioning profile could not be decoded"
+  PROFILE_APP_ID="$(plist_literal_key_raw "$PROFILE_CHECK" Entitlements:com.apple.application-identifier || true)"
+  case "$PROFILE_APP_ID" in
+    *."$EXPECTED_ID") ;;
+    *) fail "embedded provisioning profile does not match $EXPECTED_ID" ;;
+  esac
+  [ "$(plist_literal_key_raw "$PROFILE_CHECK" Entitlements:com.apple.developer.applesignin:0 || true)" = "Default" ] \
+    || fail "embedded provisioning profile lacks Sign in with Apple"
+  if [ "$(plist_literal_key_raw "$PROFILE_CHECK" Entitlements:get-task-allow || true)" = "true" ]; then
+    fail "embedded provisioning profile enables get-task-allow"
+  fi
+  SIGNING_INFO="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1)"
+  printf '%s\n' "$SIGNING_INFO" | /usr/bin/grep '^Authority=Apple Distribution:' >/dev/null \
+    || fail "app is not signed with Apple Distribution"
 fi
 
 ICON="$APP_PATH/Contents/Resources/icon.icns"
@@ -90,7 +117,8 @@ require_file "$ICON"
 
 if [ -n "$PKG_PATH" ]; then
   require_file "$PKG_PATH"
-  pkgutil --check-signature "$PKG_PATH"
+  pkgutil --check-signature "$PKG_PATH" >/dev/null
+  echo "Installer package signature verified"
 fi
 
 echo "MAS audit passed: $APP_PATH"

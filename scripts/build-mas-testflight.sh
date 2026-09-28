@@ -158,11 +158,15 @@ rm -f "$ARCHIVE_PATH"
 if [ "$MODE" = "package" ]; then
   echo "==> Build signed installer package"
   rm -f "$PKG_PATH"
-  productbuild --component "$STAGED_APP" /Applications \
-    --identifier "${BUNDLE_ID}.pkg" \
-    --version "$BUILD_VERSION" \
-    --sign "$MAS_INSTALLER_SIGN_IDENTITY" \
-    "$PKG_PATH"
+  if ! productbuild --component "$STAGED_APP" /Applications \
+      --identifier "${BUNDLE_ID}.pkg" \
+      --version "$BUILD_VERSION" \
+      --sign "$MAS_INSTALLER_SIGN_IDENTITY" \
+      "$PKG_PATH" >/dev/null 2>&1; then
+    echo "productbuild failed; certificate details were suppressed from the log" >&2
+    exit 1
+  fi
+  echo "Installer package signed"
   xattr -cr "$PKG_PATH" 2>/dev/null || true
   MAS_EXPECTED_BUILD_VERSION="$BUILD_VERSION" \
     "$ROOT/scripts/audit-mas-bundle.sh" "$STAGED_APP" "$PKG_PATH"

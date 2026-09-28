@@ -58,7 +58,7 @@ uploaded.
 | Speech | Usage description is present. Recognition is on-device-only in both builds (`speech.rs` `on_device_task`); recordings remain available when transcription is unsupported, and are read back locally later. |
 | Updates | MAS UI and runtime do not invoke Tauri's GitHub updater. Store updates must come only from the Mac App Store. |
 | Meaning model | Pinned model data is embedded before signing; the MAS runtime refuses a missing bundle cache instead of downloading it. |
-| Menu bar | NSStatusItem behavior is public API. Close hides the main window; Dock reopen restores it; the tray menu provides Quit. Verify global shortcuts and the opaque popover in a signed sandbox smoke test. |
+| Menu bar | NSStatusItem behavior is public API. Close hides the main window; the MAS Chinotto and Window menus expose Open Chinotto; Dock and tray reopen use the same restore path; the tray menu provides Quit Chinotto. Verify global shortcuts and the opaque popover in a signed sandbox smoke test. |
 | Icons | Complete 16–1024 macOS icon set and ICNS are present. Final appearance still needs human review in Finder, Dock, permission prompts, and App Store artwork. |
 | Privacy | Usage strings, public privacy document, and `PrivacyInfo.xcprivacy` are present. App Store Connect privacy answers remain a separate manual task. |
 | Encryption | `ITSAppUsesNonExemptEncryption` is false; only exempt standard platform/TLS cryptography is intended. Confirm this legal classification before submission. |

@@ -102,10 +102,7 @@ def main() -> int:
     # XML plist: codesign reliably consumes this for --entitlements (binary merge caused 90886 for some uploads).
     with out_path.open("wb") as f:
         plistlib.dump(merged, f, fmt=plistlib.FMT_XML)
-    print(
-        f"merged entitlements: application-identifier={app_id!r} team={team!r} -> {out_path}",
-        file=sys.stderr,
-    )
+    print(f"merged signing entitlements -> {out_path}", file=sys.stderr)
     return 0
 
 

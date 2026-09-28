@@ -29,6 +29,19 @@ pub fn set_cache_dir(dir: PathBuf) {
     let _ = CACHE_DIR.set(dir);
 }
 
+fn cache_dir() -> Option<PathBuf> {
+    CACHE_DIR.get().cloned().or_else(|| {
+        #[cfg(test)]
+        {
+            std::env::var_os("MAS_MODEL_CACHE").map(PathBuf::from)
+        }
+        #[cfg(not(test))]
+        {
+            None
+        }
+    })
+}
+
 /// The model, or the reason there is not one.
 ///
 /// Deliberately a cached `Result`: the first load may have to fetch the weights, and a mac
@@ -42,8 +55,7 @@ fn model() -> Result<&'static Mutex<TextEmbedding>, String> {
         .get_or_init(|| {
             #[cfg(feature = "mas")]
             {
-                let dir = CACHE_DIR
-                    .get()
+                let dir = cache_dir()
                     .ok_or_else(|| "bundled meaning model directory is not configured".to_string())?;
                 let repository = dir.join("models--Qdrant--all-MiniLM-L6-v2-onnx");
                 if !repository.join("refs/main").is_file() {
@@ -52,8 +64,8 @@ fn model() -> Result<&'static Mutex<TextEmbedding>, String> {
             }
             let mut options = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
                 .with_show_download_progress(false);
-            if let Some(dir) = CACHE_DIR.get() {
-                options = options.with_cache_dir(dir.clone());
+            if let Some(dir) = cache_dir() {
+                options = options.with_cache_dir(dir);
             }
             TextEmbedding::try_new(options)
                 .map(Mutex::new)

@@ -303,7 +303,7 @@ fn on_menu(app: &tauri::AppHandle, event: MenuEvent) {
             crate::ensure_main_window_focus(app);
             let _ = app.emit("chinotto-open-settings", ());
         }
-        MENU_QUIT => app.exit(0),
+        MENU_QUIT => crate::window_lifecycle::quit_application(app),
         // `today · n` and the sync line state something; they are not verbs and are built
         // disabled, so they never arrive here.
         _ => {}
@@ -321,14 +321,16 @@ fn on_menu(app: &tauri::AppHandle, event: MenuEvent) {
 /// key equivalent would take it away from its owner while the app is frontmost. The keys
 /// keep working; the menu does not claim them.
 pub fn setup(app: &App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, MENU_OPEN, "open chinotto", true, None::<&str>)?;
+    let (open_label, quit_label) =
+        crate::window_lifecycle::tray_labels(crate::window_lifecycle::distribution());
+    let open = MenuItem::with_id(app, MENU_OPEN, open_label, true, None::<&str>)?;
     // Both of these are statements rather than verbs, so they are built disabled: on macOS
     // that is what a menu line that reports something looks like, and it is also what stops
     // somebody clicking a number.
     let today = MenuItem::with_id(app, MENU_TODAY, "today", false, None::<&str>)?;
     let sync = MenuItem::with_id(app, MENU_SYNC, "sync", false, None::<&str>)?;
     let settings = MenuItem::with_id(app, MENU_SETTINGS, "settings", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "quit", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, quit_label, true, None::<&str>)?;
 
     let tray_menu = Menu::with_items(
         app,

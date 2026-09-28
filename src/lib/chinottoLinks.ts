@@ -1,4 +1,4 @@
-/** Mac App Store listing URL. This is a separate app record from iOS ("Chinotto for Mac", id6763830030) — iOS is "Chinotto", id6761345307. */
+/** Mac App Store listing URL. This is a separate app record from iOS ("Chinotto — Thought Record", id6763830030) — iOS is "Chinotto", id6761345307. */
 export const CHINOTTO_MAC_APP_STORE_URL =
   "https://apps.apple.com/us/app/chinotto-for-mac/id6763830030";
 
