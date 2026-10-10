@@ -226,18 +226,18 @@ fn clear_firestore_ingest_suppression(db: tauri::State<Db>, entry_id: String) ->
 
 #[tauri::command(async)]
 fn delete_local_entries_for_sync(
+    app: tauri::AppHandle,
     db: tauri::State<Db>,
     entry_ids: Vec<String>,
 ) -> Result<u32, String> {
-    let deleted = db
-        .delete_local_entries_for_sync(&entry_ids)
-        .map_err(|e| e.to_string())?;
-    // A delete made on another device reaches the Record as a soft removal: the material
-    // stays here, it just stops being present.
-    if let Err(e) = db.absorb_remote_deletes(&entry_ids) {
-        eprintln!("[bridge] absorbing remote deletes failed: {e}");
+    let removed = db.delete_local_entries_for_sync(&entry_ids).map_err(|e| e.to_string())?;
+    let dir = audio_dir(&app)?;
+    let cutoff = db::erasure::permanence_cutoff(chrono::Utc::now());
+    let report = db::erasure::erase_removed_voice(&db, &dir, &cutoff);
+    if !report.kept.is_empty() {
+        eprintln!("[bridge] remote deletion file cleanup will retry for {} moments", report.kept.len());
     }
-    Ok(deleted)
+    Ok(removed)
 }
 
 #[derive(serde::Deserialize)]

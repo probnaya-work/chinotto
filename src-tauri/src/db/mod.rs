@@ -1221,24 +1221,9 @@ impl Db {
         Ok(removed)
     }
 
-    /// Remote tombstone (or sync apply): remove local row without adding suppression; clear suppression for this id.
+    /// Remote tombstone compatibility entry point. Applies the same suppression contract.
     pub fn delete_local_entries_for_sync(&self, entry_ids: &[String]) -> Result<u32, rusqlite::Error> {
-        if entry_ids.is_empty() {
-            return Ok(0);
-        }
-        let conn = self.0.lock().unwrap();
-        let mut removed: u32 = 0;
-        for id in entry_ids {
-            let n = conn.execute("DELETE FROM entries WHERE id = ?1", [id.as_str()])?;
-            if n > 0 {
-                removed += 1;
-            }
-            conn.execute(
-                "DELETE FROM firestore_ingest_suppressed_ids WHERE id = ?1",
-                [id.as_str()],
-            )?;
-        }
-        Ok(removed)
+        self.absorb_remote_deletes(entry_ids).map(|n| n as u32)
     }
 
     pub fn list_theme_counts(
@@ -1937,7 +1922,7 @@ mod tests {
     }
 
     #[test]
-    fn delete_local_entries_for_sync_clears_suppression() {
+    fn delete_local_entries_for_sync_keeps_suppression() {
         let db = Db::open(PathBuf::from(":memory:")).unwrap();
         db.create_entry("gone", "x", "2025-01-01T12:00:00Z", None).unwrap();
         db.delete_entry("gone").unwrap();
@@ -1961,11 +1946,8 @@ mod tests {
                 "2025-02-01T12:00:00Z".to_string(),
             )])
             .unwrap();
-        assert_eq!(n2, 1);
-        assert_eq!(
-            db.get_entry_by_id("gone").unwrap().unwrap().text,
-            "cloud"
-        );
+        assert_eq!(n2, 0);
+        assert!(db.get_entry_by_id("gone").unwrap().is_none());
     }
 
     #[test]

@@ -131,26 +131,27 @@ impl Db {
     /// suppression id stops the next pull from re-inserting it, and the tombstone tells
     /// other devices.
     pub fn remove_fragment(&self, fragment_id: &str) -> Result<(), rusqlite::Error> {
-        let conn = self.0.lock().unwrap();
+        let mut conn = self.0.lock().unwrap();
+        let tx = conn.transaction()?;
         let now = chrono::Utc::now().to_rfc3339();
 
-        conn.execute(
+        tx.execute(
             "UPDATE fragments SET removed_at = ?1 WHERE id = ?2 AND removed_at IS NULL",
             rusqlite::params![now, fragment_id],
         )?;
         // Removed material stops answering Find but stays in the Record.
-        super::record::sync_fts(&conn, fragment_id)?;
+        super::record::sync_fts(&tx, fragment_id)?;
 
-        conn.execute("DELETE FROM entries WHERE id = ?1", [fragment_id])?;
-        conn.execute(
+        tx.execute("DELETE FROM entries WHERE id = ?1", [fragment_id])?;
+        tx.execute(
             "INSERT OR REPLACE INTO firestore_ingest_suppressed_ids (id, suppressed_at) VALUES (?1, ?2)",
             rusqlite::params![fragment_id, now],
         )?;
-        conn.execute(
+        tx.execute(
             "INSERT OR REPLACE INTO sync_tombstone_outbox (entry_id, enqueued_at) VALUES (?1, ?2)",
             rusqlite::params![fragment_id, now],
         )?;
-        Ok(())
+        tx.commit()
     }
 
     /// Puts back something removed by mistake, on this device.
@@ -160,7 +161,7 @@ impl Db {
     /// devices — an honest limit of the legacy protocol, not something to paper over.
     ///
     /// Only inside the removal's window: past `erasure::PERMANENT_AFTER_SECS` a removal is
-    /// permanent and a voice moment's content may already be erased, so nothing is restored
+    /// permanent and its content may already be erased, so nothing is restored
     /// and the tombstone still goes.
     pub fn restore_fragment(&self, fragment_id: &str) -> Result<(), rusqlite::Error> {
         let cutoff = super::erasure::permanence_cutoff(chrono::Utc::now());
@@ -189,28 +190,34 @@ impl Db {
         Ok(())
     }
 
-    /// Soft-removes fragments whose legacy rows were deleted by a remote device.
-    ///
-    /// Called by the sync layer alongside `delete_local_entries_for_sync`, so a delete made
-    /// on the phone reaches the Record. Soft, so a mistake made elsewhere does not destroy
-    /// material here.
+    /// Applies remote tombstones atomically, retaining only an id for stale-ingest suppression.
+    /// The removal time is beyond the local undo boundary because remote undo has expired.
     pub fn absorb_remote_deletes(&self, ids: &[String]) -> Result<usize, rusqlite::Error> {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.0.lock().unwrap();
+        let mut conn = self.0.lock().unwrap();
+        let tx = conn.transaction()?;
         let now = chrono::Utc::now().to_rfc3339();
+        let permanent = super::erasure::permanence_cutoff(chrono::Utc::now() - chrono::Duration::seconds(1));
         let mut removed = 0usize;
         for id in ids {
-            let n = conn.execute(
+            tx.execute("DELETE FROM entries WHERE id = ?1", [id])?;
+            tx.execute("DELETE FROM sync_tombstone_outbox WHERE entry_id = ?1", [id])?;
+            tx.execute(
+                "INSERT OR IGNORE INTO firestore_ingest_suppressed_ids (id, suppressed_at) VALUES (?1, ?2)",
+                rusqlite::params![id, now],
+            )?;
+            let n = tx.execute(
                 "UPDATE fragments SET removed_at = ?1 WHERE id = ?2 AND removed_at IS NULL",
-                rusqlite::params![now, id],
+                rusqlite::params![permanent, id],
             )?;
             if n > 0 {
-                super::record::sync_fts(&conn, id)?;
+                super::record::sync_fts(&tx, id)?;
                 removed += 1;
             }
         }
+        tx.commit()?;
         Ok(removed)
     }
 
@@ -737,13 +744,19 @@ mod tests {
     }
 
     #[test]
-    fn a_delete_from_another_device_softly_removes_it_here() {
+    fn a_delete_from_another_device_erases_the_record_here() {
         let db = db();
         db.ingest_firestore_entries(&[("m1".into(), "from the phone".into(), "2026-01-01T00:00:00Z".into())])
             .unwrap();
         db.project_entries_into_record().unwrap();
 
         assert_eq!(db.absorb_remote_deletes(&["m1".to_string()]).unwrap(), 1);
+        let dir = std::env::temp_dir().join(format!("chinotto-remote-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let report = super::super::erasure::erase_removed_voice(
+            &db, &dir, &super::super::erasure::permanence_cutoff(chrono::Utc::now()));
+        std::fs::remove_dir(&dir).unwrap();
+        assert_eq!(report.erased, 1);
 
         assert!(db.find_fragments("phone", 10).unwrap().is_empty());
         let body: String = {
@@ -751,7 +764,7 @@ mod tests {
             conn.query_row("SELECT body FROM fragments WHERE id = 'm1'", [], |r| r.get(0))
                 .unwrap()
         };
-        assert_eq!(body, "from the phone", "a remote delete does not destroy material here");
+        assert_eq!(body, "");
     }
 
     // ------------------------------------------------------------ catch-up

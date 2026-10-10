@@ -384,7 +384,7 @@ export function RecordApp() {
    * Voice upkeep, in the background and never in the way.
    *
    * Removals that can no longer be undone take their recording and words with them
-   * (`erase_removed_voice`, which waits well past the eight seconds `bring back` offers),
+   * (`erase_removed_voice`, after the eight seconds `bring back` offers),
    * checked on a slow timer. Recordings still waiting for words are read back on this Mac
    * when it can recognise locally (`retry_transcripts`), which asks nothing of the person
    * and backs off by itself; it is offered after the first read and whenever the window
@@ -404,7 +404,7 @@ export function RecordApp() {
       erase();
       retry();
     }, 4000);
-    const eraseTimer = setInterval(erase, 60_000);
+    const eraseTimer = setInterval(erase, 5_000);
     window.addEventListener("focus", retry);
     return () => {
       clearTimeout(first);

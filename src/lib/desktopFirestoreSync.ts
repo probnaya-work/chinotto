@@ -33,7 +33,6 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import {
-  clearFirestoreIngestSuppression,
   clearSyncTombstoneOutboxAll,
   deleteLocalEntriesForSync,
   enqueueSyncTombstone,
@@ -410,13 +409,22 @@ async function pullTombstonesFromServer(
   }
   lastTombstoneGetDocsAt = now;
   try {
-    const snap = await getDocs(tombstoneQuery(coll));
-    const ids = snap.docs.map((d) => d.id);
-    lastTombstoneQueryDocIds = new Set(ids);
-    const removed = await applyRemoteTombstonesById(ids);
-    if (removed > 0) {
-      onIngested();
+    let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+    const seen = new Set<string>();
+    for (;;) {
+      const page: Query<DocumentData> = cursor
+        ? query(coll, where("deletedAt", "!=", null), orderBy("deletedAt", "desc"), startAfter(cursor), limit(TOMBSTONE_QUERY_LIMIT))
+        : tombstoneQuery(coll);
+      const snap = await getDocs(page);
+      if (snap.empty) break;
+      const ids = snap.docs.map((d) => d.id);
+      ids.forEach((id) => seen.add(id));
+      const removed = await applyRemoteTombstonesById(ids);
+      if (removed > 0) onIngested();
+      cursor = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
+      if (snap.docs.length < TOMBSTONE_QUERY_LIMIT) break;
     }
+    lastTombstoneQueryDocIds = seen;
   } catch (e) {
     console.error("[chinotto sync] tombstone getDocs failed", e);
     if (isFirestoreSessionAccessLostError(e)) {
@@ -433,7 +441,7 @@ export type FirestoreEntryPush = {
 
 /**
  * Upsert `users/{uid}/entries/{id}` so mobile (and other clients) receive new or restored thoughts.
- * Uses merge; `deletedAt` is cleared so Cmd+Z after a synced delete can revive the doc remotely.
+ * Uses merge; an undo inside the local window can clear `deletedAt` if it was set already.
  */
 export async function pushEntryUpsertToFirestore(
   entry: FirestoreEntryPush,
@@ -661,7 +669,6 @@ export async function flushSyncTombstoneOutbox(): Promise<void> {
     try {
       await setDoc(ref, { deletedAt: serverTimestamp() }, { merge: true });
       await removeSyncTombstoneOutbox(entryId);
-      await clearFirestoreIngestSuppression(entryId);
     } catch (e) {
       if (isFirestoreSessionAccessLostError(e)) {
         void invalidateFirebaseSyncAfterRemoteSessionLost("tombstoneFlush");

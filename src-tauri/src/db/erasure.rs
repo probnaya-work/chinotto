@@ -1,23 +1,19 @@
-//! What is left of a voice moment once its removal can no longer be undone.
+//! What is left of a moment once its removal can no longer be undone.
 //!
 //! ## Where "for good" is, on the Mac
 //!
 //! `remove_fragment` sets `removed_at`, deletes the legacy row and queues a tombstone, all at
 //! once. What stands between that and permanence is only the quiet line's `bring back`,
-//! offered for `UNDO_WINDOW_SECONDS` (8) and checked once a second — so gone within about
-//! nine seconds, and gone at once if the app quits. Nothing else can restore a removed
-//! fragment: `restore_fragment` has one caller, that button; remote tombstones never reach
-//! the Record (`absorb_remote_deletes` has no caller); and the bridge never re-projects a
-//! fragment it holds as removed.
+//! offered for `UNDO_WINDOW_SECONDS` (8). Remote tombstones are already beyond that window;
+//! the bridge never re-projects a fragment it holds as removed.
 //!
-//! So a removal is permanent once `removed_at` is older than [`PERMANENT_AFTER_SECS`] — a
-//! minute, well past anything the interface can still offer — and `restore_fragment` itself
-//! now refuses past that point, so the rule is enforced here rather than merely observed.
+//! A local removal is permanent after [`PERMANENT_AFTER_SECS`] seconds. `restore_fragment`
+//! refuses past that point, so the rule is enforced here rather than merely observed.
 //!
 //! ## What goes, and what stays
 //!
-//! For a voice moment at that boundary: the recording, the machine transcript, the wording
-//! it became and every earlier wording, the voice metadata, the search entry, the embedding,
+//! For every moment at that boundary: any recording, machine transcript, current and earlier
+//! wording, encounter data, relationships, judgements, search material and embedding,
 //! and cached Traces and Returns that quote it. What stays is the `fragments` row — id,
 //! `captured_at`, `capture_method`, `removed_at` — and the sync outbox and suppression rows
 //! keyed on the id, which are what stop the moment coming back through sync.
@@ -37,14 +33,14 @@ use super::Db;
 use rusqlite::OptionalExtension;
 
 /// How long after a removal it becomes permanent. The interface offers eight seconds.
-pub const PERMANENT_AFTER_SECS: i64 = 60;
+pub const PERMANENT_AFTER_SECS: i64 = 8;
 
 /// The removal cutoff for `now`: anything removed at or before it is removed for good.
 pub fn permanence_cutoff(now: chrono::DateTime<chrono::Utc>) -> String {
     (now - chrono::Duration::seconds(PERMANENT_AFTER_SECS)).to_rfc3339()
 }
 
-/// A removed-for-good voice moment whose content is still here.
+/// A removed-for-good moment whose content is still here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Erasable {
     pub fragment_id: String,
@@ -53,7 +49,7 @@ pub struct Erasable {
 }
 
 impl Db {
-    /// Voice moments removed at or before `cutoff` that still hold any voice content.
+    /// Moments removed at or before `cutoff` that still hold content.
     pub fn removed_voice_to_erase(&self, cutoff: &str) -> Result<Vec<Erasable>, rusqlite::Error> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -61,8 +57,18 @@ impl Db {
                LEFT JOIN voice_captures v ON v.fragment_id = f.id \
               WHERE f.removed_at IS NOT NULL \
                 AND julianday(f.removed_at) <= julianday(?1) \
-                AND (v.fragment_id IS NOT NULL \
-                     OR EXISTS (SELECT 1 FROM voice_transcripts t WHERE t.fragment_id = f.id))",
+                AND (f.body <> '' OR v.fragment_id IS NOT NULL \
+                     OR EXISTS (SELECT 1 FROM fragment_revisions r WHERE r.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM encounters e WHERE e.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM voice_transcripts t WHERE t.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM wording_conflicts w WHERE w.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM continuations c WHERE c.fragment_id = f.id OR c.continues_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM holds h WHERE h.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM traces tr WHERE tr.fragment_id = f.id OR tr.related_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM returns rt WHERE rt.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM return_evidence re WHERE re.related_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM fragment_embeddings em WHERE em.fragment_id = f.id) \
+                     OR EXISTS (SELECT 1 FROM trace_judgements j WHERE j.fragment_id = f.id OR j.related_id = f.id))",
         )?;
         let rows = stmt.query_map([cutoff], |r| {
             Ok(Erasable {
@@ -73,7 +79,7 @@ impl Db {
         rows.collect()
     }
 
-    /// Erases a removed voice moment's content, if it is removed for good by `cutoff`.
+    /// Erases a removed moment's content, if it is removed for good by `cutoff`.
     ///
     /// The recording must already be gone from disk — see the module comment for why the
     /// file comes first. Idempotent: returns false when there was nothing to erase.
@@ -92,17 +98,23 @@ impl Db {
         if eligible.is_none() {
             return Ok(false);
         }
-        // Only voice content is in scope, and a moment already erased has none left.
-        let holds_voice: i64 = tx.query_row(
-            "SELECT (SELECT COUNT(*) FROM voice_captures WHERE fragment_id = ?1) \
-                  + (SELECT COUNT(*) FROM voice_transcripts WHERE fragment_id = ?1)",
-            [fragment_id],
-            |r| r.get(0),
+        let remaining: i64 = tx.query_row(
+            "SELECT (SELECT LENGTH(body) FROM fragments WHERE id = ?1) \
+                  + (SELECT COUNT(*) FROM voice_captures WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM voice_transcripts WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM fragment_revisions WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM encounters WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM holds WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM continuations WHERE fragment_id = ?1 OR continues_id = ?1) \
+                  + (SELECT COUNT(*) FROM traces WHERE fragment_id = ?1 OR related_id = ?1) \
+                  + (SELECT COUNT(*) FROM returns WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM return_evidence WHERE related_id = ?1) \
+                  + (SELECT COUNT(*) FROM fragment_embeddings WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM wording_conflicts WHERE fragment_id = ?1) \
+                  + (SELECT COUNT(*) FROM trace_judgements WHERE fragment_id = ?1 OR related_id = ?1)",
+            [fragment_id], |r| r.get(0),
         )?;
-        if holds_voice == 0 {
-            return Ok(false);
-        }
-
+        if remaining == 0 { return Ok(false); }
         tx.execute("DELETE FROM fragment_revisions WHERE fragment_id = ?1", [fragment_id])?;
         // correction_count == COUNT(fragment_revisions) is an invariant.
         tx.execute(
@@ -112,6 +124,10 @@ impl Db {
         tx.execute("DELETE FROM voice_transcripts WHERE fragment_id = ?1", [fragment_id])?;
         tx.execute("DELETE FROM voice_captures WHERE fragment_id = ?1", [fragment_id])?;
         tx.execute("DELETE FROM wording_conflicts WHERE fragment_id = ?1", [fragment_id])?;
+        tx.execute("DELETE FROM encounters WHERE fragment_id = ?1", [fragment_id])?;
+        tx.execute("DELETE FROM holds WHERE fragment_id = ?1", [fragment_id])?;
+        tx.execute("DELETE FROM continuations WHERE fragment_id = ?1 OR continues_id = ?1", [fragment_id])?;
+        tx.execute("DELETE FROM trace_judgements WHERE fragment_id = ?1 OR related_id = ?1", [fragment_id])?;
         tx.execute("DELETE FROM fragment_embeddings WHERE fragment_id = ?1", [fragment_id])?;
         tx.execute(
             "DELETE FROM traces WHERE fragment_id = ?1 OR related_id = ?1",
@@ -122,6 +138,7 @@ impl Db {
                 OR id IN (SELECT return_id FROM return_evidence WHERE related_id = ?1)",
             [fragment_id],
         )?;
+        super::migrate::rebuild_line_index(&tx)?;
         // Removed material is already out of Find; this makes sure no row is left behind.
         sync_fts(&tx, fragment_id)?;
         tx.commit()?;
@@ -162,7 +179,7 @@ pub struct ErasureReport {
     pub kept: Vec<String>,
 }
 
-/// Erases every voice moment removed for good by `cutoff`: the file, then the content.
+/// Erases every moment removed for good by `cutoff`: the file, then the content.
 pub fn erase_removed_voice(db: &Db, audio_dir: &std::path::Path, cutoff: &str) -> ErasureReport {
     let mut report = ErasureReport::default();
     let Ok(due) = db.removed_voice_to_erase(cutoff) else {
@@ -185,8 +202,13 @@ pub fn erase_removed_voice(db: &Db, audio_dir: &std::path::Path, cutoff: &str) -
                 }
             }
         }
-        if let Ok(true) = db.erase_voice_content(&item.fragment_id, cutoff) {
-            report.erased += 1;
+        match db.erase_voice_content(&item.fragment_id, cutoff) {
+            Ok(true) => report.erased += 1,
+            Ok(false) => {},
+            Err(error) => {
+                eprintln!("[erasure] will retry {}: {error}", item.fragment_id);
+                report.kept.push(item.fragment_id);
+            }
         }
     }
     report
@@ -358,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_and_live_material_is_never_touched() {
+    fn removed_typed_material_is_erased_but_live_material_is_untouched() {
         let db = db();
         let dir = audio_dir();
         let (live, live_path) = voice_moment(&db, &dir.0);
@@ -366,14 +388,40 @@ mod tests {
         db.remove_fragment(&typed.id).unwrap();
 
         let report = erase_removed_voice(&db, &dir.0, &cutoff_after(PERMANENT_AFTER_SECS));
-        assert_eq!(report, ErasureReport::default());
+        assert_eq!(report.erased, 1);
         assert!(live_path.exists());
         assert_eq!(count(&db, "SELECT COUNT(*) FROM voice_captures WHERE fragment_id = ?1", &live), 1);
         let conn = db.0.lock().unwrap();
         let body: String = conn
             .query_row("SELECT body FROM fragments WHERE id = ?1", [&typed.id], |r| r.get(0))
             .unwrap();
-        assert_eq!(body, "typed, not said");
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn remote_tombstone_erases_content_without_echo_or_resurrection() {
+        let db = db();
+        let dir = audio_dir();
+        let (id, path) = voice_moment(&db, &dir.0);
+        let other = db.capture_fragment("unrelated", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&id).unwrap();
+
+        assert_eq!(db.absorb_remote_deletes(&[id.clone()]).unwrap(), 1);
+        let cutoff = permanence_cutoff(chrono::Utc::now());
+        assert_eq!(erase_removed_voice(&db, &dir.0, &cutoff).erased, 1);
+        assert!(!path.exists());
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM sync_tombstone_outbox WHERE entry_id = ?1", &id), 0);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM firestore_ingest_suppressed_ids WHERE id = ?1", &id), 1);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM voice_captures WHERE fragment_id = ?1", &id), 0);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM fragment_revisions WHERE fragment_id = ?1", &id), 0);
+        assert_eq!(db.ingest_firestore_entries(&[(id.clone(), "stale".into(), "2026-01-01T00:00:00Z".into())]).unwrap(), 0);
+        assert_eq!(db.absorb_remote_deletes(&[id.clone()]).unwrap(), 0);
+        assert_eq!(erase_removed_voice(&db, &dir.0, &cutoff).erased, 0);
+        let conn = db.0.lock().unwrap();
+        let body: String = conn.query_row("SELECT body FROM fragments WHERE id = ?1", [&id], |r| r.get(0)).unwrap();
+        assert_eq!(body, "");
+        let other_body: String = conn.query_row("SELECT body FROM fragments WHERE id = ?1", [&other.id], |r| r.get(0)).unwrap();
+        assert_eq!(other_body, "unrelated");
     }
 
     #[test]
