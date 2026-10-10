@@ -4,14 +4,14 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 
 ## Your data
 
-- **Entry text** is stored locally only. It is not sent to analytics or included in crash-style telemetry.
+- **Record text** is stored locally by default. With optional sync, text is also stored in the synced copy. It is not sent to analytics or included in crash-style telemetry.
 - **Voice recordings** are stored in Chinotto's local app data and are not synced. Both the Mac App
   Store and the direct-download builds transcribe only on-device: when macOS has no on-device
   recogniser for the language, or speech recognition is not allowed, the recording is kept without
   a transcript and nothing is sent anywhere. It is read back on this Mac later, once, if on-device
   recognition becomes available. Time Machine may include the app's local data.
-- **Removing a voice entry** deletes its recording and transcript from this Mac a minute after
-  removal, once it can no longer be brought back. Backups you make yourself and exports are yours
+- **Removing a moment** erases its wording, history, relationships and derived material after
+  the eight-second undo period. A voice moment's local recording and transcript go too. Backups you make yourself and exports are yours
   and are not changed.
 - **Export** — Export the record writes a ZIP of plain text and audio to a location you control.
 - **Backup** — automatic local backups in `chinotto-backups/` (last 7 kept).
@@ -24,6 +24,10 @@ When you enable sync and sign in with Apple, entry text can sync with the Chinot
 Firebase. Recall themes can sync too when enabled on both devices. Chinotto also stores an install
 identifier and the Mac name you see in the device list. Voice audio is not synced. Sync is optional;
 the app remains fully usable without it.
+
+Removing a synced moment marks the cloud copy as removed; its text remains there until the cloud
+account is deleted. Removing the cloud account deletes the synced copy and leaves local records on
+your devices.
 
 ## Optional sharing
 
