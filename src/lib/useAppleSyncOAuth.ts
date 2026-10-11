@@ -83,10 +83,35 @@ function messageFromAppleSyncStartFailure(
 }
 
 const OAUTH_TIMEOUT_MS = 4 * 60 * 1000;
+const CREDENTIAL_TIMEOUT_MS = 30 * 1000;
 
 type OauthSuccessPayload = { nonce: string; credential: BridgedOAuthCredentialJson };
 type OauthErrorPayload = { nonce: string; message: string };
 type NativeAppleSignInResult = { idToken: string; rawNonce: string };
+
+export function isNativeAppleSignInCancellation(e: unknown): boolean {
+  const raw = extractAppleSyncStartErrorText(e);
+  return /APPLE_SIGN_IN_CANCELLED|AuthorizationError[^\n]*1001|\bcancel(?:l)?ed\b/i.test(raw);
+}
+
+async function applyAppleCredentialWithDeadline(
+  credential: BridgedOAuthCredentialJson,
+): Promise<User> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject({
+        code: "auth/network-request-failed",
+        message: "Firebase credential exchange timed out.",
+      });
+    }, CREDENTIAL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([signInWithAppleCredential(credential), deadline]);
+  } finally {
+    if (timeout != null) clearTimeout(timeout);
+  }
+}
 
 type UseAppleSyncOAuthOptions = {
   /** When false, auth subscription is inactive (saves work when modal is closed). */
@@ -105,6 +130,7 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inflightCleanupRef = useRef<(() => void) | null>(null);
+  const attemptRef = useRef(0);
 
   useEffect(() => {
     if (!active || !isFirebaseSyncConfigured()) {
@@ -121,6 +147,7 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
   }, []);
 
   const onContinueApple = useCallback(async () => {
+    const attempt = ++attemptRef.current;
     setError(null);
     if (!isTauriShell()) {
       setError("Use the Chinotto desktop app to continue.");
@@ -134,18 +161,22 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
       setBusy(true);
       try {
         const native = await invoke<NativeAppleSignInResult>("native_apple_sign_in");
-        await signInWithAppleCredential({
+        if (attempt !== attemptRef.current) return;
+        const signedInUser = await applyAppleCredentialWithDeadline({
           providerId: "apple.com",
           signInMethod: "apple.com",
           idToken: native.idToken,
           nonce: native.rawNonce,
         });
+        if (attempt !== attemptRef.current) return;
+        setUser(signedInUser);
         track({ event: "sync_oauth_completed" });
       } catch (e) {
+        if (attempt !== attemptRef.current) return;
         track({ event: "sync_oauth_failed", reason: "credential" });
-        setError(userMessageFromCredentialApplyError(e));
+        setError(isNativeAppleSignInCancellation(e) ? null : userMessageFromCredentialApplyError(e));
       } finally {
-        setBusy(false);
+        if (attempt === attemptRef.current) setBusy(false);
       }
       return;
     }
@@ -180,24 +211,32 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
     inflightCleanupRef.current = cleanup;
 
     const unSuccess = await listen<OauthSuccessPayload>("chinotto-sync-oauth-success", async (event) => {
-      if (event.payload.nonce !== nonce) {
+      if (event.payload.nonce !== nonce || attempt !== attemptRef.current) {
         return;
       }
       cleanup();
       try {
-        await signInWithAppleCredential(event.payload.credential);
+        const signedInUser = await applyAppleCredentialWithDeadline(event.payload.credential);
+        if (attempt !== attemptRef.current) return;
+        setUser(signedInUser);
+        try {
+          localStorage.removeItem("chinotto_oauth_nonce");
+        } catch {
+          /* ignore */
+        }
         track({ event: "sync_oauth_completed" });
       } catch (e) {
+        if (attempt !== attemptRef.current) return;
         track({ event: "sync_oauth_failed", reason: "credential" });
         setError(userMessageFromCredentialApplyError(e));
       } finally {
-        setBusy(false);
+        if (attempt === attemptRef.current) setBusy(false);
       }
     });
     unlisteners.push(unSuccess);
 
     const unErr = await listen<OauthErrorPayload>("chinotto-sync-oauth-error", (event) => {
-      if (event.payload.nonce !== nonce) {
+      if (event.payload.nonce !== nonce || attempt !== attemptRef.current) {
         return;
       }
       cleanup();
@@ -255,6 +294,25 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
     }
   }, []);
 
+  const onCancelApple = useCallback(() => {
+    ++attemptRef.current;
+    inflightCleanupRef.current?.();
+    inflightCleanupRef.current = null;
+    setError(null);
+    setBusy(false);
+    try {
+      localStorage.removeItem("chinotto_oauth_nonce");
+    } catch {
+      /* ignore */
+    }
+
+    if (IS_MAC_APP_STORE && isTauriShell()) {
+      void invoke("cancel_native_apple_sign_in").catch((e) => {
+        logOAuthUnknownError("cancel_native_apple_sign_in", e);
+      });
+    }
+  }, []);
+
   const onSignOut = useCallback(async () => {
     setError(null);
     setSigningOut(true);
@@ -274,6 +332,12 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
 
   const stable = user != null && !user.isAnonymous;
 
+  // A timed-out credential request may still complete underneath the SDK. The auth observer is
+  // the source of truth, so a real signed-in user must also retire any stale retry message.
+  useEffect(() => {
+    if (stable) setError(null);
+  }, [stable]);
+
   return {
     user,
     stable,
@@ -282,6 +346,7 @@ export function useAppleSyncOAuth({ active }: UseAppleSyncOAuthOptions) {
     error,
     setError,
     onContinueApple,
+    onCancelApple,
     onSignOut,
   };
 }

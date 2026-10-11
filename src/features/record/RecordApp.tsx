@@ -139,7 +139,7 @@ function settingsSyncLine(
   devices: SyncDevice[] | null,
   pending: number,
 ): string {
-  if (state === "error") return "stopped · this mac’s sign-in expired.";
+  if (state === "error") return "off · sign-in needs attention.";
   if (state === "off") return "off · the record is only on this mac.";
   if (state === "connecting") return "connecting this mac…";
   if (offline) return `on · offline, ${pending} waiting.`;
@@ -221,7 +221,6 @@ export function RecordApp() {
   const [pendingToSync, setPendingToSync] = useState(0);
   /** Set by "already done on the phone?", which is the manual way past step one. */
   const [phoneReady, setPhoneReady] = useState(false);
-  const [signingIn, setSigningIn] = useState(false);
   /** This mac was removed from the record by another device. */
   const [revoked, setRevoked] = useState(false);
 
@@ -229,7 +228,7 @@ export function RecordApp() {
   // identity to sync, it does not redesign how signing in works.
   const appleAuth = useAppleSyncOAuth({ active: surface === "sync" || surface === "settings" });
   const signedIn = appleAuth.user != null || isSignedInForSync();
-  const syncState: SyncState = signingIn || appleAuth.busy
+  const syncState: SyncState = appleAuth.busy
     ? "connecting"
     : appleAuth.error
       ? "error"
@@ -989,14 +988,13 @@ export function RecordApp() {
             qrUrl="https://getchinotto.app/sync"
             onAlreadyDone={() => setPhoneReady(true)}
             onContinueWithApple={() => {
-              setSigningIn(true);
-              void appleAuth
-                .onContinueApple()
-                .then(() => registerThisDevice())
-                .catch(() => {})
-                .finally(() => setSigningIn(false));
+              // Device registration belongs to the signed-in heartbeat above. Keeping it out
+              // of the button's loading lifetime means a slow Firestore check-in can never
+              // strand the Apple sign-in surface in its connecting state.
+              void appleAuth.onContinueApple();
             }}
             onRemoveDevice={(id) => {
+            onCancelSignIn={appleAuth.onCancelApple}
               void removeDevice(id).catch(() => {
                 setNotice("that device could not be removed · try again when online");
               });
@@ -1020,7 +1018,7 @@ export function RecordApp() {
               setSurface(null);
               setFocusId(fragmentId);
             }}
-            expiredWhen={appleAuth.error ? "recently" : "recently"}
+            errorMessage={appleAuth.error}
             onLeave={() => setSurface("settings")}
           />
         ) : surface === "settings" ? (
@@ -1370,7 +1368,7 @@ export function RecordApp() {
         }
         notice={notice}
         offline={!online}
-        syncOn={isFirebaseSyncConfigured()}
+        syncOn={syncState === "on"}
         update={
           updater.phase === "available" && updater.version
             ? {

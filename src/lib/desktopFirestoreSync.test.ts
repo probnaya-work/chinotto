@@ -60,6 +60,7 @@ import {
   deleteCloudAccount,
   isFirestoreSessionAccessLostError,
   normalizeFirestoreCreatedAtForIngest,
+  startPostSignInSync,
 } from "./desktopFirestoreSync";
 
 describe("normalizeFirestoreCreatedAtForIngest", () => {
@@ -103,8 +104,8 @@ describe("normalizeFirestoreCreatedAtForIngest", () => {
 });
 
 describe("isFirestoreSessionAccessLostError", () => {
-  it("is true for permission-denied and unauthenticated Firestore-style errors", () => {
-    expect(isFirestoreSessionAccessLostError({ code: "permission-denied" })).toBe(true);
+  it("only treats an explicit unauthenticated response as a lost auth session", () => {
+    expect(isFirestoreSessionAccessLostError({ code: "permission-denied" })).toBe(false);
     expect(isFirestoreSessionAccessLostError({ code: "unauthenticated" })).toBe(true);
     expect(isFirestoreSessionAccessLostError({ code: "unavailable" })).toBe(false);
     expect(isFirestoreSessionAccessLostError(null)).toBe(false);
@@ -122,6 +123,20 @@ describe("Mac sync has no purchase dependency", () => {
 
   it("has no StoreKit/IAP/purchase code", () => {
     expect(src).not.toMatch(/StoreKit|\bIAP\b|purchase/i);
+  });
+});
+
+describe("post-sign-in sync", () => {
+  it("starts every remote task without holding the credential boundary open", () => {
+    const never = () => new Promise<void>(() => {});
+    const tombstones = vi.fn(never);
+    const themes = vi.fn(never);
+    const backfill = vi.fn(never);
+
+    expect(startPostSignInSync({ tombstones, themes, backfill })).toBeUndefined();
+    expect(tombstones).toHaveBeenCalledOnce();
+    expect(themes).toHaveBeenCalledOnce();
+    expect(backfill).toHaveBeenCalledOnce();
   });
 });
 

@@ -159,6 +159,19 @@ async fn native_apple_sign_in(app: tauri::AppHandle) -> Result<NativeAppleSignIn
     }
 }
 
+#[tauri::command]
+fn cancel_native_apple_sign_in(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        native_apple_sign_in::cancel(&app)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok(())
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FirestoreEntryIn {
@@ -2191,6 +2204,7 @@ pub fn run() {
                 }
                 _ => {}
             }
+            cancel_native_apple_sign_in,
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = &event {
                 ensure_main_window_focus(app);
