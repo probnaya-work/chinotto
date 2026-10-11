@@ -38,6 +38,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 vi.mock("@/lib/uiZoom", () => ({ applyStoredUiZoom: () => Promise.resolve(1) }));
+vi.mock("@/lib/distribution", () => ({ IS_MAC_APP_STORE: true }));
 vi.mock("@/lib/firebaseConfig", () => ({ isFirebaseSyncConfigured: () => true }));
 vi.mock("@/lib/appearance", () => ({
   applyAppearance: vi.fn(),
@@ -53,10 +54,14 @@ vi.mock("@/lib/recordApi", () => ({
   recordReturnOutcome: vi.fn(() => Promise.resolve()),
   refreshTray: vi.fn(() => Promise.resolve()),
   fitCapturePopover: vi.fn(() => Promise.resolve()),
+  prepareVoiceAccess: vi.fn(() =>
+    Promise.resolve({ microphone: "granted", prompted: false }),
+  ),
   recordVoice: vi.fn(() => new Promise(() => {})),
   captureVoice: vi.fn(),
   recordTranscript: vi.fn(),
   stopVoiceCapture: vi.fn(() => Promise.resolve()),
+  discardVoiceRecording: vi.fn(() => Promise.resolve()),
 }));
 
 // The hook the panel shares with the edge reaches for the api through its own relative
@@ -114,6 +119,13 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("resting", () => {
+  it("marks the public opaque App Store host so it is painted as one dark panel", async () => {
+    render(<TrayCapture />);
+    await act(async () => {});
+
+    expect(document.documentElement).toHaveClass("tray-capture-page", "tray-capture-opaque");
+  });
+
   it("draws the caret, the placeholder, and the way to speak", async () => {
     render(<TrayCapture />);
     await act(async () => {});
@@ -121,7 +133,7 @@ describe("resting", () => {
     expect(field()).toHaveAttribute("placeholder", "anything");
     expect(screen.getByText("⏎ leave it")).toBeInTheDocument();
     expect(screen.getByText("esc close")).toBeInTheDocument();
-    expect(screen.getByText("hold ⌥ to speak")).toBeInTheDocument();
+    expect(screen.getByText("hold ⌥ / mouse · tap locks")).toBeInTheDocument();
   });
 
   it("holds the field's own caret back while the drawn one is standing there", async () => {
@@ -261,6 +273,29 @@ describe("a return is waiting", () => {
 });
 
 describe("speaking", () => {
+  it("uses the same hold-or-tap gesture from the mouse hint", async () => {
+    render(<TrayCapture />);
+    await act(async () => {});
+
+    const hint = screen.getByRole("button", { name: "hold to speak; tap to lock" });
+    await act(async () => {
+      fireEvent.mouseDown(hint);
+    });
+    expect(api.recordVoice).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/holding ·/)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.mouseUp(window);
+    });
+    expect(screen.getByText(/hands-free ·/)).toBeInTheDocument();
+    expect(api.stopVoiceCapture).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByText(/hands-free ·/));
+    });
+    expect(api.stopVoiceCapture).toHaveBeenCalledTimes(1);
+  });
+
   it("holds ⌥ on an empty field, and says what it is doing", async () => {
     render(<TrayCapture />);
     await act(async () => {});
@@ -270,8 +305,8 @@ describe("speaking", () => {
     });
 
     expect(api.recordVoice).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/holding ⌥ ·/)).toBeInTheDocument();
-    expect(screen.getByText("release to leave it")).toBeInTheDocument();
+    expect(screen.getByText(/holding ·/)).toBeInTheDocument();
+    expect(screen.getByText("release to leave it · tap locks")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "esc drop it" })).toBeInTheDocument();
   });
 
@@ -300,7 +335,7 @@ describe("speaking", () => {
     expect(api.captureVoice).not.toHaveBeenCalled();
   });
 
-  it("takes the chord from anywhere on the mac while it is the surface in front", async () => {
+  it("takes the chord from anywhere, locks a tap, and leaves it on the next press", async () => {
     render(<TrayCapture />);
     await act(async () => {});
 
@@ -311,6 +346,12 @@ describe("speaking", () => {
 
     await act(async () => {
       listeners.get("chinotto-voice-hold-stop")?.({ payload: null });
+    });
+    expect(screen.getByText(/hands-free ·/)).toBeInTheDocument();
+    expect(api.stopVoiceCapture).not.toHaveBeenCalled();
+
+    await act(async () => {
+      listeners.get("chinotto-voice-hold-start")?.({ payload: null });
     });
     expect(api.stopVoiceCapture).toHaveBeenCalledTimes(1);
   });

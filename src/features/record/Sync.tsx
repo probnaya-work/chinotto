@@ -30,10 +30,11 @@ export interface SyncProps {
   conflicts: WordingConflict[];
   now: Date;
 
-  /** The phone has reported in, so "continue with apple" can do something. */
+  /** Whether the person has confirmed that the phone already has the record. */
   phoneReady: boolean;
   onAlreadyDone: () => void;
   onContinueWithApple: () => void;
+  onCancelSignIn: () => void;
   qrUrl: string;
 
   onRemoveDevice: (id: string) => void;
@@ -41,8 +42,8 @@ export interface SyncProps {
   onResolveConflict: (fragmentId: string, shows: "local" | "remote") => void;
   onOpenFragment: (fragmentId: string) => void;
 
-  /** When the sign-in expired, said in the person's own terms. */
-  expiredWhen: string;
+  /** The actual sign-in failure, instead of falsely calling every failure an expiry. */
+  errorMessage: string | null;
 
   onLeave: () => void;
 }
@@ -107,26 +108,16 @@ export function Sync(props: SyncProps) {
                 <div
                   style={{ display: "flex", gap: "22px", alignItems: "center", marginTop: "6px" }}
                 >
-                  {/*
-                    Inert until the phone has reported in. Signing in first creates an
-                    account with nothing to sync to, which looks like it worked and is not
-                    recoverable without explaining what happened.
-                  */}
                   <Verb
+                    filled
                     onClick={props.onContinueWithApple}
-                    disabled={!props.phoneReady}
                     style={{
                       height: 44,
                       padding: "0 20px",
                       display: "inline-flex",
                       alignItems: "center",
                       fontSize: "var(--size-utility-2)",
-                      cursor: props.phoneReady ? "pointer" : "default",
-                      background: props.phoneReady ? "var(--agency)" : "transparent",
-                      color: props.phoneReady ? "var(--agency-ground)" : "var(--inert-ink)",
-                      border: props.phoneReady
-                        ? "1px solid var(--agency)"
-                        : "1px solid var(--inert-border)",
+                      cursor: "pointer",
                       transition: "all .25s",
                     }}
                   >
@@ -165,6 +156,9 @@ export function Sync(props: SyncProps) {
               <Head>connecting this mac…</Head>
             </div>
             <Secondary>the phone already has the record. the mac is checking in.</Secondary>
+            <div>
+              <Verb quiet onClick={props.onCancelSignIn}>cancel and try again</Verb>
+            </div>
           </>
         ) : null}
 
@@ -303,7 +297,7 @@ export function Sync(props: SyncProps) {
 
         {props.state === "error" ? (
           <>
-            <Head>sync stopped.</Head>
+            <Head>sync could not connect.</Head>
             <div
               style={{
                 fontSize: "var(--size-utility)",
@@ -311,23 +305,22 @@ export function Sync(props: SyncProps) {
                 color: "var(--ink-near)",
               }}
             >
-              this mac’s sign-in expired {props.expiredWhen}. nothing was lost —{" "}
+              {props.errorMessage ?? "apple sign-in did not finish."} nothing was lost —{" "}
               {pendingPhrase} waiting here, and the phone kept going.
             </div>
             <div style={{ display: "flex", gap: "22px", alignItems: "center" }}>
               <Verb
+                filled
                 onClick={props.onContinueWithApple}
                 style={{
                   height: 44,
                   padding: "0 20px",
                   display: "inline-flex",
                   alignItems: "center",
-                  background: "var(--agency)",
-                  color: "var(--agency-ground)",
                   fontSize: "var(--size-utility-2)",
                 }}
               >
-                sign in again
+                try apple sign-in again
               </Verb>
               <Verb quiet onClick={props.onStopSyncing}>or stop syncing on this mac</Verb>
             </div>

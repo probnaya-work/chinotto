@@ -67,7 +67,9 @@ fi
 
 SOURCE_APP="$ROOT/src-tauri/target/release/bundle/macos/${APP_NAME}.app"
 OUT_DIR="$ROOT/builds/mas"
-STAGED_APP="$OUT_DIR/${APP_NAME}-${MARKETING_VERSION}-${BUILD_VERSION}-mas.app"
+# The component name becomes the installed filename in /Applications and therefore the Dock
+# label. Keep versioning in the archive/package filenames, never in the app bundle itself.
+STAGED_APP="$OUT_DIR/${APP_NAME}.app"
 ARCHIVE_PATH="$OUT_DIR/${APP_NAME}-${MARKETING_VERSION}-${BUILD_VERSION}-mas.zip"
 PKG_PATH="$OUT_DIR/${APP_NAME}-${MARKETING_VERSION}-${BUILD_VERSION}-mas.pkg"
 ENTITLEMENTS="$ROOT/src-tauri/Chinotto.mas.entitlements"
@@ -101,6 +103,17 @@ if [ ! -d "$SOURCE_APP" ]; then
   echo "Expected app not found: $SOURCE_APP" >&2
   exit 1
 fi
+
+# A custom Info.plist is merged after Tauri's generated metadata and can retain an older build
+# number even when the CLI override is correct. Stamp and verify the actual bundle that will be
+# signed; App Store Connect reads this file, not our build command.
+SOURCE_INFO="$SOURCE_APP/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$MARKETING_VERSION" "$SOURCE_INFO"
+plutil -replace CFBundleVersion -string "$BUILD_VERSION" "$SOURCE_INFO"
+[ "$(plutil -extract CFBundleVersion raw -o - "$SOURCE_INFO")" = "$BUILD_VERSION" ] || {
+  echo "Failed to stamp CFBundleVersion $BUILD_VERSION into $SOURCE_INFO" >&2
+  exit 1
+}
 
 if [ -e "$STAGED_APP" ]; then
   rm -rf "$STAGED_APP"

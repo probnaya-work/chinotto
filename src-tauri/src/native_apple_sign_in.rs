@@ -11,7 +11,7 @@ use objc2::{define_class, msg_send, AnyThread, DefinedClass, MainThreadOnly};
 use objc2_app_kit::NSWindow;
 use objc2_authentication_services::{
     ASAuthorization, ASAuthorizationAppleIDCredential, ASAuthorizationAppleIDProvider,
-    ASAuthorizationController, ASAuthorizationControllerDelegate,
+    ASAuthorizationController, ASAuthorizationControllerDelegate, ASAuthorizationError,
     ASAuthorizationControllerPresentationContextProviding, ASAuthorizationOperationLogin,
     ASAuthorizationRequest, ASAuthorizationScopeEmail, ASAuthorizationScopeFullName,
     ASPresentationAnchor,
@@ -25,9 +25,11 @@ use tauri::Manager;
 
 use crate::NativeAppleSignInResult;
 
+const APPLE_SIGN_IN_CANCELLED: &str = "APPLE_SIGN_IN_CANCELLED";
+
 struct SignInKeepAlive {
-    _delegate: Retained<AppleAuthDelegate>,
-    _controller: Retained<ASAuthorizationController>,
+    delegate: Retained<AppleAuthDelegate>,
+    controller: Retained<ASAuthorizationController>,
 }
 
 thread_local! {
@@ -92,8 +94,11 @@ define_class!(
             _controller: &ASAuthorizationController,
             error: &NSError,
         ) {
-            let desc = error.localizedDescription();
-            let msg = desc.to_string();
+            let msg = if error.code() == ASAuthorizationError::Canceled.0 {
+                APPLE_SIGN_IN_CANCELLED.to_string()
+            } else {
+                error.localizedDescription().to_string()
+            };
             send_result(self.ivars(), Err(msg));
         }
     }
@@ -139,6 +144,34 @@ pub fn run(app: &AppHandle) -> Result<NativeAppleSignInResult, String> {
     .map_err(|e| e.to_string())?;
     rx.recv_timeout(Duration::from_secs(120))
         .map_err(|_| "Sign in with Apple timed out.".to_string())?
+}
+
+/// End an authorization request that no longer has a visible system sheet.
+///
+/// AuthenticationServices normally reports a cancelled sheet through the delegate. This explicit
+/// escape hatch also releases the retained controller and wakes the blocking command when macOS
+/// dismisses the sheet without delivering that callback promptly.
+pub fn cancel(app: &AppHandle) -> Result<(), String> {
+    app.clone()
+        .run_on_main_thread(|| {
+            let flow = SIGN_IN_KEEP_ALIVE.with(|cell| cell.borrow_mut().take());
+            if let Some(flow) = flow {
+                if let Some(sender) = flow
+                    .delegate
+                    .ivars()
+                    .done_tx
+                    .lock()
+                    .expect("AppleAuthIvars.done_tx poisoned")
+                    .take()
+                {
+                    let _ = sender.send(Err(APPLE_SIGN_IN_CANCELLED.to_string()));
+                }
+                unsafe {
+                    flow.controller.cancel();
+                }
+            }
+        })
+        .map_err(|e| e.to_string())
 }
 
 fn run_on_main(app: &AppHandle, done_tx: SyncSender<Result<NativeAppleSignInResult, String>>) -> Result<(), String> {
@@ -198,8 +231,8 @@ fn run_on_main(app: &AppHandle, done_tx: SyncSender<Result<NativeAppleSignInResu
             return Err("Another Sign in with Apple flow is already in progress.".to_string());
         }
         *slot = Some(SignInKeepAlive {
-            _delegate: delegate,
-            _controller: controller.clone(),
+            delegate,
+            controller: controller.clone(),
         });
         Ok(())
     })?;

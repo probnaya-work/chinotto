@@ -25,19 +25,21 @@
 
 use block2::RcBlock;
 use objc2::rc::Retained;
+use objc2::runtime::{AnyClass, Bool};
 use objc2::AnyThread;
 use objc2_avf_audio::{
-    AVAudioEngine, AVAudioFile, AVAudioFrameCount, AVAudioPCMBuffer, AVAudioTime,
+    AVAudioApplication, AVAudioApplicationRecordPermission, AVAudioEngine, AVAudioFile,
+    AVAudioFrameCount, AVAudioPCMBuffer, AVAudioTime,
 };
-use objc2_foundation::NSURL;
 use objc2_foundation::NSError;
+use objc2_foundation::NSURL;
 use objc2_speech::{
     SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionRequest, SFSpeechRecognitionResult,
     SFSpeechRecognitionTask, SFSpeechRecognizer, SFSpeechRecognizerAuthorizationStatus,
     SFSpeechURLRecognitionRequest,
 };
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -75,25 +77,51 @@ pub fn arm_stop() {
     STOP_REQUESTED.store(false, Ordering::SeqCst);
 }
 
-/// Asks the mac, once, whether this app may read recordings back as words.
-///
-/// Speech recognition is a separate permission from the microphone, and an app that has
-/// never asked does not appear under System Settings › Privacy & Security › Speech
-/// Recognition at all — so telling somebody to go and enable it there, which is what this
-/// used to do, sent them to a list they could not be on. The only way out of "not
-/// determined" is to ask.
-///
-/// It does not wait for the answer. The prompt is the person's to take their time over, and
-/// the recording is already running; this capture keeps its audio and gets no transcript,
-/// and the next one gets both.
-pub fn ask_for_speech_if_undecided() {
-    let status = unsafe { SFSpeechRecognizer::authorizationStatus() };
-    if status.0 != NOT_DETERMINED_STATUS {
-        return;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PermissionState {
+    Granted,
+    Denied,
+    Undetermined,
+    /// `AVAudioApplication` arrived in macOS 14. Older supported Macs keep the previous
+    /// engine-triggered prompt rather than crashing while looking up a class they lack.
+    Legacy,
+}
+
+pub fn microphone_permission_state() -> PermissionState {
+    if AnyClass::get(c"AVAudioApplication").is_none() {
+        return PermissionState::Legacy;
     }
-    eprintln!("[Speech] speech authorisation not determined — asking");
-    let handler = RcBlock::new(|answered: SFSpeechRecognizerAuthorizationStatus| {
-        eprintln!("[Speech] speech authorisation answered: {}", answered.0);
+    let app = unsafe { AVAudioApplication::sharedInstance() };
+    match unsafe { app.recordPermission() } {
+        AVAudioApplicationRecordPermission::Granted => PermissionState::Granted,
+        AVAudioApplicationRecordPermission::Denied => PermissionState::Denied,
+        AVAudioApplicationRecordPermission::Undetermined => PermissionState::Undetermined,
+        _ => PermissionState::Denied,
+    }
+}
+
+/// Present the microphone prompt. Must be called from the main thread; the answer is sent
+/// back rather than waited for there, because the callback itself also needs the main run
+/// loop to remain alive.
+pub fn request_microphone_permission(answer: mpsc::SyncSender<bool>) {
+    let handler = RcBlock::new(move |granted: Bool| {
+        let _ = answer.try_send(granted.as_bool());
+    });
+    unsafe { AVAudioApplication::requestRecordPermissionWithCompletionHandler(&handler) };
+}
+
+pub fn speech_permission_state() -> PermissionState {
+    match unsafe { SFSpeechRecognizer::authorizationStatus() }.0 {
+        AUTHORIZED_STATUS => PermissionState::Granted,
+        NOT_DETERMINED_STATUS => PermissionState::Undetermined,
+        _ => PermissionState::Denied,
+    }
+}
+
+/// Present the separate Speech Recognition prompt without starting a recording.
+pub fn request_speech_permission(answer: mpsc::SyncSender<bool>) {
+    let handler = RcBlock::new(move |status: SFSpeechRecognizerAuthorizationStatus| {
+        let _ = answer.try_send(status.0 == AUTHORIZED_STATUS);
     });
     unsafe { SFSpeechRecognizer::requestAuthorization(&handler) };
 }
@@ -142,6 +170,94 @@ fn on_device_task(
     Some(unsafe { recognizer.recognitionTaskWithRequest_resultHandler(request, handler) })
 }
 
+/// Words from every recognition task that belongs to one uninterrupted recording.
+///
+/// Apple ends or resets a recognition task at phrase boundaries. A pause is therefore a
+/// boundary in the derived transcript, not the end of the person's recording. Keeping the
+/// committed prefix apart from the current task's partial prevents a fresh task from
+/// replacing everything that was said before the pause.
+#[derive(Default, Debug)]
+struct TranscriptAccumulator {
+    committed: String,
+    current: String,
+}
+
+impl TranscriptAccumulator {
+    fn observe(&mut self, text: &str) {
+        let text = text.trim();
+        // An empty terminal callback is common after useful partials. It is not a
+        // correction and must not erase the last useful wording of this segment.
+        if !text.is_empty() {
+            self.current.clear();
+            self.current.push_str(text);
+        }
+    }
+
+    fn commit_segment(&mut self) {
+        let segment = self.current.trim();
+        if segment.is_empty() {
+            return;
+        }
+        if !self.committed.is_empty() {
+            self.committed.push(' ');
+        }
+        self.committed.push_str(segment);
+        self.current.clear();
+    }
+
+    fn composed(&self) -> Option<String> {
+        let committed = self.committed.trim();
+        let current = self.current.trim();
+        match (committed.is_empty(), current.is_empty()) {
+            (true, true) => None,
+            (false, true) => Some(committed.to_string()),
+            (true, false) => Some(current.to_string()),
+            (false, false) => Some(format!("{committed} {current}")),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum SegmentEvent {
+    Words {
+        generation: u64,
+        text: String,
+        final_result: bool,
+    },
+    Failed {
+        generation: u64,
+    },
+}
+
+#[derive(Default, Debug)]
+struct PauseDetector {
+    heard_audio: bool,
+    silent_frames: u64,
+    close_segment: bool,
+}
+
+/// RMS of the first input channel when AVAudioEngine gives us its normal float format.
+/// Other formats still record and still use Speech's own phrase-final callbacks; they just
+/// do not get the proactive pause boundary.
+unsafe fn pcm_rms(buffer: &AVAudioPCMBuffer) -> Option<f32> {
+    let channels = unsafe { buffer.floatChannelData() };
+    if channels.is_null() {
+        return None;
+    }
+    let frames = buffer.frameLength() as usize;
+    if frames == 0 {
+        return Some(0.0);
+    }
+    let stride = unsafe { buffer.stride() } as usize;
+    let samples = unsafe { (*channels).as_ptr() };
+    let mut squares = 0.0f32;
+    for i in 0..frames {
+        let sample = unsafe { *samples.add(i * stride) };
+        squares += sample * sample;
+    }
+    Some((squares / frames as f32).sqrt())
+}
+
 /// Whether this Mac could read speech back as words locally right now. Asks nothing.
 ///
 /// `available` · `unavailable` · `denied` · `not_determined`.
@@ -153,7 +269,8 @@ pub fn local_recognition_status() -> &'static str {
     if status.0 != AUTHORIZED_STATUS {
         return "denied";
     }
-    let Some(recognizer) = (unsafe { SFSpeechRecognizer::init(SFSpeechRecognizer::alloc()) }) else {
+    let Some(recognizer) = (unsafe { SFSpeechRecognizer::init(SFSpeechRecognizer::alloc()) })
+    else {
         return "unavailable";
     };
     if unsafe { recognizer.supportsOnDeviceRecognition() && recognizer.isAvailable() } {
@@ -345,6 +462,8 @@ impl SpeechManager {
         let request_for_tap = accepted.clone();
         let file_for_tap = audio_file.clone();
         let frames_for_tap = frames_written.clone();
+        let pause_detector = Arc::new(Mutex::new(PauseDetector::default()));
+        let pause_for_tap = pause_detector.clone();
         let tap_block: RcBlock<dyn Fn(NonNull<AVAudioPCMBuffer>, NonNull<AVAudioTime>) + 'static> =
             RcBlock::new(
                 move |buffer: NonNull<AVAudioPCMBuffer>, _when: NonNull<AVAudioTime>| unsafe {
@@ -360,6 +479,34 @@ impl SpeechManager {
                     if let Ok(guard) = request_for_tap.lock() {
                         if let Some(request) = guard.as_ref() {
                             request.appendAudioPCMBuffer(buf);
+                        }
+                    }
+
+                    // A real pause closes only the recogniser's current phrase. The audio
+                    // file and microphone remain continuous. This is the same separation
+                    // used by the mobile recorder: the material does not inherit Speech's
+                    // phrase-sized lifecycle.
+                    if let Some(rms) = pcm_rms(buf) {
+                        if let Ok(mut pause) = pause_for_tap.lock() {
+                            const SPEECH_RMS: f32 = 0.022;
+                            const SILENCE_RMS: f32 = 0.012;
+                            const PHRASE_SILENCE_SECONDS: f64 = 1.6;
+                            if rms > SPEECH_RMS {
+                                pause.heard_audio = true;
+                                pause.silent_frames = 0;
+                            } else if pause.heard_audio && rms < SILENCE_RMS {
+                                pause.silent_frames += buf.frameLength() as u64;
+                                if sample_rate > 0.0
+                                    && pause.silent_frames as f64 / sample_rate
+                                        >= PHRASE_SILENCE_SECONDS
+                                {
+                                    pause.close_segment = true;
+                                    pause.heard_audio = false;
+                                    pause.silent_frames = 0;
+                                }
+                            } else {
+                                pause.silent_frames = 0;
+                            }
                         }
                     }
                 },
@@ -378,77 +525,81 @@ impl SpeechManager {
         }
         let _tap_block_guard = tap_block;
 
-        let (result_tx, result_rx) = mpsc::sync_channel::<Result<Option<String>, String>>(1);
-        let last_transcript = Arc::new(Mutex::new(String::new()));
-        let last_transcript_clone = last_transcript.clone();
+        let (segment_tx, segment_rx) = mpsc::channel::<SegmentEvent>();
+        let transcript = Arc::new(Mutex::new(TranscriptAccumulator::default()));
         let first_partial_sent = Arc::new(Mutex::new(false));
         let start = Arc::new(Mutex::new(t0));
         let event_tx_shared = event_tx.map(|tx| Arc::new(Mutex::new(Some(tx))));
         let event_tx_for_sends = event_tx_shared.as_ref().map(Arc::clone);
 
-        let result_block = RcBlock::new(
-            move |result: *mut SFSpeechRecognitionResult, error: *mut NSError| {
-                if !error.is_null() {
-                    eprintln!("[Speech] Result handler got error");
-                    let _ = result_tx.send(Ok(None));
-                    return;
-                }
-                if result.is_null() {
-                    return;
-                }
-                let result = unsafe { &*result };
-                let is_final = unsafe { result.isFinal() };
-                let transcription = unsafe { result.bestTranscription() };
-                let s = unsafe { transcription.formattedString() };
-                let text = s.to_string();
+        // Every task gets a generation. Cancelling the phrase before a pause often emits a
+        // late terminal callback; generations keep that old callback from touching the
+        // fresh phrase that now owns the microphone buffers.
+        let generation = Arc::new(AtomicU64::new(0));
+        let mut recognition_restarts = 0u16;
+        const MAX_RECOGNITION_RESTARTS: u16 = 180;
 
-                let ms = start.lock().map(|t| t.elapsed().as_millis()).unwrap_or(0);
-                if let Ok(mut last) = last_transcript_clone.lock() {
-                    *last = text.clone();
-                }
-
-                if is_final {
-                    eprintln!("[Speech] {} ms - final transcript received: {}", ms, text);
-                    if let Some(ref et) = event_tx_shared {
-                        if let Ok(guard) = et.lock() {
-                            if let Some(ref tx) = *guard {
-                                let _ = tx.send("voice_captured");
+        let make_segment = |recognizer: &SFSpeechRecognizer| {
+            let this_generation = generation.fetch_add(1, Ordering::SeqCst) + 1;
+            let tx = segment_tx.clone();
+            let first_partial = first_partial_sent.clone();
+            let started = start.clone();
+            let result_block: RcBlock<
+                dyn Fn(*mut SFSpeechRecognitionResult, *mut NSError) + 'static,
+            > = RcBlock::new(
+                move |result: *mut SFSpeechRecognitionResult, error: *mut NSError| {
+                    if !error.is_null() {
+                        eprintln!("[Speech] recognition segment ended with an error");
+                        let _ = tx.send(SegmentEvent::Failed {
+                            generation: this_generation,
+                        });
+                        return;
+                    }
+                    if result.is_null() {
+                        return;
+                    }
+                    let result = unsafe { &*result };
+                    let final_result = unsafe { result.isFinal() };
+                    let text = unsafe { result.bestTranscription().formattedString() }.to_string();
+                    let ms = started.lock().map(|t| t.elapsed().as_millis()).unwrap_or(0);
+                    if final_result {
+                        eprintln!("[Speech] {ms} ms - phrase final: {text}");
+                    } else {
+                        if let Ok(mut sent) = first_partial.lock() {
+                            if !*sent {
+                                *sent = true;
+                                eprintln!("[Speech] {ms} ms - first partial: {text}");
                             }
                         }
+                        eprintln!("[Speech] {ms} ms - phrase partial: {text}");
                     }
-                    let _ = result_tx.send(Ok(Some(text)));
-                } else {
-                    if let Ok(mut sent) = first_partial_sent.lock() {
-                        if !*sent {
-                            *sent = true;
-                            eprintln!(
-                                "[Speech] {} ms - first partial transcript received: {}",
-                                ms, text
-                            );
-                        }
-                    }
-                    eprintln!("[Speech] {} ms - partial: {}", ms, text);
-                }
-            },
-        );
-
-        // No recogniser means no transcript, and that is a complete outcome rather than a
-        // failure: the recording is still made, and words can be added to it later.
-        let task = recognizer.as_ref().and_then(|r| {
+                    let _ = tx.send(SegmentEvent::Words {
+                        generation: this_generation,
+                        text,
+                        final_result,
+                    });
+                },
+            );
             let request = unsafe {
                 SFSpeechAudioBufferRecognitionRequest::init(
                     SFSpeechAudioBufferRecognitionRequest::alloc(),
                 )
             };
             unsafe { request.setShouldReportPartialResults(true) };
-            let task = on_device_task(r, &request, &result_block)?;
+            let task = on_device_task(recognizer, &request, &result_block)?;
+            Some((this_generation, request, task, result_block))
+        };
+
+        // No recogniser means no transcript, and that is a complete outcome rather than a
+        // failure: the recording is still made, and words can be added to it later.
+        let mut segment = recognizer.as_ref().and_then(|r| make_segment(r));
+        if let Some((_, request, _, _)) = segment.as_ref() {
             eprintln!("[Speech] on-device recognition started");
             if let Ok(mut slot) = accepted.lock() {
-                *slot = Some(request);
+                *slot = Some(request.clone());
             }
-            Some(task)
-        });
-        if recognizer.is_some() && task.is_none() {
+        }
+        if recognizer.is_some() && segment.is_none() {
             recognition = Recognition::Unavailable;
             transcript_failure = Some(UNAVAILABLE_ON_DEVICE.to_string());
         }
@@ -481,6 +632,88 @@ impl SpeechManager {
             if STOP_REQUESTED.swap(false, Ordering::SeqCst) {
                 break;
             }
+
+            let current_generation = segment.as_ref().map(|s| s.0);
+            let mut restart_segment = false;
+            while let Ok(event) = segment_rx.try_recv() {
+                match event {
+                    SegmentEvent::Words {
+                        generation: event_generation,
+                        text,
+                        final_result,
+                    } if Some(event_generation) == current_generation => {
+                        if let Ok(mut words) = transcript.lock() {
+                            words.observe(&text);
+                            if final_result {
+                                words.commit_segment();
+                            }
+                        }
+                        restart_segment |= final_result;
+                    }
+                    SegmentEvent::Failed {
+                        generation: event_generation,
+                    } if Some(event_generation) == current_generation => {
+                        // Apple uses an error as a phrase boundary on some locale/OS pairs.
+                        // Preserve the partial and give the next phrase a fresh local task.
+                        if let Ok(mut words) = transcript.lock() {
+                            words.commit_segment();
+                        }
+                        restart_segment = true;
+                    }
+                    _ => {
+                        // A cancelled task's late callback belongs to the preceding phrase.
+                    }
+                }
+            }
+
+            if let Ok(mut pause) = pause_detector.lock() {
+                if pause.close_segment {
+                    pause.close_segment = false;
+                    if let Ok(mut words) = transcript.lock() {
+                        words.commit_segment();
+                    }
+                    restart_segment = true;
+                }
+            }
+
+            if restart_segment && segment.is_some() {
+                recognition_restarts += 1;
+                if let Some((_, old_request, old_task, old_handler)) = segment.take() {
+                    if let Ok(mut slot) = accepted.lock() {
+                        *slot = None;
+                    }
+                    unsafe {
+                        old_request.endAudio();
+                        old_task.cancel();
+                    }
+                    drop(old_handler);
+                }
+
+                segment = if recognition_restarts <= MAX_RECOGNITION_RESTARTS {
+                    recognizer.as_ref().and_then(|r| make_segment(r))
+                } else {
+                    None
+                };
+                if let Some((_, request, _, _)) = segment.as_ref() {
+                    if let Ok(mut slot) = accepted.lock() {
+                        *slot = Some(request.clone());
+                    }
+                    if let Ok(mut pause) = pause_detector.lock() {
+                        *pause = PauseDetector::default();
+                    }
+                    eprintln!(
+                        "[Speech] {} ms - recognition continued after phrase {}",
+                        t0.elapsed().as_millis(),
+                        recognition_restarts
+                    );
+                } else {
+                    recognition = Recognition::Failed;
+                    transcript_failure.get_or_insert_with(|| {
+                        "the local recogniser stopped before the recording did".to_string()
+                    });
+                    eprintln!("[Speech] recognition stopped; audio capture continues");
+                }
+            }
             std::thread::sleep(Duration::from_millis(16));
         }
 
@@ -492,8 +725,17 @@ impl SpeechManager {
                 }
             }
         }
-        let request = accepted.lock().ok().and_then(|slot| slot.clone());
-        if let Some(ref request) = request {
+        // Stop feeding Speech before ending its request. Keeping the tap alive while waiting
+        // for a final result appended buffers after `endAudio`, which made the terminal
+        // transcript timing-dependent.
+        unsafe {
+            engine.stop();
+            input_node.removeTapOnBus(BUS);
+        }
+        if let Ok(mut slot) = accepted.lock() {
+            *slot = None;
+        }
+        if let Some((_, request, _, _)) = segment.as_ref() {
             unsafe { request.endAudio() };
         }
 
@@ -501,19 +743,44 @@ impl SpeechManager {
             "[Speech] {} ms - waiting for final result",
             t0.elapsed().as_millis()
         );
-        // Nothing to wait for when no recogniser ran.
-        let outcome = if task.is_some() {
-            result_rx.recv_timeout(Duration::from_millis(5000))
-        } else {
-            Err(mpsc::RecvTimeoutError::Disconnected)
-        };
-
-        unsafe {
-            engine.stop();
-            std::thread::sleep(Duration::from_millis(100));
-            input_node.removeTapOnBus(BUS);
+        // Drain the last phrase. It is not restarted now: the recording itself has ended.
+        if let Some((current_generation, _, _, _)) = segment.as_ref() {
+            let final_deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < final_deadline {
+                match segment_rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(SegmentEvent::Words {
+                        generation: event_generation,
+                        text,
+                        final_result,
+                    }) if event_generation == *current_generation => {
+                        if let Ok(mut words) = transcript.lock() {
+                            words.observe(&text);
+                            if final_result {
+                                words.commit_segment();
+                            }
+                        }
+                        if final_result {
+                            break;
+                        }
+                    }
+                    Ok(SegmentEvent::Failed {
+                        generation: event_generation,
+                    }) if event_generation == *current_generation => {
+                        if let Ok(mut words) = transcript.lock() {
+                            words.commit_segment();
+                        }
+                        break;
+                    }
+                    Ok(_) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
         }
-        drop(task);
+        if let Some((_, _, task, handler)) = segment.take() {
+            unsafe { task.cancel() };
+            drop(handler);
+        }
         drop(_tap_block_guard);
 
         // Close the file before anything reads it, so the header is complete on disk.
@@ -526,29 +793,21 @@ impl SpeechManager {
             0
         };
 
-        // From here the audio exists on disk whatever the recogniser did. A transcript that
-        // failed, timed out or was never authorised produces `None`, never an error: there
-        // is nothing to report a failure *about*, because the material is safe.
-        let transcript = match outcome {
-            Ok(Ok(t)) => t,
-            Ok(Err(e)) => {
-                eprintln!("[Speech] recognition failed, audio kept: {e}");
-                recognition = Recognition::Failed;
-                transcript_failure.get_or_insert(e);
-                None
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                eprintln!("[Speech] recognition timed out, using the best partial");
-                last_transcript.lock().ok().and_then(|last| {
-                    if last.is_empty() {
-                        None
-                    } else {
-                        Some(last.clone())
+        // From here the audio exists on disk whatever the recogniser did. Keep every
+        // committed phrase plus the best partial from the last phrase.
+        let transcript = transcript.lock().ok().and_then(|words| words.composed());
+        if transcript.is_some() {
+            if let Some(ref et) = event_tx_shared {
+                if let Ok(guard) = et.lock() {
+                    if let Some(ref tx) = *guard {
+                        let _ = tx.send("voice_captured");
                     }
-                })
+                }
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => None,
-        };
+            // A recovered phrase-boundary error is not a failure of the final transcript.
+            transcript_failure = None;
+            recognition = Recognition::OnDevice;
+        }
         if transcript.is_none() && transcript_failure.is_none() {
             transcript_failure = Some("nothing was heard in this recording".to_string());
         }
@@ -589,32 +848,34 @@ pub fn transcribe_file(audio_path: &std::path::Path) -> Reading {
     unsafe { request.setShouldReportPartialResults(false) };
 
     let (tx, rx) = mpsc::sync_channel::<Reading>(1);
-    let handler = RcBlock::new(move |result: *mut SFSpeechRecognitionResult, error: *mut NSError| {
-        if !result.is_null() {
-            let result = unsafe { &*result };
-            if unsafe { result.isFinal() } {
-                let text = unsafe { result.bestTranscription().formattedString() }.to_string();
-                let text = text.trim().to_string();
-                let _ = tx.try_send(if text.is_empty() {
+    let handler = RcBlock::new(
+        move |result: *mut SFSpeechRecognitionResult, error: *mut NSError| {
+            if !result.is_null() {
+                let result = unsafe { &*result };
+                if unsafe { result.isFinal() } {
+                    let text = unsafe { result.bestTranscription().formattedString() }.to_string();
+                    let text = text.trim().to_string();
+                    let _ = tx.try_send(if text.is_empty() {
+                        Reading::NoSpeech
+                    } else {
+                        Reading::Words(text)
+                    });
+                    return;
+                }
+            }
+            if !error.is_null() {
+                let error = unsafe { &*error };
+                // 1110: no speech detected. An answer, not a failure.
+                let no_speech =
+                    error.domain().to_string() == "kAFAssistantErrorDomain" && error.code() == 1110;
+                let _ = tx.try_send(if no_speech {
                     Reading::NoSpeech
                 } else {
-                    Reading::Words(text)
+                    Reading::Failed
                 });
-                return;
             }
-        }
-        if !error.is_null() {
-            let error = unsafe { &*error };
-            // 1110: no speech detected. An answer, not a failure.
-            let no_speech = error.domain().to_string() == "kAFAssistantErrorDomain"
-                && error.code() == 1110;
-            let _ = tx.try_send(if no_speech {
-                Reading::NoSpeech
-            } else {
-                Reading::Failed
-            });
-        }
-    });
+        },
+    );
 
     let Some(task) = on_device_task(&recognizer, &request, &handler) else {
         return Reading::Unavailable;
@@ -687,6 +948,47 @@ pub fn run_speech_loop(rx: mpsc::Receiver<SpeechCommand>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pause_keeps_the_first_phrase_when_the_next_task_starts_from_zero() {
+        let mut words = TranscriptAccumulator::default();
+        words.observe("primeira parte");
+        words.commit_segment();
+
+        // A fresh SFSpeechRecognitionTask knows only its own phrase.
+        words.observe("segunda parte");
+        assert_eq!(
+            words.composed().as_deref(),
+            Some("primeira parte segunda parte")
+        );
+    }
+
+    #[test]
+    fn empty_phrase_final_does_not_erase_its_last_useful_partial() {
+        let mut words = TranscriptAccumulator::default();
+        words.observe("uma ideia que leva tempo");
+        words.observe("");
+        words.commit_segment();
+
+        assert_eq!(
+            words.composed().as_deref(),
+            Some("uma ideia que leva tempo")
+        );
+    }
+
+    #[test]
+    fn partial_corrections_replace_only_the_current_phrase() {
+        let mut words = TranscriptAccumulator::default();
+        words.observe("antes da pausa");
+        words.commit_segment();
+        words.observe("depois");
+        words.observe("depois da pausa");
+
+        assert_eq!(
+            words.composed().as_deref(),
+            Some("antes da pausa depois da pausa")
+        );
+    }
 
     /// A release belongs to the capture that was asked for before it.
     ///

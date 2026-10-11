@@ -131,13 +131,14 @@
   --evidence-rail-inferred: #2a2a2e;
 
   /*
-    ---- live: the only hue -----------------------------------------------
+    ---- live -------------------------------------------------------------
 
     Voice capture, the connecting pulse, the sync dot, this device. 8.54:1.
     Never on a verb, and it never means "ok" — an offline record keeps the sage dot and needs
     nothing from you.
   */
   --live: #9fb79f;
+
 
   /*
     ---- selection and focus, as structure --------------------------------
@@ -279,10 +280,10 @@
 
   /* ---- type: material tiers, near to far -------------------------------- */
   --size-d0: 26px;      --lh-d0: 1.24;   --wdth-d0: 100;  --track-d0: -0.012em;
-  --size-d1: 19px;      --lh-d1: 1.26;   --wdth-d1: 92;
-  --size-d2: 14px;      --lh-d2: 1.3;    --wdth-d2: 84;
-  --size-d3: 13px;      --lh-d3: 1.3;    --wdth-d3: 80;
-  --size-d4: 12px;      --lh-d4: 1.3;    --wdth-d4: 76;
+  --size-d1: 20px;      --lh-d1: 1.26;   --wdth-d1: 92;
+  --size-d2: 15px;      --lh-d2: 1.3;    --wdth-d2: 84;
+  --size-d3: 14px;      --lh-d3: 1.3;    --wdth-d3: 80;
+  --size-d4: 14px;      --lh-d4: 1.3;    --wdth-d4: 76;
 
   /* ---- type: utility surfaces ------------------------------------------- */
   --size-utility: 17px;      --lh-utility: 1.45;  --wdth-utility: 94;
@@ -294,8 +295,8 @@
   --size-meta: 12px;
   --size-meta-lg: 13px;  /* attached to D0 material                                */
   --size-meta-sm: 11px;  /* tier labels: "earlier today · 24 more"                 */
-  --size-meta-xs: 10px;  /* far tier labels: "yesterday"                           */
-  --size-tier-label-far: 9px; /* "wed 16 · sat 12 · aug"                           */
+  --size-meta-xs: 11px;  /* far tier labels: "yesterday"                           */
+  --size-tier-label-far: 10px; /* "wed 16 · sat 12 · aug"                          */
   --track-tier-label: 0.06em;
 
   /* ---- type: named exceptions the design draws deliberately ------------- */
@@ -309,7 +310,8 @@
   --size-quote: 22px;   --lh-quote: 1.3;   /* a kept quotation, 3a               */
   --size-voice-chip: 14px;
   --size-voice-chip-sm: 11px; /* the compact tiers' inert chip                  */
-  --size-year-label: 12px;
+  --size-year-label: 13px;
+  --size-year-summary: 13px;
   --size-wordmark-launch: 52px;  --track-wordmark-launch: -0.025em;
   --size-wordmark: 28px;         --track-wordmark: -0.01em;  --wdth-wordmark: 96;
   --mark-launch: 132px;          /* the launch lockup's mark                    */
@@ -523,8 +525,28 @@ input[aria-label="Find"]:focus-visible {
   weight is computed and then thrown away on every verb in the product — which is half of what
   marks a verb at all.
 */
+.chinotto-verb,
+.chinotto-affordance,
+.chinotto-band-label {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  border: 0;
+}
+
 .chinotto-verb {
   font-weight: var(--agency-weight) !important;
+}
+
+/*
+  The rare filled primary is still a verb, but it is deliberately a box. This selector comes
+  after the shared transparent reset and carries the same importance so a future reset cannot
+  silently erase the fill while leaving the inverse label behind.
+*/
+.chinotto-verb--filled {
+  background: var(--agency) !important;
+  color: var(--agency-ground) !important;
+  border: 1px solid var(--agency);
 }
 
 .chinotto-verb:hover:not(:disabled) {
@@ -532,6 +554,16 @@ input[aria-label="Find"]:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
+}
+
+/*
+  Compound with the base class on purpose: this must outrank the generic verb hover even if
+  somebody moves the blocks later. A white primary keeps dark surface ink when it brightens.
+*/
+.chinotto-verb.chinotto-verb--filled:hover:not(:disabled) {
+  background: var(--agency-hover) !important;
+  color: var(--surface) !important;
+  border-color: var(--agency-hover);
 }
 
 /*
@@ -556,12 +588,12 @@ input[aria-label="Find"]:focus-visible {
 }
 
 /*
-  A compact row brightens to full ink under the pointer rather than taking the D0 wash: at
-  13px a background band is a bigger gesture than the text it sits behind. It brightens as
-  MATERIAL — it is your words, not an action — so it stops at `--ink` and gains no weight.
+  A thought takes the established quiet cream under the pointer and nothing else: no wash,
+  no scale and no weight change. On desktop the pointer is the selection mechanism; keeping
+  the treatment local avoids manufacturing a permanent centre-selected state while scrolling.
 */
 .chinotto-compact-row:hover {
-  color: var(--ink) !important;
+  color: var(--agency-quiet) !important;
 }
 
 /*
@@ -672,6 +704,17 @@ input[aria-label="Find"]:focus-visible {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   box-sizing: border-box;
   animation: chinotto-settle 0.2s ease-out;
+}
+
+/* In the MAS build the window itself is the panel; no transparent shadow gutter exists. */
+.tray-capture-opaque .tray-capture-root {
+  background: var(--surface);
+  padding: 0;
+}
+
+.tray-capture-opaque .tray-capture-panel {
+  border: 0;
+  box-shadow: none;
 }
 
 /*

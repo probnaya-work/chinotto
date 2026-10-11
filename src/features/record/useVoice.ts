@@ -7,25 +7,29 @@
  * The transcript is attached afterwards, as derived material, and can be corrected later
  * without the recording changing at all.
  *
- * Released under `DROP_UNDER_MS` and nothing is kept: that is a slip of the hand, not a
- * thought, and the product should not make somebody delete it.
+ * A short release locks the microphone hands-free; a longer hold is left when released.
+ * Nothing is discarded implicitly. `esc` is the one reliable way to keep nothing.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../../lib/recordApi";
 
-/** A press this short is a slip, not something said. */
+/** Orphaned files below this are incomplete starts, not recoverable recordings. */
 export const DROP_UNDER_MS = 800;
+/** A release before this turns a press into a hands-free recording. */
+export const TAP_TO_LOCK_MS = 800;
 
 export type MicState = "granted" | "ask" | "denied";
 
 export interface VoiceState {
   /** Recording now. */
   recording: boolean;
+  /** The press has been released, but the recording intentionally continues. */
+  locked: boolean;
   /** Seconds elapsed, for the meter at capture size. */
   seconds: number;
   /** A sentence the edge has to say, once. */
-  notice: "ask" | "denied" | "failed" | null;
+  notice: "ask" | "ready" | "denied" | "failed" | null;
 }
 
 export interface VoiceOptions {
@@ -35,9 +39,9 @@ export interface VoiceOptions {
    */
   origin?: string;
   /**
-   * The key whose release ends the hold. `space` at the edge, where the field is empty and
-   * the space bar is free; `Alt` in the menu-bar panel, which the identity file draws as
-   * `hold ⌥ to speak` and which needs no chord because the panel already has focus.
+   * The key whose release either locks a tap or finishes a hold. `space` at the edge, where
+   * the field is empty and the space bar is free; `Alt` in the menu-bar panel, which needs
+   * no chord because the panel already has focus.
    */
   releaseKey?: string;
   /**
@@ -66,18 +70,24 @@ export function transcriptModel(capture: api.VoiceCaptureResult): string | null 
 export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
   const { origin = "desktop", releaseKey = " ", onFragment } = options;
   const [recording, setRecording] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [notice, setNotice] = useState<VoiceState["notice"]>(null);
   const startedAt = useRef(0);
   const inflight = useRef(false);
+  const lockedRef = useRef(false);
+  const stopRequested = useRef(false);
+  const arming = useRef(false);
+  const releasedWhileArming = useRef(false);
+  const cancelledWhileArming = useRef(false);
+  const [preparing, setPreparing] = useState(false);
   /**
    * This hold was a mistake and must not be kept.
    *
-   * The same branch a release under `DROP_UNDER_MS` takes: the native capture is stopped
-   * and the result never becomes a fragment. It is not a deletion and it does not touch the
-   * product's stance that a kept recording is the material — nothing was kept. The file the
-   * native side already wrote stays where it is, and `orphaned_recordings` is what finds it
-   * again if it mattered after all.
+   * It is not a deletion and it does not touch the product's stance that a kept recording
+   * is the material — the person explicitly said to keep nothing. The file the native side
+   * already wrote stays where it is, and `orphaned_recordings` can diagnose an interrupted
+   * capture without silently turning an accidental start into a thought.
    */
   const dropped = useRef(false);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -103,10 +113,13 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
    * path, the duration and whatever the recogniser managed. There is nothing to poll and
    * nothing that can leave a half-finished recording behind.
    */
-  const start = useCallback(() => {
+  const beginCapture = useCallback((initiallyLocked = false) => {
     if (inflight.current) return;
     inflight.current = true;
+    stopRequested.current = false;
     dropped.current = false;
+    lockedRef.current = initiallyLocked;
+    setLocked(initiallyLocked);
     startedAt.current = Date.now();
     setRecording(true);
     setSeconds(0);
@@ -119,7 +132,12 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
     void api
       .recordVoice()
       .then(async (capture) => {
-        if (dropped.current || capture.durationMs < DROP_UNDER_MS) return;
+        if (dropped.current) {
+          // `esc` is final. Renaming/removing on the native side also keeps this file out of
+          // orphan recovery if deletion itself is interrupted.
+          await api.discardVoiceRecording(capture.audioPath);
+          return;
+        }
 
         // The recording becomes a fragment first. If anything below fails, the audio is
         // already in the Record and can be transcribed or corrected later.
@@ -174,24 +192,101 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
       })
       .finally(() => {
         inflight.current = false;
+        stopRequested.current = false;
+        lockedRef.current = false;
+        setLocked(false);
         setRecording(false);
         setSeconds(0);
         if (tick.current) clearInterval(tick.current);
       });
   }, [onCaptured, clearNoticeLater, origin, onFragment]);
 
-  /**
-   * Ends the recording.
-   *
-   * The native side stops on its own when the hold is released; this is the frontend's
-   * half of the gesture, and it exists so `esc` can drop a recording as well.
-   */
-  const stop = useCallback(() => {
-    if (!inflight.current) return;
-    // The native side is holding the microphone open; this is what closes it. `max_ms` is
-    // only a ceiling, so a release that never arrives cannot record forever.
-    void api.stopVoiceCapture().catch(() => {});
+  /** Finish and keep exactly once, whether it came from release, click, key or blur. */
+  const finish = useCallback(() => {
+    if (arming.current) {
+      releasedWhileArming.current = true;
+      cancelledWhileArming.current = true;
+      return;
+    }
+    if (!inflight.current || stopRequested.current) return;
+    stopRequested.current = true;
+    void api.stopVoiceCapture().catch(() => {
+      stopRequested.current = false;
+    });
   }, []);
+
+  const start = useCallback(() => {
+    if (inflight.current) {
+      // A second press is the clearest possible end to a hands-free recording.
+      if (lockedRef.current) finish();
+      return;
+    }
+    if (arming.current) return;
+    arming.current = true;
+    releasedWhileArming.current = false;
+    cancelledWhileArming.current = false;
+    dropped.current = false;
+    setPreparing(true);
+    setNotice(null);
+
+    void api
+      .prepareVoiceAccess()
+      .then((access) => {
+        if (access.microphone === "denied") {
+          setNotice("denied");
+          clearNoticeLater(7000);
+          return;
+        }
+        if (access.prompted) {
+          // The permission sheet consumed this gesture and the intended audio happened
+          // before macOS supplied buffers. Starting now would create the one-second junk
+          // fragment seen on first use. Permission is ready; the next hold is the recording.
+          setNotice("ready");
+          clearNoticeLater(5000);
+          return;
+        }
+        if (cancelledWhileArming.current) return;
+        // A quick tap can end while the local permission check is still crossing the Tauri
+        // bridge. With access already granted that is the lock gesture, not a gesture to
+        // lose. A real system sheet reports `prompted` above and never enters this branch.
+        const lockOnStart = releasedWhileArming.current;
+        arming.current = false;
+        setPreparing(false);
+        beginCapture(lockOnStart);
+      })
+      .catch((e) => {
+        const message = String(e);
+        if (/denied|not authorized|not allowed/i.test(message)) {
+          setNotice("denied");
+          clearNoticeLater(7000);
+        } else {
+          setNotice("failed");
+          clearNoticeLater(7000);
+        }
+      })
+      .finally(() => {
+        arming.current = false;
+        setPreparing(false);
+      });
+  }, [beginCapture, clearNoticeLater, finish]);
+
+  /**
+   * Resolves a release: a tap becomes hands-free; a hold finishes and is kept.
+   */
+  const release = useCallback(() => {
+    if (arming.current) {
+      releasedWhileArming.current = true;
+      return;
+    }
+    if (!inflight.current) return;
+    if (lockedRef.current || stopRequested.current) return;
+    if (Date.now() - startedAt.current < TAP_TO_LOCK_MS) {
+      lockedRef.current = true;
+      setLocked(true);
+      return;
+    }
+    finish();
+  }, [finish]);
 
   /**
    * The release, wherever it happens.
@@ -202,16 +297,18 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
    * release lands somewhere else and is never seen: the recording then runs to its ceiling,
    * two minutes later, with no way to end it. A hold is held against the window.
    *
-   * `blur` counts as a release for the same reason. A window that is no longer frontmost
-   * will not be told when the key comes up, so continuing to record would mean recording
+   * `blur` finishes outright rather than locking. A window that is no longer frontmost
+   * will not be told when the key comes up, so continuing hands-free would mean recording
    * past the only moment we could have stopped.
    */
-  const stopRef = useRef(stop);
-  stopRef.current = stop;
+  const releaseRef = useRef(release);
+  releaseRef.current = release;
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
   useEffect(() => {
-    if (!recording) return;
+    if (!recording && !preparing) return;
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === releaseKey) stopRef.current();
+      if (e.key === releaseKey) releaseRef.current();
     };
     /**
      * The held key is still the page's key.
@@ -224,35 +321,44 @@ export function useVoice(onCaptured: () => void, options: VoiceOptions = {}) {
      * default.
      */
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === releaseKey) e.preventDefault();
+      if (e.key !== releaseKey) return;
+      e.preventDefault();
+      if (lockedRef.current && !e.repeat) finishRef.current();
     };
-    const release = () => stopRef.current();
+    const releasePointer = () => releaseRef.current();
+    const finishOnBlur = () => finishRef.current();
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("mouseup", release);
-    window.addEventListener("blur", release);
+    window.addEventListener("mouseup", releasePointer);
+    window.addEventListener("blur", finishOnBlur);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("mouseup", release);
-      window.removeEventListener("blur", release);
+      window.removeEventListener("mouseup", releasePointer);
+      window.removeEventListener("blur", finishOnBlur);
     };
-  }, [recording, releaseKey]);
+  }, [recording, preparing, releaseKey]);
 
   /** `esc` while speaking. Ends the hold, and keeps nothing. */
   const drop = useCallback(() => {
+    if (arming.current) {
+      releasedWhileArming.current = true;
+      cancelledWhileArming.current = true;
+      dropped.current = true;
+      return;
+    }
     if (!inflight.current) return;
     dropped.current = true;
-    void api.stopVoiceCapture().catch(() => {});
-  }, []);
+    finish();
+  }, [finish]);
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
-  // Memoised so `start` and `stop` keep their identity across the timer's ticks. The window
+  // Memoised so the verbs keep their identity across the timer's ticks. The window
   // registers the ⌥space listeners against them, and a new pair every 100ms is a new pair of
   // native listeners every 100ms.
   return useMemo(
-    () => ({ recording, seconds, notice, start, stop, drop, dismissNotice }),
-    [recording, seconds, notice, start, stop, drop, dismissNotice],
+    () => ({ recording, locked, seconds, notice, start, stop: release, finish, drop, dismissNotice }),
+    [recording, locked, seconds, notice, start, release, finish, drop, dismissNotice],
   );
 }

@@ -12,7 +12,7 @@
  * quiet year looks quiet next to a loud one.
  */
 
-import { metaStyle } from "../../design/tiers";
+import { CHRONOLOGY_INK, metaStyle } from "../../design/tiers";
 import { MONTHS } from "./format";
 import { yearBarHeight } from "./bands";
 
@@ -58,7 +58,7 @@ export function YearRow({
         onClick={() => onStandIn?.(year, landing)}
         style={{
           ...metaStyle("var(--size-year-label)"),
-          color: "var(--ink-far)",
+          color: CHRONOLOGY_INK,
           width: "var(--year-label-width)",
           textAlign: "left",
           background: "none",
@@ -110,7 +110,8 @@ export function YearRow({
       */}
       <span
         style={{
-          ...metaStyle(),
+          ...metaStyle("var(--size-year-summary)"),
+          color: "var(--ink-dim)",
           fontVariationSettings: "'wdth' 76",
           whiteSpace: "nowrap",
           overflow: "hidden",

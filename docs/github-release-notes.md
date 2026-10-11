@@ -4,8 +4,17 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
-## Unreleased — Mac App Store 3.0.0 (build 3.0.2); direct-download version not yet decided
+## v3.0.2 — Mac App Store build 3.0.8; direct-download version not yet decided
 
+- **Sync:** finish the sign-in surface as soon as Apple/Firebase authentication succeeds; replay tombstones, themes and device registration in the background, enforce a credential timeout, and show the real failure instead of an invented expired-session message
+- **Mac App Store UI:** paint the public opaque tray host as one dark popover, install the bundle as `Chinotto.app`, and keep the desktop Chinotto mark neutral
+- **Record UI:** enlarge desktop material, give months and years the quiet cream chronology colour, and use the same restrained cream to identify only the thought under the desktop pointer—without cards, highlight panels or automatic scroll focus
+- **Identity:** add a bottom-edge `by PROBNAYA` launch colophon; separate the PROBNAYA signature from About in Settings and link directly to `getchinotto.app/manifesto`
+- **Controls:** fully reset native button appearance so text verbs retain contrast under hover in the Mac App Store webview
+- **Release gate:** stamp the actual bundled `Info.plist`, reject a technically named installable app, and parse current `codesign` entitlement output during the signed package audit
+- **Voice (pauses):** keep the microphone and recording continuous while Apple Speech closes and restarts phrase-sized recognition tasks; committed phrases remain visible and are joined with the next phrase instead of being replaced after a pause
+- **Voice (first use):** resolve microphone and Speech Recognition permissions before opening an audio file; a gesture consumed by a system permission sheet creates no short junk fragment and ends with a clear “hold again” state
+- **Voice (gestures):** use the same state machine for mouse, Space and tray capture — hold and release to save, tap to lock hands-free, tap again to save, and press Escape to discard; discarded `.caf` files are renamed out of orphan recovery before deletion
 - **Voice (privacy):** speech is recognised on the device only, in both the direct and Mac App Store builds — every task goes through `on_device_task` in `speech.rs`, which requires `supportsOnDeviceRecognition` and sets `requiresOnDeviceRecognition`; the direct build no longer falls back to Apple's speech service
 - **Voice (retry):** recordings kept without words are read back on the device once each when local recognition becomes available (`transcript_retry.rs`, Tauri `retry_transcripts`); transcripts are labelled `apple-on-device` only when the capture reported it
 - **Voice (removal):** a removed voice fragment's `.caf`, transcript, wordings, embedding, search entry and quoting Traces/Returns are erased a minute after removal (`db/erasure.rs`, Tauri `erase_removed_voice`); `restore_fragment` refuses past that point

@@ -106,7 +106,11 @@ function isFirestorePermissionDenied(e: unknown): boolean {
 export function isFirestoreSessionAccessLostError(e: unknown): boolean {
   if (e && typeof e === "object" && "code" in e) {
     const c = String((e as { code: string }).code);
-    return c === "permission-denied" || c === "unauthenticated";
+    // `permission-denied` means the signed-in user is not allowed to access one particular
+    // Firestore path. It can be caused by a missing rule for a newly added collection and must
+    // never destroy an otherwise valid Apple/Firebase session. Only Firebase's explicit
+    // `unauthenticated` response proves that the auth session itself is gone.
+    return c === "unauthenticated";
   }
   return false;
 }
@@ -943,6 +947,31 @@ function isAuthFailedPrecondition(e: unknown): boolean {
   return authErrorCode(e) === "auth/failed-precondition";
 }
 
+type PostSignInSyncTasks = {
+  tombstones: () => Promise<void>;
+  themes: () => Promise<void>;
+  backfill: () => Promise<void>;
+};
+
+/** Starts ordinary sync work without making a successful credential exchange wait for it. */
+export function startPostSignInSync(
+  tasks: PostSignInSyncTasks = {
+    tombstones: flushSyncTombstoneOutbox,
+    themes: flushSyncUserThemeOutbox,
+    backfill: backfillLocalThemesToRemote,
+  },
+): void {
+  void tasks.tombstones().catch((error) => {
+    console.warn("[chinotto sync] post-sign-in tombstone flush failed", error);
+  });
+  void tasks.themes().catch((error) => {
+    console.warn("[chinotto sync] post-sign-in theme flush failed", error);
+  });
+  void tasks.backfill().catch((error) => {
+    console.warn("[chinotto sync] post-sign-in theme backfill failed", error);
+  });
+}
+
 /**
  * Applies the Apple OAuth credential from the bridge webview in the **main** window.
  *
@@ -950,7 +979,7 @@ function isAuthFailedPrecondition(e: unknown): boolean {
  * signed in (Firebase expects sign-out or `linkWithCredential` for anonymous). We sign out first
  * when replacing an existing session so “Continue with Apple” always applies the fresh credential.
  */
-export async function signInWithAppleCredential(credentialJson: BridgedOAuthCredentialJson): Promise<void> {
+export async function signInWithAppleCredential(credentialJson: BridgedOAuthCredentialJson): Promise<User> {
   if (!isFirebaseSyncConfigured()) {
     throw new Error("Sync is not configured");
   }
@@ -969,28 +998,29 @@ export async function signInWithAppleCredential(credentialJson: BridgedOAuthCred
     throw new Error("Apple sign-in credential could not be built");
   }
 
-  const signInAfterClearingSession = async () => {
+  const signInAfterClearingSession = async (): Promise<User> => {
     try {
-      await signInWithCredential(auth, credential);
+      return (await signInWithCredential(auth, credential)).user;
     } catch (e) {
       if (!isAuthFailedPrecondition(e)) {
         throw e;
       }
       await signOut(auth);
       await auth.authStateReady();
-      await signInWithCredential(auth, credential);
+      return (await signInWithCredential(auth, credential)).user;
     }
   };
 
   const cur = auth.currentUser;
+  let signedInUser: User;
   if (cur?.isAnonymous) {
     try {
-      await linkWithCredential(cur, credential);
+      signedInUser = (await linkWithCredential(cur, credential)).user;
     } catch (e) {
       if (isAuthFailedPrecondition(e)) {
         await signOut(auth);
         await auth.authStateReady();
-        await signInAfterClearingSession();
+        signedInUser = await signInAfterClearingSession();
       } else {
         throw e;
       }
@@ -998,14 +1028,24 @@ export async function signInWithAppleCredential(credentialJson: BridgedOAuthCred
   } else if (cur) {
     await signOut(auth);
     await auth.authStateReady();
-    await signInAfterClearingSession();
+    signedInUser = await signInAfterClearingSession();
   } else {
-    await signInAfterClearingSession();
+    signedInUser = await signInAfterClearingSession();
   }
 
-  await flushSyncTombstoneOutbox();
-  await flushSyncUserThemeOutbox();
-  void backfillLocalThemesToRemote();
+  // `signInWithCredential` normally updates `currentUser` before resolving. Treat any other
+  // outcome as a failed exchange instead of letting the UI silently fall back to “off”.
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.isAnonymous || currentUser.uid !== signedInUser.uid) {
+    throw new Error("Apple sign-in completed, but the Firebase session was not saved");
+  }
+
+  // Authentication is the boundary the sign-in surface is waiting for. Outbox replay and
+  // theme backfill are ordinary sync work: waiting for Firestore here left the UI saying
+  // “connecting this mac…” forever whenever one of those requests was slow or offline, even
+  // though Apple and Firebase had already accepted the session.
+  startPostSignInSync();
+  return currentUser;
 }
 
 export async function signOutFirebaseSync(): Promise<void> {

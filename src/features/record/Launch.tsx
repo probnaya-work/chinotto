@@ -181,6 +181,45 @@ export function Launch({ phase, visible }: { phase: LaunchPhase; visible: boolea
             chinotto
           </span>
         </div>
+
+      </div>
+
+      {/*
+        Authorship is a footer, not part of the Chinotto lockup. Keeping it at the edge lets
+        the centred mark retain its own identity while the instrument still names its maker.
+      */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 34,
+          display: "flex",
+          justifyContent: "center",
+          overflow: "hidden",
+          paddingBottom: 3,
+          pointerEvents: "none",
+        }}
+      >
+        <span
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 6,
+            fontSize: 12,
+            lineHeight: 1,
+            fontVariationSettings: "'wdth' 76",
+            color: "var(--agency-quiet)",
+            animation: reduced
+              ? "none"
+              : leaving
+                ? "chinotto-wordout .3s ease-in both"
+                : `chinotto-riseword .65s ${EASE} 1.12s both`,
+          }}
+        >
+          <span style={{ letterSpacing: "0.03em" }}>by</span>
+          <span style={{ fontWeight: 520, letterSpacing: "0.13em" }}>PROBNAYA</span>
+        </span>
       </div>
     </div>
   );

@@ -10,16 +10,18 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { transcriptModel, useVoice } from "./useVoice";
+import { TAP_TO_LOCK_MS, transcriptModel, useVoice } from "./useVoice";
 import * as api from "../../lib/recordApi";
 
 vi.mock("../../lib/recordApi", () => ({
+  prepareVoiceAccess: vi.fn(() => Promise.resolve({ microphone: "granted", prompted: false })),
   // Never resolves by default: the recording is still running for the whole of each test,
   // which is exactly the state a release has to be able to get out of.
   recordVoice: vi.fn(() => new Promise(() => {})),
   captureVoice: vi.fn(),
   recordTranscript: vi.fn(),
   stopVoiceCapture: vi.fn(() => Promise.resolve()),
+  discardVoiceRecording: vi.fn(() => Promise.resolve()),
   linkContinuation: vi.fn(() => Promise.resolve()),
   retryTranscripts: vi.fn(() =>
     Promise.resolve({ ran: true, why: null, transcribed: 0, heardNothing: 0, stillWaiting: 0 }),
@@ -30,18 +32,26 @@ vi.mock("../../lib/recordApi", () => ({
 const stopped = () => vi.mocked(api.stopVoiceCapture).mock.calls.length;
 
 describe("ending a recording", () => {
-  beforeEach(() => vi.mocked(api.stopVoiceCapture).mockClear());
+  let now = 10_000;
+  beforeEach(() => {
+    now = 10_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.mocked(api.stopVoiceCapture).mockClear();
+    vi.mocked(api.discardVoiceRecording).mockClear();
+    vi.mocked(api.prepareVoiceAccess).mockResolvedValue({ microphone: "granted", prompted: false });
+  });
   afterEach(() => vi.restoreAllMocks());
 
-  function holding() {
+  async function holding() {
     const hook = renderHook(() => useVoice(() => {}));
-    act(() => hook.result.current.start());
+    await act(async () => hook.result.current.start());
     expect(hook.result.current.recording).toBe(true);
     return hook;
   }
 
-  it("ends when space comes up anywhere, not only where it went down", () => {
-    const hook = holding();
+  it("ends when space comes up anywhere, not only where it went down", async () => {
+    const hook = await holding();
+    now += TAP_TO_LOCK_MS + 1;
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keyup", { key: " " }));
     });
@@ -49,8 +59,9 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
-  it("ends when the mouse comes up anywhere, not only on the hint", () => {
-    const hook = holding();
+  it("ends when the mouse comes up anywhere, not only on the hint", async () => {
+    const hook = await holding();
+    now += TAP_TO_LOCK_MS + 1;
     act(() => {
       window.dispatchEvent(new MouseEvent("mouseup"));
     });
@@ -58,8 +69,8 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
-  it("ends when the window stops being the one that would hear the release", () => {
-    const hook = holding();
+  it("ends when the window stops being the one that would hear the release", async () => {
+    const hook = await holding();
     act(() => {
       window.dispatchEvent(new Event("blur"));
     });
@@ -67,8 +78,62 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
-  it("does not let the held key page the record away underneath it", () => {
-    const hook = holding();
+  it("locks a quick space tap, then leaves it on the next space press", async () => {
+    const hook = await holding();
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: " " })));
+
+    expect(stopped()).toBe(0);
+    expect(hook.result.current.locked).toBe(true);
+
+    act(() =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", cancelable: true })),
+    );
+    expect(stopped()).toBe(1);
+    hook.unmount();
+  });
+
+  it("locks a quick mouse click, then leaves it on the next press", async () => {
+    const hook = await holding();
+    act(() => window.dispatchEvent(new MouseEvent("mouseup")));
+
+    expect(stopped()).toBe(0);
+    expect(hook.result.current.locked).toBe(true);
+
+    act(() => hook.result.current.start());
+    expect(stopped()).toBe(1);
+    hook.unmount();
+  });
+
+  it("discards a locked recording for good instead of leaving an orphan", async () => {
+    let answer!: (capture: api.VoiceCaptureResult) => void;
+    vi.mocked(api.recordVoice).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const hook = await holding();
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: " " })));
+    expect(hook.result.current.locked).toBe(true);
+
+    act(() => hook.result.current.drop());
+    expect(stopped()).toBe(1);
+    await act(async () =>
+      answer({
+        audioPath: "/tmp/dropped.caf",
+        durationMs: 4200,
+        transcript: "do not keep this",
+        transcriptFailure: null,
+        recognition: "on_device",
+      }),
+    );
+
+    expect(api.discardVoiceRecording).toHaveBeenCalledWith("/tmp/dropped.caf");
+    expect(api.captureVoice).not.toHaveBeenCalled();
+    hook.unmount();
+  });
+
+  it("does not let the held key page the record away underneath it", async () => {
+    const hook = await holding();
 
     // The field that swallowed the first press is gone — the waveform replaced it — so the
     // auto-repeats of the hold arrive at the document, where `space` means "page down".
@@ -81,8 +146,8 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
-  it("leaves other keys' defaults alone", () => {
-    const hook = holding();
+  it("leaves other keys' defaults alone", async () => {
+    const hook = await holding();
     const other = new KeyboardEvent("keydown", { key: "PageDown", cancelable: true });
     act(() => {
       window.dispatchEvent(other);
@@ -101,8 +166,8 @@ describe("ending a recording", () => {
     hook.unmount();
   });
 
-  it("is not ended by some other key coming up", () => {
-    const hook = holding();
+  it("is not ended by some other key coming up", async () => {
+    const hook = await holding();
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keyup", { key: "a" }));
     });
@@ -119,6 +184,41 @@ describe("ending a recording", () => {
     expect(stopped()).toBe(0);
     hook.unmount();
   });
+
+  it("uses the first hold only for a permission sheet and creates no junk recording", async () => {
+    vi.mocked(api.prepareVoiceAccess).mockResolvedValueOnce({
+      microphone: "granted",
+      prompted: true,
+    });
+    const hook = renderHook(() => useVoice(() => {}));
+
+    await act(async () => hook.result.current.start());
+
+    expect(api.recordVoice).not.toHaveBeenCalled();
+    expect(api.captureVoice).not.toHaveBeenCalled();
+    expect(hook.result.current.recording).toBe(false);
+    expect(hook.result.current.notice).toBe("ready");
+    hook.unmount();
+  });
+
+  it("turns a quick tap during an already-granted preflight into a lock", async () => {
+    let answer!: (value: api.VoiceAccessResult) => void;
+    vi.mocked(api.prepareVoiceAccess).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const hook = renderHook(() => useVoice(() => {}));
+    act(() => hook.result.current.start());
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: " " })));
+
+    await act(async () => answer({ microphone: "granted", prompted: false }));
+
+    expect(api.recordVoice).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.recording).toBe(true);
+    expect(hook.result.current.locked).toBe(true);
+    hook.unmount();
+  });
 });
 
 /**
@@ -127,7 +227,11 @@ describe("ending a recording", () => {
  * happen to the fragment before the transcript is attached.
  */
 describe("the same recorder, held from the menu bar", () => {
+  let now = 20_000;
   beforeEach(() => {
+    now = 20_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.mocked(api.prepareVoiceAccess).mockResolvedValue({ microphone: "granted", prompted: false });
     vi.mocked(api.stopVoiceCapture).mockClear();
     vi.mocked(api.captureVoice).mockReset();
     vi.mocked(api.recordTranscript).mockReset();
@@ -152,15 +256,16 @@ describe("the same recorder, held from the menu bar", () => {
     vi.mocked(api.recordTranscript).mockResolvedValue(undefined);
   }
 
-  it("ends on the key the surface says it ends on, and not on the edge's", () => {
+  it("ends on the key the surface says it ends on, and not on the edge's", async () => {
     const hook = renderHook(() =>
       useVoice(() => {}, { origin: "menubar", releaseKey: "Alt" }),
     );
-    act(() => hook.result.current.start());
+    await act(async () => hook.result.current.start());
 
     act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: " " })));
     expect(stopped()).toBe(0);
 
+    now += TAP_TO_LOCK_MS + 1;
     act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })));
     expect(stopped()).toBe(1);
     hook.unmount();
@@ -235,7 +340,9 @@ describe("the same recorder, held from the menu bar", () => {
     await act(async () => {
       hook.result.current.drop();
     });
-    expect(stopped()).toBe(1);
+    // Dropped while permission preflight still owned the gesture: no native capture exists
+    // yet, so there is deliberately nothing to stop and nothing to keep.
+    expect(stopped()).toBe(0);
     expect(vi.mocked(api.captureVoice)).not.toHaveBeenCalled();
     expect(captured).not.toHaveBeenCalled();
     hook.unmount();
