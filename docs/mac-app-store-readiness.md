@@ -51,7 +51,7 @@ uploaded.
 | Build version | Defaults to the repository version; override with `MAS_BUILD_NUMBER` for replacement uploads. It must increase relative to App Store Connect. |
 | Architectures | arm64, minimum macOS 12.0. Universal Intel support is not currently promised. |
 | Sandbox | Required and enabled only in the MAS entitlements. Direct builds remain unsandboxed. |
-| Network client | Required for optional Firebase sync, sharing, analytics, URL enrichment, and Apple services. |
+| Network client | Required for optional Firebase sync, analytics, URL enrichment, and Apple services. |
 | Network server | Removed from MAS; the native Apple sign-in flow does not bind localhost. |
 | Files | Database, backups, audio, and preferences stay in the app container. Export uses a save-panel grant. |
 | Microphone | Both sandbox and hardened-runtime audio entitlements are present. The app shows a recording surface and requests permission only on use. |
@@ -70,7 +70,7 @@ uploaded.
 - Confirm the next unused build number in App Store Connect before creating the package.
 - Run the signed app from a clean macOS user/container and test first launch, close/reopen/quit,
   tray capture, both global shortcuts, microphone allow/deny/re-enable, on-device transcription,
-  native Apple sign-in, offline core capture/search, sync, sharing, URL enrichment, save-panel export,
+  native Apple sign-in, offline core capture/search, sync, URL enrichment, save-panel export,
   backup retention, icon variants, account deletion, and update wording.
 - Decide the direct-to-store data migration experience. App Sandbox moves data to
   `~/Library/Containers/app.chinotto`; an existing direct installation's database is not imported
@@ -81,7 +81,7 @@ uploaded.
   does not apply — Mac never gates a feature behind an out-of-app purchase). Core capture/search and
   optional sync are both free on Mac; Chinotto Pro is an iOS-only purchase that unlocks sync on iOS.
 - Reconcile App Store Connect privacy answers with the manifest: optional linked email/user ID,
-  linked install/device information, linked user content for sync/sharing, and unlinked opt-in product
+  linked install/device information, linked user content for sync, and unlinked opt-in product
   interaction analytics. Confirm Firebase, hosting, Umami, and Apple speech-processing practices.
 - Supply or confirm the privacy-policy URL, support URL, category, age rating, screenshots, app
   description, review notes, test account/instructions if required, and encryption answers.

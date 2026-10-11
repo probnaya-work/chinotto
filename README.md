@@ -12,7 +12,7 @@ Capture it instantly — without projects, folders, or workspaces.
 
 Structure can come later — when you revisit.
 
-Local-first. Desktop only. Optional device sync with the mobile app when you enable it in Settings.
+Local-first on macOS. Optional text sync with Chinotto on iPhone when you enable it in Settings.
 
 ## Download (macOS)
 
@@ -23,20 +23,17 @@ Local-first. Desktop only. Optional device sync with the mobile app when you ena
 - Capture thoughts instantly
 - One continuous stream instead of documents and folders
 - Full-text search
-- Spaces (All, Inbox, Work, Personal)
 - Jump to any day in your history
 - Thought trails and related thoughts in context
-- Recall themes — optional labels to filter and revisit threads of thought
-- Share selected thoughts as a hosted read link
 - Quiet recall when a past thought still matters
-- Optional sync with Chinotto mobile (entries and recall themes when both apps support it)
+- Optional text sync with Chinotto on iPhone
 
 ## Data ownership
 
-- **Export** — entries can be exported as Markdown
+- **Export** — a ZIP of readable text and original audio
 - **Backup** — automatic local backups
 
-See [Privacy](docs/privacy.md) for local storage, optional sync, sharing, and analytics.
+See [Privacy](docs/privacy.md) for local storage, optional sync, and analytics.
 
 ## Updates
 

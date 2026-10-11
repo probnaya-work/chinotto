@@ -20,18 +20,14 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 
 ## Optional sync
 
-When you enable sync and sign in with Apple, entry text can sync with the Chinotto mobile app via
-Firebase. Recall themes can sync too when enabled on both devices. Chinotto also stores an install
+When you enable sync and sign in with Apple, Record text can sync with Chinotto on iPhone via
+Firebase. Chinotto also stores an install
 identifier and the Mac name you see in the device list. Voice audio is not synced. Sync is optional;
 the app remains fully usable without it.
 
 Removing a synced moment marks the cloud copy as removed; its text remains there until the cloud
 account is deleted. Removing the cloud account deletes the synced copy and leaves local records on
 your devices.
-
-## Optional sharing
-
-When you create a share link from entry detail, Chinotto uploads a **snapshot** of the selected thoughts (text and share metadata you choose) to the hosted read service at `getchinotto.app`. The link expires after the period you pick. Your full local database is not uploaded. Sharing is explicit and optional.
 
 ## Analytics (opt-in)
 
