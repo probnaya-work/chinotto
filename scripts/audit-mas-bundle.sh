@@ -14,6 +14,17 @@ fail() { echo "MAS audit failed: $*" >&2; exit 1; }
 require_file() { [ -f "$1" ] || fail "missing $1"; }
 plist_raw() { plutil -extract "$2" raw -o - "$1" 2>/dev/null; }
 plist_literal_key_raw() { /usr/libexec/PlistBuddy -c "Print :$2" "$1" 2>/dev/null; }
+entitlement_has_value() {
+  local key="$1" value="$2"
+  awk -v wanted_key="$key" -v wanted_value="$value" '
+    index($0, "[Key] ") {
+      active = (substr($0, index($0, "[Key] ") + 6) == wanted_key)
+      next
+    }
+    active && index($0, "] " wanted_value) { found = 1; exit }
+    END { exit(found ? 0 : 1) }
+  ' "$ENT_CHECK"
+}
 expect_plist() {
   local file="$1" key="$2" expected="$3" actual
   actual="$(plist_raw "$file" "$key" || true)"
@@ -21,6 +32,8 @@ expect_plist() {
 }
 
 [ -d "$APP_PATH" ] || fail "app bundle not found: $APP_PATH"
+[ "$(basename "$APP_PATH")" = "Chinotto.app" ] \
+  || fail "installable bundle must be named Chinotto.app, got $(basename "$APP_PATH")"
 INFO="$APP_PATH/Contents/Info.plist"
 EXECUTABLE="$APP_PATH/Contents/MacOS/Chinotto"
 PRIVACY="$APP_PATH/Contents/Resources/PrivacyInfo.xcprivacy"
@@ -64,29 +77,33 @@ if strings "$EXECUTABLE" | /usr/bin/grep -q 'chinotto-oauth-bridge'; then
   fail "browser-loopback OAuth server marker is present"
 fi
 
-codesign --verify --strict --verbose=2 "$APP_PATH"
+# Verify the executable and every nested signed component. A shallow bundle check can pass
+# while the Mach-O's embedded signature has changed, which produces a package that looks
+# signed to `pkgutil` but cannot be accepted or launched as the submitted application.
+codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 ENT_CHECK="$(mktemp -t chinotto-mas-audit-entitlements).plist"
 PROFILE_CHECK=""
 trap 'rm -f "$ENT_CHECK"; [ -z "${PROFILE_CHECK:-}" ] || rm -f "$PROFILE_CHECK"' EXIT
-# `codesign` 27 writes a diagnostic tree when passed a filesystem output path.
-# Its stdout plist form remains machine-readable across the supported toolchains.
-codesign -d --entitlements :- "$APP_PATH" >"$ENT_CHECK" 2>/dev/null
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.app-sandbox || true)" = "true" ] \
+# Current codesign writes a stable diagnostic tree for `--entitlements -`; the retired `:-`
+# plist spelling now returns an empty file plus a false "invalid blob" warning even for the
+# App Store-installed build. Parse the signed binary's tree rather than the input plist.
+codesign -d --entitlements - "$APP_PATH" >"$ENT_CHECK" 2>/dev/null
+entitlement_has_value com.apple.security.app-sandbox true \
   || fail "App Sandbox entitlement is missing"
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.network.client || true)" = "true" ] \
+entitlement_has_value com.apple.security.network.client true \
   || fail "outgoing-network entitlement is missing"
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.files.user-selected.read-write || true)" = "true" ] \
+entitlement_has_value com.apple.security.files.user-selected.read-write true \
   || fail "user-selected read/write entitlement is missing"
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.device.audio-input || true)" = "true" ] \
+entitlement_has_value com.apple.security.device.audio-input true \
   || fail "audio-input entitlement is missing"
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.security.device.microphone || true)" = "true" ] \
+entitlement_has_value com.apple.security.device.microphone true \
   || fail "microphone entitlement is missing"
-[ "$(plist_literal_key_raw "$ENT_CHECK" com.apple.developer.applesignin:0 || true)" = "Default" ] \
+entitlement_has_value com.apple.developer.applesignin Default \
   || fail "Sign in with Apple entitlement is missing"
-if plist_literal_key_raw "$ENT_CHECK" com.apple.security.network.server >/dev/null 2>&1; then
+if /usr/bin/grep -F '[Key] com.apple.security.network.server' "$ENT_CHECK" >/dev/null; then
   fail "incoming-network entitlement must not be present"
 fi
-if [ "$(plist_literal_key_raw "$ENT_CHECK" get-task-allow || true)" = "true" ]; then
+if entitlement_has_value get-task-allow true; then
   fail "get-task-allow must not be enabled"
 fi
 
