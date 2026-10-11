@@ -347,16 +347,18 @@ export function TrayCapture() {
 
         {voice.recording ? (
           <div
+            onMouseDown={voice.locked ? voice.finish : undefined}
             style={{
               display: "flex",
               alignItems: "center",
               gap: "16px",
               minHeight: "var(--tray-row-min)",
+              cursor: voice.locked ? "pointer" : "default",
             }}
           >
             <SpeakingBars width="2px" height="var(--tray-caret-height)" />
             <span style={metaStyle("var(--size-meta-sm)")}>
-              holding ⌥ · {durationLabel(voice.seconds)}
+              {voice.locked ? "hands-free" : "holding"} · {durationLabel(voice.seconds)}
             </span>
           </div>
         ) : (
@@ -417,6 +419,11 @@ export function TrayCapture() {
                   void leave();
                 }
               }}
+              onKeyUp={(e) => {
+                if (e.key !== "Alt" || !empty) return;
+                e.preventDefault();
+                voice.stop();
+              }}
               aria-label={continuing ? "Continue this" : "Leave a fragment"}
               placeholder={continuing ? "continue it" : "anything"}
               spellCheck={false}
@@ -452,7 +459,11 @@ export function TrayCapture() {
         >
           {voice.recording ? (
             <>
-              <span>release to leave it</span>
+              <span>
+                {voice.locked
+                  ? "click or ⌥ to leave it"
+                  : "release to leave it · tap locks"}
+              </span>
               <span style={{ marginLeft: "auto" }}>
                 <Verb quiet onClick={voice.drop}>
                   esc drop it
@@ -463,14 +474,41 @@ export function TrayCapture() {
             <>
               <span>{continuing ? "⏎ continue it" : "⏎ leave it"}</span>
               <span>{continuing ? "esc put it back" : "esc close"}</span>
-              <span
+              <button
+                type="button"
+                aria-label="hold to speak; tap to lock"
+                className="chinotto-verb chinotto-verb--quiet"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  voice.start();
+                }}
+                onMouseUp={(event) => {
+                  event.preventDefault();
+                  voice.stop();
+                }}
+                onKeyDown={(event) => {
+                  if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+                    event.preventDefault();
+                    voice.start();
+                  }
+                }}
+                onKeyUp={(event) => {
+                  if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    voice.stop();
+                  }
+                }}
                 style={{
                   marginLeft: "auto",
                   color: failure ? "var(--ink-far)" : "var(--meta)",
+                  padding: 0,
+                  font: "inherit",
+                  cursor: empty && !failure && !note ? "pointer" : "default",
                 }}
+                disabled={!empty || Boolean(failure) || Boolean(note)}
               >
-                {failure ?? note ?? (empty ? "hold ⌥ to speak" : "")}
-              </span>
+                {failure ?? note ?? (empty ? "hold ⌥ / mouse · tap locks" : "")}
+              </button>
             </>
           )}
         </div>
@@ -595,11 +633,12 @@ function TrayReturn({
 }
 
 /** What the microphone said, in the product's voice rather than the system's. */
-function micSentence(notice: "ask" | "denied" | "failed"): string {
+function micSentence(notice: "ask" | "ready" | "denied" | "failed"): string {
   if (notice === "denied") {
     return "the mac is not letting chinotto hear — system settings › privacy › microphone";
   }
   if (notice === "ask") return "the mac is asking about the microphone";
+  if (notice === "ready") return "microphone ready · hold ⌥ again when you mean to record";
   return "that did not record";
 }
 

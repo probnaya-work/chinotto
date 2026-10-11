@@ -1678,6 +1678,69 @@ pub struct VoiceCaptureResult {
     pub recognition: String,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VoiceAccessResult {
+    /// `granted` or `denied`. On macOS 12/13 the audio engine remains the compatibility
+    /// permission path, so this is `legacy` and capture proceeds as it did before.
+    microphone: &'static str,
+    /// True when this gesture had to present either of macOS's voice permission sheets.
+    /// That gesture never becomes a recording: the person must deliberately hold again.
+    prompted: bool,
+}
+
+/// Resolve macOS's two voice permissions before a recording exists.
+///
+/// Starting AVAudioEngine first made the permission sheet part of the recording gesture:
+/// the intended words happened while macOS supplied no buffers, then the one or two seconds
+/// after the sheet closed became a junk fragment. Asking here makes that first gesture a
+/// permission gesture only and leaves no file or fragment behind.
+#[tauri::command(async)]
+async fn prepare_voice_access(app: tauri::AppHandle) -> Result<VoiceAccessResult, String> {
+    let mut prompted = false;
+    let microphone = match speech::microphone_permission_state() {
+        speech::PermissionState::Granted => "granted",
+        speech::PermissionState::Denied => "denied",
+        speech::PermissionState::Legacy => "legacy",
+        speech::PermissionState::Undetermined => {
+            prompted = true;
+            let (tx, rx) = mpsc::sync_channel(1);
+            app.run_on_main_thread(move || speech::request_microphone_permission(tx))
+                .map_err(|e| e.to_string())?;
+            let granted = tauri::async_runtime::spawn_blocking(move || {
+                rx.recv_timeout(std::time::Duration::from_secs(300))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|_| "the microphone permission question did not come back".to_string())?;
+            if granted { "granted" } else { "denied" }
+        }
+    };
+
+    // There is no point presenting a second sheet after the microphone was refused.
+    if microphone != "denied"
+        && speech::speech_permission_state() == speech::PermissionState::Undetermined
+    {
+        prompted = true;
+        let (tx, rx) = mpsc::sync_channel(1);
+        app.run_on_main_thread(move || speech::request_speech_permission(tx))
+            .map_err(|e| e.to_string())?;
+        // A refusal still permits the canonical audio recording. It simply has no derived
+        // words until the person enables Speech Recognition later.
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            rx.recv_timeout(std::time::Duration::from_secs(300))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|_| "the speech permission question did not come back".to_string())?;
+    }
+
+    Ok(VoiceAccessResult {
+        microphone,
+        prompted,
+    })
+}
+
 /// Where recordings live. Beside the record, because they are part of it.
 fn audio_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -1785,10 +1848,6 @@ fn run_native_speech_recognition(
         // Before the command is queued, so a release that arrives while the recogniser is
         // being created or the mac is asking about the microphone is still seen.
         speech::arm_stop();
-        // And, once ever, the other permission. On the main thread because that is where a
-        // system prompt is presented from; it is not waited for, so this recording keeps its
-        // audio and simply has no words. See `speech::ask_for_speech_if_undecided`.
-        let _ = app.run_on_main_thread(speech::ask_for_speech_if_undecided);
         let cmd_tx = app.state::<SpeechCommandTx>().0.clone();
         cmd_tx
             .send((max_ms, path, result_tx, Some(event_tx)))
@@ -1896,6 +1955,31 @@ fn stop_voice_capture() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     speech::request_stop();
     Ok(())
+}
+
+/// Explicit discard of a finished, unclaimed capture.
+///
+/// Rename first: orphan recovery only considers `.caf`, so even if unlinking is interrupted
+/// after the rename, a recording the person dropped can never reappear in the Record.
+#[tauri::command(async)]
+fn discard_voice_recording(app: tauri::AppHandle, audio_path: String) -> Result<(), String> {
+    let dir = audio_dir(&app)?;
+    let path = PathBuf::from(audio_path);
+    if !db::erasure::is_retained_recording(&path, &dir) {
+        return Err("refusing to discard a file outside chinotto's audio directory".into());
+    }
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let discarded = path.with_extension("discarded");
+    fs::rename(&path, &discarded).map_err(|e| e.to_string())?;
+    match fs::remove_file(&discarded) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        // The renamed file is intentionally left outside orphan recovery.
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -2120,6 +2204,7 @@ pub fn run() {
             record_commands::restore_fragment,
             record_commands::remove_fragment,
             native_apple_sign_in,
+            cancel_native_apple_sign_in,
             oauth_dev_bridge::start_oauth_dev_bridge_listener,
             ingest_firestore_entries,
             enqueue_sync_tombstone,
@@ -2149,9 +2234,11 @@ pub fn run() {
             jump_dates_in_month,
             jump_anchor_for_local_date,
             search_entries,
+            prepare_voice_access,
             run_native_speech_recognition,
             orphaned_recordings,
             stop_voice_capture,
+            discard_voice_recording,
             generate_embedding,
             classify_entry_theme,
             get_entry_theme,
@@ -2204,7 +2291,6 @@ pub fn run() {
                 }
                 _ => {}
             }
-            cancel_native_apple_sign_in,
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = &event {
                 ensure_main_window_focus(app);

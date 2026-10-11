@@ -670,14 +670,30 @@ export interface VoiceCaptureResult {
 /** The label a transcript recognised on this Mac carries. Mirrors `ON_DEVICE_MODEL` in Rust. */
 export const ON_DEVICE_MODEL = "apple-on-device";
 
+export interface VoiceAccessResult {
+  microphone: "granted" | "denied" | "legacy";
+  /** A system permission sheet was shown; this gesture must not become a recording. */
+  prompted: boolean;
+}
+
+/** Resolve macOS voice permissions before opening a file or starting the microphone. */
+export function prepareVoiceAccess(): Promise<VoiceAccessResult> {
+  return invoke<VoiceAccessResult>("prepare_voice_access");
+}
+
 /** Hold to speak. Records to a file, and transcribes it if it can. */
 export function recordVoice(maxMs?: number): Promise<VoiceCaptureResult> {
   return invoke<VoiceCaptureResult>("run_native_speech_recognition", { maxMs });
 }
 
-/** The hold was released. `maxMs` is only a ceiling; this is what normally ends a recording. */
+/** Ask the native capture to finish. Gesture semantics (hold/tap/lock) stay in `useVoice`. */
 export function stopVoiceCapture(): Promise<void> {
   return invoke<void>("stop_voice_capture");
+}
+
+/** Explicit discard: the stopped audio is removed and can never return as an orphan. */
+export function discardVoiceRecording(audioPath: string): Promise<void> {
+  return invoke<void>("discard_voice_recording", { audioPath });
 }
 
 /** The recording becomes a fragment. Called whether or not any words came back. */

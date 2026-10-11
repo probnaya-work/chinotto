@@ -62,16 +62,18 @@ describe("Mac voice recognition stays on the device", () => {
   it("sends every request through the gate", () => {
     expect(count("SFSpeechAudioBufferRecognitionRequest::init(")).toBe(1);
     expect(count("SFSpeechURLRecognitionRequest::initWithURL(")).toBe(1);
-    expect(count("on_device_task(r, &request")).toBe(1);
+    expect(count("on_device_task(recognizer, &request")).toBe(1);
     expect(count("on_device_task(&recognizer, &request")).toBe(1);
   });
 
   it("hands audio to Speech only through a request the gate accepted", () => {
     expect(count("appendAudioPCMBuffer(")).toBe(1);
-    const accept = code.indexOf("let task = on_device_task(r, &request, &result_block)?;");
-    const kept = code.indexOf("*slot = Some(request);");
+    const accept = code.indexOf("let task = on_device_task(recognizer, &request, &result_block)?;");
+    const completed = code.indexOf("Some((this_generation, request, task, result_block))", accept);
+    const kept = code.indexOf("*slot = Some(request.clone());", completed);
     expect(accept).toBeGreaterThan(-1);
-    expect(kept).toBeGreaterThan(accept);
+    expect(completed).toBeGreaterThan(accept);
+    expect(kept).toBeGreaterThan(completed);
   });
 
   it("keeps recording when there is no local recogniser", () => {

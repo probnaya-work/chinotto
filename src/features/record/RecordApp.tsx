@@ -105,7 +105,7 @@ function backupLine(iso: string | null, now: Date): string {
  * honest affordance is the door to where the answer lives.
  */
 function micNotice(
-  notice: "ask" | "denied" | "failed" | null,
+  notice: "ask" | "ready" | "denied" | "failed" | null,
   onOpenSettings: () => void,
 ): ReactNode {
   if (!notice) return null;
@@ -122,6 +122,9 @@ function micNotice(
   }
   if (notice === "ask") {
     return <>the mac will ask once whether chinotto may hear you.</>;
+  }
+  if (notice === "ready") {
+    return <>microphone ready · hold space again when you mean to record.</>;
   }
   return <>that recording didn’t start. nothing was lost; hold space again.</>;
 }
@@ -322,6 +325,7 @@ export function RecordApp() {
 
   useEffect(() => {
     if (voice.notice === "denied") setMicrophone("denied");
+    if (voice.notice === "ready") setMicrophone("granted");
   }, [voice.notice]);
   useEffect(() => {
     if (voice.recording) setMicrophone("granted");
@@ -353,9 +357,8 @@ export function RecordApp() {
       } catch {
         return;
       }
-      // Shorter than a hold: a slip of the hand, not a thought. The same threshold the
-      // live path drops on, so being interrupted cannot make something the product would
-      // not have kept anyway.
+      // Below this length there is not enough complete audio to recover after a crash.
+      // Live captures never guess: they are either explicitly left or explicitly dropped.
       const keep = found.filter((r) => r.durationMs >= DROP_UNDER_MS);
       if (keep.length === 0) return;
       for (const r of keep) {
@@ -551,10 +554,8 @@ export function RecordApp() {
       }
       if (e.key !== "Escape") return;
       // A recording is the innermost thing you can be in the middle of, which is why the
-      // design's ladder puts it first: tray → recording → correcting → … It keeps nothing,
-      // exactly as a hold released inside `DROP_UNDER_MS` already kept nothing — the field
-      // has been offering `esc to drop` since the speaking surface was drawn, and this is
-      // the half that was missing.
+      // design's ladder puts it first: tray → recording → correcting → … It keeps nothing;
+      // the field has been offering `esc to drop` since the speaking surface was drawn.
       if (voice.recording) return voice.drop();
       if (editing) return setEditing(null);
       // A utility surface is deeper than focus: sync steps back to settings, settings to
@@ -993,8 +994,8 @@ export function RecordApp() {
               // strand the Apple sign-in surface in its connecting state.
               void appleAuth.onContinueApple();
             }}
-            onRemoveDevice={(id) => {
             onCancelSignIn={appleAuth.onCancelApple}
+            onRemoveDevice={(id) => {
               void removeDevice(id).catch(() => {
                 setNotice("that device could not be removed · try again when online");
               });
@@ -1151,8 +1152,11 @@ export function RecordApp() {
                   meaningOn={meaningOn}
                   onToggleMeaning={() => setMeaningOn((m) => !m)}
                   speaking={voice.recording}
+                  speakingLocked={voice.locked}
                   speakingSeconds={voice.seconds}
                   onStartSpeaking={voice.start}
+                  onReleaseSpeaking={voice.stop}
+                  onFinishSpeaking={voice.finish}
                   notice={micNotice(voice.notice, () => {
                     voice.dismissNotice();
                     void api.openMicrophoneSettings().catch(() => {});

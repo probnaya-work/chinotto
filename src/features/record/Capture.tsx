@@ -35,8 +35,13 @@ export interface CaptureProps {
    * because it does not reliably arrive at whatever took the press.
    */
   onStartSpeaking?: () => void;
+  /** The matching release on the original control; the window listener is the fallback. */
+  onReleaseSpeaking?: () => void;
   speaking?: boolean;
+  speakingLocked?: boolean;
   speakingSeconds?: number;
+  /** Leave a hands-free recording with a second click. */
+  onFinishSpeaking?: () => void;
   /** The live transcript, while speaking. */
   transcript?: string;
 
@@ -60,8 +65,11 @@ export function Capture({
   onLeave,
   onStand,
   onStartSpeaking,
+  onReleaseSpeaking,
   speaking = false,
+  speakingLocked = false,
   speakingSeconds = 0,
+  onFinishSpeaking,
   transcript = "",
   onEnterRecord,
   findCount = 0,
@@ -108,11 +116,13 @@ export function Capture({
     return (
       <div>
         <div
+          onMouseDown={speakingLocked ? onFinishSpeaking : undefined}
           style={{
             display: "flex",
             alignItems: "center",
             minHeight: "var(--capture-height)",
             gap: "26px",
+            cursor: speakingLocked ? "pointer" : "default",
           }}
         >
           <SpeakingBars />
@@ -120,7 +130,9 @@ export function Capture({
             {durationLabel(speakingSeconds)}
           </span>
           <span style={{ ...metaStyle("var(--size-meta-lg)"), marginLeft: "auto" }}>
-            release to leave it · esc to drop
+            {speakingLocked
+              ? "hands-free · click or space to leave it · esc to drop"
+              : "release to leave it · tap locks · esc to drop"}
           </span>
         </div>
         {/*
@@ -177,6 +189,12 @@ export function Capture({
     // `esc` is handled once, globally, so it always steps back by exactly one level.
   }
 
+  function handleKeyUp(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== " " || hasText) return;
+    e.preventDefault();
+    onReleaseSpeaking?.();
+  }
+
   return (
     <div>
       <div
@@ -206,6 +224,7 @@ export function Capture({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           aria-label="Leave a fragment"
@@ -232,6 +251,7 @@ export function Capture({
         {!hasText ? (
           <span
             onMouseDown={onStartSpeaking}
+            onMouseUp={onReleaseSpeaking}
             className="chinotto-verb chinotto-verb--quiet"
             style={{
               ...metaStyle("var(--size-meta-lg)"),
@@ -244,7 +264,7 @@ export function Capture({
               whiteSpace: "nowrap",
             }}
           >
-            ◌ hold space to speak
+            ◌ hold space · tap locks
           </span>
         ) : null}
 
