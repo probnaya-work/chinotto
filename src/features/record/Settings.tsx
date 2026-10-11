@@ -118,7 +118,7 @@ export function Settings(props: SettingsProps) {
             </div>
             <div>
               voice · hold <Key>space</Key> at the edge, or <Key>⌥space</Key> anywhere on the
-              mac.
+              mac. tap locks; <Key>esc</Key> drops.
             </div>
             <div style={{ color: "var(--ink-far)" }}>
               microphone · {micLine}{" "}
@@ -441,6 +441,7 @@ const KEYS: [string, ReactNode][] = [
   ["⇧⏎", "new line"],
   ["esc", "drop it · step back"],
   ["space, held", "speak"],
+  ["space, tapped", "speak hands-free · tap again to leave it"],
   ["/", "find"],
   ["a date", "stand there — “march 2024”, “2019”, “today”"],
   ["↓", "into the record · c continue · h hold"],
