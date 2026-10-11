@@ -39,6 +39,11 @@ export interface VerbProps {
    */
   ambient?: boolean;
   /**
+   * The rare filled primary action. It keeps the same accessible button behavior as a verb,
+   * but opts out of the transparent word-control reset in tokens.css.
+   */
+  filled?: boolean;
+  /**
    * For the few places that want a specific step on the ladder rather than either rank —
    * a voice chip's label, or a word that is quoted rather than pressed.
    */
@@ -53,6 +58,7 @@ export function Verb({
   onClick,
   quiet = false,
   ambient = false,
+  filled = false,
   tone,
   style,
   disabled = false,
@@ -62,7 +68,12 @@ export function Verb({
     <button
       type="button"
       className={
-        ambient ? "chinotto-affordance" : "chinotto-verb" + (quiet ? " chinotto-verb--quiet" : "")
+        ambient
+          ? "chinotto-affordance"
+          :
+              "chinotto-verb" +
+              (quiet ? " chinotto-verb--quiet" : "") +
+              (filled ? " chinotto-verb--filled" : "")
       }
       disabled={disabled}
       onClick={(e) => {

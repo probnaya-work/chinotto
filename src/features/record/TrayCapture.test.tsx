@@ -38,6 +38,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 vi.mock("@/lib/uiZoom", () => ({ applyStoredUiZoom: () => Promise.resolve(1) }));
+vi.mock("@/lib/distribution", () => ({ IS_MAC_APP_STORE: true }));
 vi.mock("@/lib/firebaseConfig", () => ({ isFirebaseSyncConfigured: () => true }));
 vi.mock("@/lib/appearance", () => ({
   applyAppearance: vi.fn(),
@@ -117,6 +118,13 @@ describe("resting", () => {
   it("draws the caret, the placeholder, and the way to speak", async () => {
     render(<TrayCapture />);
     await act(async () => {});
+
+  it("marks the public opaque App Store host so it is painted as one dark panel", async () => {
+    render(<TrayCapture />);
+    await act(async () => {});
+
+    expect(document.documentElement).toHaveClass("tray-capture-page", "tray-capture-opaque");
+  });
 
     expect(field()).toHaveAttribute("placeholder", "anything");
     expect(screen.getByText("⏎ leave it")).toBeInTheDocument();

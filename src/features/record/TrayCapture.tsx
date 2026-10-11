@@ -23,6 +23,7 @@ import * as api from "@/lib/recordApi";
 import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
 import { applyAppearance, readAppearance, readLiftContrast } from "@/lib/appearance";
 import { applyStoredUiZoom } from "@/lib/uiZoom";
+import { IS_MAC_APP_STORE } from "@/lib/distribution";
 import { metaStyle } from "../../design/tiers";
 import { SpeakingBars } from "./Caret";
 import { Marked } from "./Marked";
@@ -150,10 +151,14 @@ export function TrayCapture() {
       zoom.current = z;
     });
     document.documentElement.classList.add("tray-capture-page");
+    document.documentElement.classList.toggle("tray-capture-opaque", IS_MAC_APP_STORE);
     // Deliberately not `readReturn()`: this webview mounts when the app launches, and
     // `select_return` surfaces as well as reads. A Return is something you arrive at, so it
     // is asked for when the panel opens and never merely because Chinotto is running.
     carry();
+    return () => {
+      document.documentElement.classList.remove("tray-capture-page", "tray-capture-opaque");
+    };
   }, [carry]);
 
   useEffect(() => {

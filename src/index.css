@@ -50,3 +50,14 @@ html.tray-capture-page #root {
   min-height: 100%;
   overflow: hidden;
 }
+
+/*
+  The App Store build cannot use Tauri's private transparent-WebKit feature. Paint its whole
+  public, opaque host with the product surface so AppKit never shows a white slab around the
+  capture panel while the shared direct build remains genuinely transparent.
+*/
+html.tray-capture-page.tray-capture-opaque,
+html.tray-capture-page.tray-capture-opaque body,
+html.tray-capture-page.tray-capture-opaque #root {
+  background: #141416 !important;
+}

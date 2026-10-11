@@ -525,10 +525,30 @@ input[aria-label="Find"]:focus-visible {
 */
 .chinotto-verb {
   font-weight: var(--agency-weight) !important;
+.chinotto-verb,
+.chinotto-affordance,
+.chinotto-band-label {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  border: 0;
+}
+
 }
 
 .chinotto-verb:hover:not(:disabled) {
   color: var(--agency-hover) !important;
+/*
+  The rare filled primary is still a verb, but it is deliberately a box. This selector comes
+  after the shared transparent reset and carries the same importance so a future reset cannot
+  silently erase the fill while leaving the inverse label behind.
+*/
+.chinotto-verb--filled {
+  background: var(--agency) !important;
+  color: var(--agency-ground) !important;
+  border: 1px solid var(--agency);
+}
+
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
@@ -536,6 +556,16 @@ input[aria-label="Find"]:focus-visible {
 
 /*
   The quiet rank: back and up, dismissals, key notation, the correction window, and every
+/*
+  Compound with the base class on purpose: this must outrank the generic verb hover even if
+  somebody moves the blocks later. A white primary keeps dark surface ink when it brightens.
+*/
+.chinotto-verb.chinotto-verb--filled:hover:not(:disabled) {
+  background: var(--agency-hover) !important;
+  color: var(--surface) !important;
+  border-color: var(--agency-hover);
+}
+
   destructive verb in the product. It lifts one step, to full agency, and takes no underline —
   `remove` must never arrive louder than `keep it`.
 */
@@ -676,6 +706,17 @@ input[aria-label="Find"]:focus-visible {
 
 /*
   The placeholder is the resting state, not a label: one word, in the placeholder step,
+/* In the MAS build the window itself is the panel; no transparent shadow gutter exists. */
+.tray-capture-opaque .tray-capture-root {
+  background: var(--surface);
+  padding: 0;
+}
+
+.tray-capture-opaque .tray-capture-panel {
+  border: 0;
+  box-shadow: none;
+}
+
   sitting where your first character will land. `opacity: 1` because WebKit dims a
   placeholder on its own and the step is already chosen.
 */
