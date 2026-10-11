@@ -123,6 +123,9 @@ export const META = {
   ink: "var(--meta)",
 } as const;
 
+/** Chronology is navigation, so months and years use the established quiet cream. */
+export const CHRONOLOGY_INK = "var(--agency-quiet)";
+
 /**
  * Named exceptions the prototype draws deliberately, rather than tiers.
  */
@@ -260,6 +263,7 @@ export function metaStyle(size: string = "var(--size-meta)"): CSSProperties {
 export function bandLabelStyle(tier: Tier): CSSProperties {
   return {
     ...metaStyle(TIERS[tier].labelSize ?? "var(--size-meta-sm)"),
+    color: CHRONOLOGY_INK,
     letterSpacing: "var(--track-tier-label)",
     textTransform: "uppercase",
     cursor: "pointer",

@@ -28,10 +28,18 @@ export interface CompactRowProps {
   voice?: VoiceCapture;
 }
 
-export function CompactRow({ fragment, tier, onOpen, mark, encounter, voice }: CompactRowProps) {
+export function CompactRow({
+  fragment,
+  tier,
+  onOpen,
+  mark,
+  encounter,
+  voice,
+}: CompactRowProps) {
   const style: CSSProperties = {
     ...tierStyle(tier),
     cursor: "pointer",
+    transition: "color 180ms ease-out",
     ...(voice ? { fontStyle: "italic" } : null),
   };
 

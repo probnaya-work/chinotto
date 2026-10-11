@@ -33,7 +33,7 @@ import { heldSinceLabel } from "./format";
  * A guess at one row's height per tier, used only for a chunk that has never been on
  * screen. Replaced by a real measurement the moment it is.
  */
-const ROW_ESTIMATE = { d0: 96, d1: 40, d2: 26, d3: 22, d4: 20 } as const;
+const ROW_ESTIMATE = { d0: 100, d1: 42, d2: 28, d3: 24, d4: 22 } as const;
 
 export interface RecordProps {
   fragments: Fragment[];
@@ -358,7 +358,7 @@ export function Record(props: RecordProps) {
   const recordIsEmpty = loaded && fragments.length === 0 && held.length === 0;
 
   return (
-    <>
+    <div>
       {returnSlot}
 
       {atEdge && held.length > 0 ? (
@@ -434,6 +434,6 @@ export function Record(props: RecordProps) {
       ) : null}
 
       {bands.map(renderBand)}
-    </>
+    </div>
   );
 }

@@ -465,6 +465,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <div
         style={{
           ...metaStyle("var(--size-meta-sm)"),
+          color: "var(--agency-quiet)",
+          fontWeight: "var(--agency-weight)",
           letterSpacing: "var(--track-tier-label)",
           textTransform: "uppercase",
           paddingTop: "6px",

@@ -134,7 +134,6 @@ export function FragmentRow(props: FragmentRowProps) {
     : (encounter?.title ?? encounter?.urlRaw ?? fragment.body);
   const paragraphs = displayText.split(/\n\n+/);
   const moreParagraphs = paragraphs.length - 1;
-
   const bodyStyle: CSSProperties = {
     ...tierStyle("d0"),
     cursor: "pointer",
@@ -143,6 +142,8 @@ export function FragmentRow(props: FragmentRowProps) {
     // A transcript and a link's own title are both in someone else's voice.
     ...(voice ? { fontStyle: "italic", color: "var(--ink-far)" } : null),
     ...(!hasOwnWords && encounter ? { color: "var(--ink-far)" } : null),
+    ...(active ? { color: "var(--agency-quiet)" } : null),
+    transition: "color 180ms ease-out",
     // The fragment you just left keeps a line under it for as long as it is still yours
     // to change — the same mark correcting uses, saying the same thing.
     ...(justSaved ? { boxShadow: "inset 0 -2px var(--correction-rule)" } : null),
@@ -165,7 +166,7 @@ export function FragmentRow(props: FragmentRowProps) {
         // height identical hovered and not: the record must not move under the pointer.
         margin: "0 -20px",
         padding: "6px 20px",
-        background: active || selected ? "var(--row-hover)" : "transparent",
+        background: selected ? "var(--row-hover)" : "transparent",
         animation: landing ? "chinotto-settle var(--settle) var(--ease)" : "none",
       }}
     >
