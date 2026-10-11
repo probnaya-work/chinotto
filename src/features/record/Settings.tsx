@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { metaStyle } from "../../design/tiers";
 import { Mark } from "./Mark";
 import {
@@ -426,9 +427,63 @@ export function Settings(props: SettingsProps) {
                 </Verb>
               ) : null}
             </div>
-            <div style={{ color: "var(--meta)" }}>the manifesto · on getchinotto.app</div>
-            {/* Secondary maker's mark. PROBNAYA is the laboratory; Chinotto keeps its own identity. */}
-            <div style={{ color: "var(--meta)" }}>PROBNAYA · Independent Computational Laboratory</div>
+            <div style={{ color: "var(--meta)" }}>
+              <Verb onClick={() => void openUrl("https://getchinotto.app/manifesto")}>
+                the manifesto ↗
+              </Verb>{" "}
+              · getchinotto.app
+            </div>
+            {/* A colophon, not part of the Chinotto lockup: the instrument keeps its own name. */}
+            <div
+              style={{
+                borderTop: "1px solid var(--rule)",
+                marginTop: "28px",
+                paddingTop: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "16px",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontVariationSettings: "'wdth' 76",
+                    letterSpacing: "0.12em",
+                    color: "var(--ink-far)",
+                  }}
+                >
+                  AN INSTRUMENT BY
+                </span>
+                <span
+                  style={{
+                    fontSize: "17px",
+                    lineHeight: 1,
+                    fontVariationSettings: "'wdth' 76",
+                    letterSpacing: "0.11em",
+                    color: "var(--ink)",
+                  }}
+                >
+                  PROBNAYA
+                </span>
+              </div>
+              <span
+                style={{
+                  flex: 1,
+                  textAlign: "right",
+                  fontSize: "9px",
+                  lineHeight: 1.35,
+                  fontVariationSettings: "'wdth' 76",
+                  letterSpacing: "0.08em",
+                  color: "var(--ink-far)",
+                }}
+              >
+                INDEPENDENT COMPUTATIONAL
+                <br />
+                LABORATORY
+              </span>
+            </div>
           </Stack>
         </Row>
       </div>
