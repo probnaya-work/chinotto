@@ -4,6 +4,11 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
+## v3.0.3 — Mac App Store candidate build 3.0.9
+
+- **Sync deletion:** apply remote tombstones to the local Record and erase the removed material without recreating it on replay
+- **Offline recovery:** retain a pending local deletion in the desktop outbox when an inbound snapshot arrives, so it can still be sent after reconnect and restart
+
 ## v3.0.2 — Mac App Store build 3.0.8; direct-download version not yet decided
 
 - **Sync:** finish the sign-in surface as soon as Apple/Firebase authentication succeeds; replay tombstones, themes and device registration in the background, enforce a credential timeout, and show the real failure instead of an invented expired-session message
