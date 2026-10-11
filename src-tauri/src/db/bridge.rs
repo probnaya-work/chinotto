@@ -203,7 +203,8 @@ impl Db {
         let mut removed = 0usize;
         for id in ids {
             tx.execute("DELETE FROM entries WHERE id = ?1", [id])?;
-            tx.execute("DELETE FROM sync_tombstone_outbox WHERE entry_id = ?1", [id])?;
+            // A local pending write can appear in a Firestore snapshot before the server
+            // acknowledges it. Only the outbound flush may clear this durable outbox row.
             tx.execute(
                 "INSERT OR IGNORE INTO firestore_ingest_suppressed_ids (id, suppressed_at) VALUES (?1, ?2)",
                 rusqlite::params![id, now],
@@ -726,6 +727,18 @@ mod tests {
         assert!(entry(&db, &f.id).is_none(), "suppression holds");
         // Mirroring must not undo the removal either.
         assert!(!db.mirror_fragment_to_entry(&f.id).unwrap());
+    }
+
+    #[test]
+    fn a_pending_local_tombstone_survives_an_inbound_snapshot() {
+        let db = db();
+        let f = db.capture_fragment("offline removal", "typed", None).unwrap();
+        db.mirror_fragment_to_entry(&f.id).unwrap();
+        db.remove_fragment(&f.id).unwrap();
+
+        db.absorb_remote_deletes(&[f.id.clone()]).unwrap();
+
+        assert_eq!(db.list_sync_tombstone_outbox().unwrap(), vec![f.id]);
     }
 
     #[test]
