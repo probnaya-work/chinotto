@@ -4,7 +4,9 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
-## v3.0.3 — Mac App Store candidate build 3.0.9
+## v3.0.3
+
+Mac App Store build 3.0.9.
 
 - **Sync deletion:** apply remote tombstones to the local Record and erase the removed material without recreating it on replay
 - **Offline recovery:** retain a pending local deletion in the desktop outbox when an inbound snapshot arrives, so it can still be sent after reconnect and restart
