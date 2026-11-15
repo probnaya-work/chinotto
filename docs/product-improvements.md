@@ -182,7 +182,7 @@ Verification:
   a switch, restore the choice after remount, reject late preference hydration, and cover old-text
   colour/large-text behaviour. Physical iPhone daylight, keyboard and largest accessibility-size
   visual acceptance remain pending.
-- Mac: 28 Vitest files / 213 tests plus 14 Node tests; TypeScript and production frontend build
+- Mac: 28 Vitest files / 214 tests plus 14 Node tests; TypeScript and production frontend build
   passed. Native theme sequencing and transparent-host boundaries are mocked, not a signed app
   acceptance result. Browser inspection checked light settings/Record, dark baseline, long links
   and old text at 130%, with screenshots in the sibling `product-phase6-artifacts` directory.

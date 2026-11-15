@@ -23,3 +23,17 @@ it.each(['continue', 'correct'])('removes private DOM while preserving the unfin
   view.rerender(<FragmentFocus {...props} startCorrecting={mode === 'correct'} />);
   await waitFor(() => expect(screen.getByLabelText(label)).toHaveValue('unfinished words'));
 });
+
+it('keeps the correction-history action readable and opens the earlier wording', async () => {
+  const line = await api.lineFor('f1');
+  vi.mocked(api.lineFor).mockResolvedValueOnce(line.map((moment) => ({ ...moment, fragment: { ...moment.fragment, correctionCount: 1 } })));
+  vi.mocked(api.fragmentHistory).mockResolvedValueOnce([
+    { body: 'first authored version', supersededAt: '2026-11-02T10:00:00Z', revisionIndex: 0 },
+    { body: 'private wording', supersededAt: '2026-11-03T10:00:00Z', revisionIndex: 1 },
+  ]);
+  render(<FragmentFocus {...props} />);
+  const action = await screen.findByRole('button', { name: /wording corrected · show/ });
+  expect(action.style.color).toBe('var(--ink-functional)');
+  fireEvent.click(action);
+  expect(await screen.findByText('earlier wording · first authored version')).toBeInTheDocument();
+});

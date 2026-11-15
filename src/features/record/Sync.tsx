@@ -429,7 +429,7 @@ export function Sync(props: SyncProps) {
           </div>
         ) : null}
 
-        <div style={{ marginTop: "18px", ...metaStyle(), color: "var(--faint)" }}>
+        <div style={{ marginTop: "18px", ...metaStyle(), color: "var(--ink-functional)" }}>
           the whole record is on every device. a correction in two places at once is not a
           problem to solve — both wordings are kept and you choose which one shows. removing
           a moment on one device removes it everywhere, with the same eight seconds to bring

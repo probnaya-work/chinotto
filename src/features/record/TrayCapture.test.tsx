@@ -128,7 +128,7 @@ describe("resting", () => {
     expect(applyAppearance).toHaveBeenCalledWith("system", false);
   });
 
-  it("marks the public opaque App Store host so it is painted as one dark panel", async () => {
+  it("marks the public opaque App Store host so it is painted as one surface", async () => {
     render(<TrayCapture />);
     await act(async () => {});
 
@@ -141,6 +141,7 @@ describe("resting", () => {
 
     expect(field()).toHaveAttribute("placeholder", "anything");
     expect(screen.getByText("⏎ leave it")).toBeInTheDocument();
+    expect(screen.getByText("⏎ leave it").closest("div")?.style.color).toBe("var(--ink-functional)");
     expect(screen.getByText("esc close")).toBeInTheDocument();
     expect(screen.getByText("hold ⌥ / mouse · tap locks")).toBeInTheDocument();
   });

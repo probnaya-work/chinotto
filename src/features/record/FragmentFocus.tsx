@@ -539,7 +539,7 @@ export function FragmentFocus({
                   return next;
                 })
               }
-              style={{ color: "var(--faint)", cursor: "pointer" }}
+              style={{ color: "var(--ink-functional)", cursor: "pointer" }}
             >
               wording corrected · {showEarlier.has(f.id) ? "hide" : "show"}
             </Verb>

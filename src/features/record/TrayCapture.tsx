@@ -462,7 +462,7 @@ export function TrayCapture() {
             display: "flex",
             gap: "var(--tray-hint-gap)",
             ...metaStyle("var(--size-meta-sm)"),
-            color: "var(--faint)",
+            color: "var(--ink-functional)",
           }}
         >
           {voice.recording ? (
