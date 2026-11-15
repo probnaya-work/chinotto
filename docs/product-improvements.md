@@ -11,7 +11,7 @@ Both repositories use `feat/product-phases-20261115`. Each phase produces its ow
 | 3 | First-week value and discoverable Find | Implemented and checked locally | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
 | 4 | Optional Face ID / Touch ID protection | Implemented and checked locally; hardware acceptance pending | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
 | 5 | Restore and import | Own-archive restore implemented locally; device acceptance pending | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
-| 6 | Readability and public product explanation | Queued | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
+| 6 | Readability and public product explanation | Implemented locally; device visual acceptance pending | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
 
 ## Phase 1
 
@@ -149,6 +149,51 @@ release was produced.
 Review older-text compression, functional contrast, large text and a real phone light appearance. Retain the existing visual hierarchy.
 
 Replace the landing example with a thought that develops across time. Remove descriptions of retired Spaces and time-strand surfaces. Explain what sync carries, what remains local, and what Pro unlocks.
+
+### Phase 6 local result — 15 November 2026
+
+The light appearance now has a warm mineral field, graphite material, stone rules and subdued
+word evidence. The same palette is recorded in both repositories. Functional text uses at least
+4.5:1 against the light field; low-contrast faint ink remains decorative. The ordinary dark
+palette and baseline geometry are retained, with readable status and correction-history labels.
+
+On iPhone, Settings offers dark/light and lifted contrast. The choice is local and persistent;
+loading it never gates capture. Keyboard, status bar, Find, focus, history, sync, restore and
+other overlays follow it without remounting the capture input or discarding a draft. At system
+font scales of 1.3 and above, old moments use a wider face and no line clamp. Action targets can
+grow and wrap. Text scaling remains enabled without a maximum multiplier.
+
+On Mac, system/light/dark remain available. At 130–140% text size, older rows expand instead of
+being squeezed back into a single line. Native window appearance/background follows the main
+Record; the transparent capture panel stays transparent and refreshes its palette on opening.
+The system-light contrast override no longer darkens a system-dark window. Native window APIs
+are documented by [Tauri](https://v2.tauri.app/reference/javascript/api/namespacewindow/).
+
+The website draft is in the separate `product-web-20261115` worktree. The maintained landing
+specimen already develops a thought across two original dates, so its wording, dates and live
+elapsed intervals are preserved. Current Record copy replaces retired strand/Spaces/shared-link
+claims and explains continuity, cloud storage of words and their structure, device-local original audio and Pro for iPhone
+sync (Mac sync remains free). The in-app iPhone manifesto matches. Each app has a release-ready
+[store description draft](store-description.txt); none has been submitted or published.
+
+Verification:
+- iPhone: 127 Jest suites, 840 passed / 1 existing skipped; TypeScript; unsigned iOS Simulator
+  Debug build passed. Theme tests retain the same capture instance and multiline draft across
+  a switch, restore the choice after remount, reject late preference hydration, and cover old-text
+  colour/large-text behaviour. Physical iPhone daylight, keyboard and largest accessibility-size
+  visual acceptance remain pending.
+- Mac: 28 Vitest files / 213 tests plus 14 Node tests; TypeScript and production frontend build
+  passed. Native theme sequencing and transparent-host boundaries are mocked, not a signed app
+  acceptance result. Browser inspection checked light settings/Record, dark baseline, long links
+  and old text at 130%, with screenshots in the sibling `product-phase6-artifacts` directory.
+- Website: production build, site/API TypeScript and four share API tests passed. Browser
+  checks at 375px and 1440px found no horizontal overflow; the Cyrillic specimen and original
+  dates remain intact. The source website's existing uncommitted changes were left untouched.
+
+Screenshot impact: retain ordinary dark reading captures where their copy is still current.
+Replace light-theme screenshots and iPhone Settings shots that need to show the new controls;
+large-text shots deliberately show a different reading density. This is local implementation,
+not a release, store submission or website deployment.
 
 ## Later candidates
 

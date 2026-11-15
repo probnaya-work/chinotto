@@ -1,0 +1,16 @@
+Release draft — phase 6, 15 November 2026. Not submitted to App Store Connect.
+Publish with the matching app release after device acceptance; plans and prices come from the app.
+
+Chinotto — Mac description
+
+A private record of thoughts, encounters, and what continues between them.
+
+Leave a thought without deciding where it belongs. Capture from the Record or the menu bar, or hold a key and speak. No folders, tags or account to set up before writing.
+
+Every moment keeps its date. Continue adds a new moment dated now. Correct changes the wording while keeping the original date and earlier words. Find the words you remember, follow a Line, or revisit an older thought when recent writing gives it a reason to return.
+
+Choose dark, warm light or the system appearance. Adjust text size and lift contrast in bright light. Optional Touch ID or Mac-password protection keeps reading behind system authentication while leaving blank capture available.
+
+Capture, reading, Find and local audio playback need no subscription. Optional sync between iPhone and Mac uses Sign in with Apple. Sync is free on Mac; iPhone sync uses Chinotto Pro. Words, dates, Lines and wording history travel through the cloud. Original recordings stay on the device that captured them. Available iPhone plans and prices are shown before purchase.
+
+Keep a portable archive of text, dates, wording history, links and original audio. Preview and restore a Chinotto archive without duplicating moments already in your Record.
