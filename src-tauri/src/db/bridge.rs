@@ -4,6 +4,9 @@
 //! app and the Firestore sync protocol speak it, and neither can be changed from here. This
 //! module is the whole of that compatibility surface, and it is meant to be deleted.
 //!
+//! Record continuity now travels separately through `record_sync` and `docs/record-sync.md`.
+//! This bridge still projects only the legacy shape.
+//!
 //! ## The one rule
 //!
 //! The legacy model is `{ id, text, created_at }`. It cannot express a Line, a correction

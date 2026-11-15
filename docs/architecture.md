@@ -16,7 +16,7 @@ The current Record stores **fragments** with immutable capture times, correction
 
 SQLite on your machine is the source of truth for capture and search. Entry text is not sent to analytics.
 
-**Optional sync:** when Firebase is configured and you sign in with Apple, text can sync with Chinotto on iPhone. Original audio and correction history remain local. Sync is not required for core use.
+**Optional sync:** when Firebase is configured and you sign in with Apple, text can sync with Chinotto on iPhone. Current clients also sync correction history and continuation links through additive [Record metadata](record-sync.md). Original audio remains local. Sync is not required for core use.
 
 ## Project layout
 

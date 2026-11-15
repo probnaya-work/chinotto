@@ -4,7 +4,7 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 
 ## Your data
 
-- **Record text** is stored locally by default. With optional sync, text is also stored in the synced copy. It is not sent to analytics or included in crash-style telemetry.
+- **Record text** is stored locally by default. With optional sync, text, earlier wordings and continuation links are also stored in the synced copy. It is not sent to analytics or included in crash-style telemetry.
 - **Voice recordings** are stored in Chinotto's local app data and are not synced. Both the Mac App
   Store and the direct-download builds transcribe only on-device: when macOS has no on-device
   recogniser for the language, or speech recognition is not allowed, the recording is kept without
@@ -20,12 +20,12 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 
 ## Optional sync
 
-When you enable sync and sign in with Apple, Record text can sync with Chinotto on iPhone via
+When you enable sync and sign in with Apple, Record text, earlier wordings and continuation links can sync with Chinotto on iPhone via
 Firebase. Chinotto also stores an install
 identifier and the Mac name you see in the device list. Voice audio is not synced. Sync is optional;
 the app remains fully usable without it.
 
-Removing a synced moment marks the cloud copy as removed; its text remains there until the cloud
+Removing a synced moment marks the cloud copy as removed; its text and Record metadata remain there until the cloud
 account is deleted. Removing the cloud account deletes the synced copy and leaves local records on
 your devices.
 

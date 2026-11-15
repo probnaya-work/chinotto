@@ -7,8 +7,8 @@ Both repositories use `feat/product-phases-20261115`. Each phase produces its ow
 | Order | Phase | Current state | Completion criterion |
 |---|---|---|---|
 | 1 | Trustworthy search and word evidence | Implemented and checked locally | No unrelated fallback suggestions; Unicode word evidence; accurate labels and highlights; existing tests pass |
-| 2 | Record continuity between iPhone and Mac | Next | Continuation edges and wording history survive a two-device round trip, reconnect and concurrent edits; older clients remain compatible |
-| 3 | First-week value and discoverable Find | Queued | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
+| 2 | Record continuity between iPhone and Mac | Implemented and checked locally; cloud release checks pending | Continuation edges and wording history survive a two-device round trip, reconnect and concurrent edits; older clients remain compatible |
+| 3 | First-week value and discoverable Find | Next | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
 | 4 | Optional Face ID / Touch ID protection | Queued, implementation requirements below | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
 | 5 | Restore and import | Queued | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
 | 6 | Readability and public product explanation | Queued | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
@@ -32,7 +32,16 @@ Verification:
 
 ## Phase 2
 
-First implementation slice: define additive Record metadata and a pair of real SQLite client fixtures. Preserve legacy `{id, text, created_at}` readers and existing account identities.
+Implemented: additive Record metadata, durable SQLite generations, Firestore transaction merging, continuation links and full authored wording ancestry. Legacy `{id, text, created_at}` readers and existing account identities remain. Concurrent offline corrections retain both wordings; equivalent early legacy projections do not create later false conflicts. Pending work survives restart, account changes and edits during a send. Permanent local removal scrubs metadata and blocks delayed resurrection.
+
+Verification:
+- Mobile: 119 Jest suites, 781 tests passed, including the real Rust → mobile SQLite round trip; TypeScript passed.
+- Desktop: 22 Vitest files, 181 tests passed; 14 Node tests passed; TypeScript and production frontend build passed.
+- Native desktop: 209 tests passed in both default and `--no-default-features --features mas` configurations. The installed app's local model was supplied through `MAS_MODEL_CACHE`; no model network download was required.
+- Cross-runtime checks cover capture dates, correction history, child-before-parent delivery and complete Lines. Additional cases cover restart, concurrent branches, early legacy projection, CAS/acknowledgement races, queue fairness, account changes and deletion suppression.
+- No signed app package or cloud deployment was made. Deployed security rules, the metadata indexing exemption and a signed iPhone ↔ Mac cloud round trip remain release checks in [Record continuity sync](record-sync.md).
+
+The mobile export now retains every known concurrent wording in `wording_versions`. Original audio remains local. No restore/import feature is claimed in this phase.
 
 Acceptance scenarios:
 1. Capture on iPhone, continue on Mac, reopen on iPhone: both moments retain their own dates and one line.
