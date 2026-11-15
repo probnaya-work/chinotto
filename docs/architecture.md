@@ -46,3 +46,12 @@ the current read session, and successful answers from an older session cannot re
 wording remains in memory across a lock. This is an application access boundary, not database,
 backup, export or cloud encryption. See [phase 4 verification](product-improvements.md#phase-4-local-result--15-november-2026)
 for the remaining physical-device checks.
+
+
+## Portable archives
+
+Settings previews a validated Chinotto ZIP before restoring absent moment IDs. SQLite writes
+are transactional and preceded by a consistent recovery copy. Original audio is staged,
+verified and journaled independently; startup cleans interrupted installs before orphan audio
+recovery. Imports preserve the durable model and regenerate local paths/indexes. See the
+[archive contract](record-archive.md) for bounds, merge policy and compatibility.

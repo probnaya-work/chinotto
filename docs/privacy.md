@@ -13,7 +13,7 @@ Chinotto is **local-first**. Your thoughts stay on your device in a SQLite datab
 - **Removing a moment** erases its wording, history, relationships and derived material after
   the eight-second undo period. A voice moment's local recording and transcript go too. Backups you make yourself and exports are yours
   and are not changed.
-- **Export** — Export the record writes a ZIP of plain text and audio to a location you control.
+- **Export** — Export the record writes a portable ZIP with readable text, history and original audio to a location you control. Its Record can be restored on iPhone or Mac; accounts and device settings are not included.
 - **Backup** — automatic local backups in `chinotto-backups/` (last 7 kept).
 - **Meaning model** — the Mac App Store build includes its local meaning model. The direct-download
   build downloads the same model on first use and then keeps it in local app data.
@@ -57,3 +57,14 @@ capture only while protection is enabled. Chinotto covers private content for ba
 On Mac, outgoing sync reads wait until the protected Record is reopened; new captures are kept
 locally. This access control does not encrypt the database, backups, exports or cloud storage.
 An export is a plain copy under your control and can be read outside Chinotto.
+
+
+## Restoring an archive
+
+Archives are verified locally and previewed before any moments are added. Existing or previously
+removed IDs are skipped. A consistent database recovery copy is kept on this device before a
+nonempty restore; it is not uploaded or encrypted by device authentication. Temporary archive
+staging is removed after use or retried on launch. The file picker may download a ZIP from your
+chosen Files provider. Chinotto itself does not send archive contents to a server. If sync is
+already enabled, restored text/history/links join its normal sync path; original audio stays
+local. See [portable archives](record-archive.md) for recovery locations and compatibility.

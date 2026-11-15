@@ -10,7 +10,7 @@ Both repositories use `feat/product-phases-20261115`. Each phase produces its ow
 | 2 | Record continuity between iPhone and Mac | Implemented and checked locally; cloud release checks pending | Continuation edges and wording history survive a two-device round trip, reconnect and concurrent edits; older clients remain compatible |
 | 3 | First-week value and discoverable Find | Implemented and checked locally | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
 | 4 | Optional Face ID / Touch ID protection | Implemented and checked locally; hardware acceptance pending | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
-| 5 | Restore and import | Queued | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
+| 5 | Restore and import | Own-archive restore implemented locally; device acceptance pending | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
 | 6 | Readability and public product explanation | Queued | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
 
 ## Phase 1
@@ -122,6 +122,27 @@ Protection controls access through Chinotto. It does not encrypt SQLite, existin
 ## Phase 5
 
 Start with restoring Chinotto's own export. Validate and preview before modifying the live Record; restore in a transaction and keep the existing Record recoverable. Preserve original dates and stable IDs. Import the same archive twice without duplicating moments or audio. Broader text imports follow after this round trip is reliable.
+
+### Phase 5 local result — 15 November 2026
+
+Settings on iPhone and Mac now offers a system file picker, validated preview and explicit
+restore. New Mac exports include the full Record envelope alongside readable text. Imports
+merge absent IDs, preserve capture dates/history/links/original M4A and CAF audio, skip current
+or removed IDs, and retain a pre-import SQLite copy. A transaction and audio journal protect
+against partial writes. Reimporting the same archive adds nothing. Outgoing sync generations
+remain durable; accounts, device protection and app preferences are not imported.
+
+The [archive contract and acceptance checklist](record-archive.md) documents compatibility,
+resource limits, recovery locations and remaining device checks. Earlier iPhone version-1
+archives are supported; older Mac text-only exports require a future plain-text import flow.
+
+Local verification: 836 Jest tests; 195 Vitest and 14 Node tests; 229 Rust tests for direct and
+Mac App Store configurations; both TypeScript checks; desktop frontend build; SDK 55 iOS
+unsigned simulator build with ExpoDocumentPicker. Fresh iPhone → native Mac → iPhone archives
+were parsed/restored in real SQLite, including wording hashes, chronology, history, links,
+M4A and CAF metadata. Browser inspection confirmed the Settings entrance. Native picker and
+physical playback/device authentication acceptance remain pending. No packaged Mac app or
+release was produced.
 
 ## Phase 6
 

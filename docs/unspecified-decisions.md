@@ -911,3 +911,21 @@ from every window, including the legacy API. Incoming write-only sync maintenanc
 available; outgoing reads retry after unlock. Widgets are capture-only for as long as iPhone
 protection is enabled, including while the app's own Record is open. Exports are plain copies
 and require an active read session. This does not add encryption to storage or sync.
+
+
+### Restore from archive — phase 5, 15 November 2026
+
+The approved phase starts with Chinotto's own archive. Merge-only restore is the chosen first
+version: existing IDs/wordings win and removed IDs are not revived. Original dates are kept;
+source paths and child row numbers are not identities. Missing predecessors wait without
+placeholder moments. More than five active holds blocks the import rather than silently
+releasing something. A preview must be reviewed again after relevant local changes.
+
+The SQLite recovery copy and journal protect the existing Record and interrupted audio
+installation. Recovery copies remain on-device for manual recovery and have no automatic
+retention/deletion policy in this phase. System file picking uses ExpoDocumentPicker on mobile
+and the existing Tauri dialog plugin on Mac. Mobile adds fflate for streaming DEFLATE/CRC;
+Expo's filesystem provides byte streams but no ZIP decoder. Native uses the existing zip crate.
+These concrete missing capabilities justify the two mobile dependencies. Broader text imports,
+complete app-state restoration and completed-import undo remain follow-ups. The full contract,
+resource bounds and release acceptance are in [portable archives](record-archive.md).
