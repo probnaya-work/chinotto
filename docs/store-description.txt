@@ -1,4 +1,4 @@
-Release draft — phase 6, 15 November 2026. Not submitted to App Store Connect.
+Release candidate — Mac 3.1.0, 15 November 2026. Not submitted to App Store Connect.
 Publish with the matching app release after device acceptance; plans and prices come from the app.
 
 Chinotto — Mac description

@@ -21,23 +21,25 @@ Local-first on macOS. Optional text sync with Chinotto on iPhone when you enable
 ## Features
 
 - Capture thoughts instantly
-- One continuous stream instead of documents and folders
-- Full-text search
-- Jump to any day in your history
-- Thought trails and related thoughts in context
-- Quiet recall when a past thought still matters
-- Optional text sync with Chinotto on iPhone
+- One continuous Record, with original capture dates
+- Find remembered words or move to a date, month or year
+- Continue a moment with a new dated thought; Correct keeps earlier wording
+- Follow Lines and revisit older moments when recent writing gives them a reason to return
+- Voice capture with retained original audio and on-device transcription where available
+- Optional Touch ID or Mac-password protection for reading, with capture still available
+- Dark, warm light or system appearance, adjustable text size and contrast
+- Optional sync of words, dates, Lines and wording history with Chinotto on iPhone
 
 ## Data ownership
 
-- **Export** — a ZIP of readable text and original audio
+- **Export and restore** — a portable ZIP with text, dates, history, links and original audio; preview before merging, with duplicate handling and a recovery copy
 - **Backup** — automatic local backups
 
 See [Privacy](docs/privacy.md) for local storage, optional sync, and analytics.
 
 ## Updates
 
-Installed builds check [GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest) for updates.
+Direct-download builds check [GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest) for updates. Mac App Store builds update through the store.
 
 ## Documentation
 
@@ -48,4 +50,4 @@ Installed builds check [GitHub Releases](https://github.com/probnaya-work/chinot
 ## Related
 
 - [Chinotto mobile](https://github.com/probnaya-work/chinotto-mobile) — iOS companion for capture on the go
-- [Chinotto web](https://github.com/AleksandrMalinin/chinotto-web) — web companion / info site
+- [Chinotto website](https://github.com/probnaya-work/chinotto-site) — product information

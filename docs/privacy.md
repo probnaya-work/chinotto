@@ -31,7 +31,7 @@ your devices.
 
 ## Analytics (opt-in)
 
-Analytics are **off by default**. You can enable them in Settings → **Share anonymous usage data**.
+Analytics are **off by default**. You can enable them in Settings → privacy → **anonymous usage**.
 
 When enabled, Chinotto sends only simple event names and numbers — for example “entry created” with the text length, or “search used” with the number of results. It never sends:
 

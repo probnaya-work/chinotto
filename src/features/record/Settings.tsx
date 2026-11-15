@@ -296,7 +296,7 @@ export function Settings(props: SettingsProps) {
         <Row label="the record">
           <Stack>
             <div>
-              everything lives in one file on this mac.{" "}
+              your record lives on this mac.{" "}
               <Verb onClick={props.onExport}>
                 export it ›
               </Verb>{" "}
@@ -317,8 +317,8 @@ export function Settings(props: SettingsProps) {
         <Row label="privacy">
           <Stack>
             <div>
-              the words never leave this mac unless sync is on, and then only to your own
-              devices.
+              local by default. optional sync stores words, dates, lines and wording history
+              in the cloud for your signed-in devices. original recordings stay on this mac.
             </div>
             <div>
               anonymous usage · <Key>{props.analyticsOn ? "on" : "off"}</Key> ·{" "}
@@ -362,7 +362,7 @@ export function Settings(props: SettingsProps) {
         {props.hasAccount ? (
           <Row label="account">
             <Stack>
-              <div>apple id · the only thing sync knows about you.</div>
+              <div>sign in with apple · your synced record and connected devices belong to this account.</div>
               {del === "idle" ? (
                 <div>
                   <Verb quiet onClick={() => setDel("armed")}>delete the cloud account ›</Verb>

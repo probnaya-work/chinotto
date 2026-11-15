@@ -53,7 +53,7 @@ uploaded.
 | Sandbox | Required and enabled only in the MAS entitlements. Direct builds remain unsandboxed. |
 | Network client | Required for optional Firebase sync, analytics, URL enrichment, and Apple services. |
 | Network server | Removed from MAS; the native Apple sign-in flow does not bind localhost. |
-| Files | Database, backups, audio, and preferences stay in the app container. Export uses a save-panel grant. |
+| Files | Database, backups, audio, and preferences stay in the app container. Export uses a save panel; restore uses an archive open panel, followed by validation and a reviewed merge. |
 | Microphone | Both sandbox and hardened-runtime audio entitlements are present. The app shows a recording surface and requests permission only on use. |
 | Speech | Usage description is present. Recognition is on-device-only in both builds (`speech.rs` `on_device_task`); recordings remain available when transcription is unsupported, and are read back locally later. |
 | Updates | MAS UI and runtime do not invoke Tauri's GitHub updater. Store updates must come only from the Mac App Store. |
@@ -74,8 +74,9 @@ uploaded.
   backup retention, icon variants, account deletion, and update wording.
 - Decide the direct-to-store data migration experience. App Sandbox moves data to
   `~/Library/Containers/app.chinotto`; an existing direct installation's database is not imported
-  automatically. The current safe path is export from the direct build, but Chinotto does not yet
-  import that archive.
+  automatically. The current path is export from the updated direct build, then preview and restore
+  its archive in the store build. Earlier direct text-only archives are not supported by restore;
+  verify the native picker, recovery copy and round trip before distribution.
 - Sync entitlement model confirmed: the desktop app enables sync from Sign in with Apple alone and
   has no purchase flow and no dependency on any mobile-established entitlement (Guideline 3.1.3(b)
   does not apply — Mac never gates a feature behind an out-of-app purchase). Core capture/search and

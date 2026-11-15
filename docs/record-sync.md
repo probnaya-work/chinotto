@@ -45,7 +45,7 @@ Packets are limited to 400,000 UTF-8 JSON bytes, 2,048 versions and 32 parents p
 
 Permanent removal scrubs the local metadata graph along with the existing wording, history and relationships. Suppression IDs prevent delayed metadata from restoring removed moments. Local parent removal also clears pending link references. As with existing text sync, the cloud document is marked removed; its text and metadata remain in cloud storage until cloud account deletion. Audio remains on its original device.
 
-The mobile structured export includes `wording_versions` with selected ID and the full known version graph, including concurrent alternatives. It omits sync UID, retry state and errors. This preserves material for the future restore phase; it does not make the current export restorable.
+The mobile structured export includes `wording_versions` with selected ID and the full known version graph, including concurrent alternatives. It omits sync UID, retry state and errors. Current iPhone and Mac archives can be previewed and restored through the [portable archive flow](record-archive.md); older Mac text-only exports are not restorable.
 
 ## Verification and release checks
 
