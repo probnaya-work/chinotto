@@ -251,14 +251,14 @@ fragment six months old is one ellipsised 12px line, and past that a whole year 
 |---|---|---|---|---|
 | 3.1 | Minimum gap between any two Returns | `20` hours | `src-tauri/src/db/returns.rs` | invented |
 | 3.2 | Minimum gap before the *same* fragment may return | `30` days | same | invented |
-| 3.3 | Minimum age before anything counts as "returning" | `30` days | same | invented |
-| 3.4 | A capture can only pull something back if it is this recent | `24` hours | same | invented |
+| 3.3 | Minimum age before anything counts as "returning" | `7` days | same | phase 3 |
+| 3.4 | A capture can only pull something back if it is this recent | `48` hours | same | phase 3 |
 | 3.5 | A word is "distinctive" if it appears in this many fragments | `2`–`6` | same | invented |
 | 3.6 | Minimum word length to count as distinctive | `5` characters | same | invented |
 | 3.7 | Stopword list | 34 words | same, `STOPWORDS` | invented |
-| 3.8 | A Line must have this many moments to return | `3` | same | invented |
-| 3.9 | …and have been quiet this long | `60` days | same | invented |
-| 3.10 | Trigger precedence | repeated language → same source → line continued → interval | same | inferred |
+| 3.8 | A Line must have this many moments to return | `2` | same | phase 3 |
+| 3.9 | What causes a Line Return | no quiet-time trigger; recent addition required | same | phase 3 |
+| 3.10 | Trigger precedence | repeated language → same source → line continued | same | inferred |
 
 The product direction names the triggers and says Returns must be sparse, cooled down and
 silent by default. It sets no thresholds. Every number above is a first guess at "sparse",
@@ -879,3 +879,18 @@ Audio and derived/personal state are not included. Oversized metadata stays pend
 than losing history. Live updates use `updatedAt` so edits to old moments remain visible. Multiple
 children of one parent belong to the same Line. The wire format, bounds, compatibility and required
 cloud release checks are recorded in [Record continuity sync](record-sync.md).
+
+
+### Find and first-week Returns — phase 3, 15 November 2026
+
+Visible Find borrows the existing capture field and preserves an unfinished capture verbatim.
+Leaving search restores that capture; no new navigation screen, onboarding gate or stored query
+is added. Continue and Correct keep distinct promises at their actions.
+
+The approved first-week phase replaces the former 180-day mobile / 30-day desktop Return age
+with seven full days on both. A cause must be in the previous 48 hours, with at least three
+shared words, an exact source key or a recent Line addition. An old quiet Line alone is not a
+cause. Timing is shared: 20 hours globally, 30 days for the same moment, at most one open Return.
+Held and removed moments are excluded; an open Return is withdrawn if its evidence disappears.
+Selection waits for an idle visible edge and does not run behind Find or an unfinished capture.
+The limits, retrieval differences and validation are recorded in `docs/product-improvements.md`.

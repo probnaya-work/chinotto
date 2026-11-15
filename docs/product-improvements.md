@@ -8,8 +8,8 @@ Both repositories use `feat/product-phases-20261115`. Each phase produces its ow
 |---|---|---|---|
 | 1 | Trustworthy search and word evidence | Implemented and checked locally | No unrelated fallback suggestions; Unicode word evidence; accurate labels and highlights; existing tests pass |
 | 2 | Record continuity between iPhone and Mac | Implemented and checked locally; cloud release checks pending | Continuation edges and wording history survive a two-device round trip, reconnect and concurrent edits; older clients remain compatible |
-| 3 | First-week value and discoverable Find | Next | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
-| 4 | Optional Face ID / Touch ID protection | Queued, implementation requirements below | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
+| 3 | First-week value and discoverable Find | Implemented and checked locally | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
+| 4 | Optional Face ID / Touch ID protection | Next, implementation requirements below | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
 | 5 | Restore and import | Queued | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
 | 6 | Readability and public product explanation | Queued | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
 
@@ -55,11 +55,21 @@ Move authored structure first. Audio transfer needs separate retention, storage 
 
 ## Phase 3
 
-Use the existing field and overlay model. A visible Find action should insert `/` and focus the same field. It must preserve an existing draft.
+Implemented:
+- A visible `find /` action uses the existing capture field on iPhone and Mac. It preserves the exact unfinished draft, focuses the field and restores the draft with `‹ capture`, desktop Escape or Android Back. Clearing/removing a borrowed slash also restores the draft. Search queries never become saved moments.
+- Returns can begin at seven full days. A real cause must be within the previous 48 hours; future captures, an anniversary or a quiet old Line alone never qualify. Triggers remain repeated language, the same source and a recent addition to an older Line.
+- Shared timing: at most one open Return, at least 20 hours between new Returns, and 30 days before the same moment can return. Held/removed moments are excluded. Dismissal and open state survive remount/restart in SQLite.
+- New Returns wait for a visible idle edge, after a 1.6-second settling period, and do not spend their cooldown behind Find, a draft or focus. Mobile re-evaluates after material changes. Existing open Returns are resumed and are withdrawn when the quoted evidence disappears.
+- Both clients require a shared run of at least three words for repeated language. Candidate retrieval is bounded to the newest 32 acts within the cause window; desktop FTS probes at most 12 distinctive terms and retains its rare-word filter. Mobile prefilters shared triples before comparing full phrases. Retrieval ranking and source rendering still follow each platform's existing model.
+- Mobile Continue now states `a new moment, dated now` before entry. Both platforms retain their correction explanation: wording changes, while the original date and earlier wording stay.
 
-Evaluate a shared seven-day minimum Return age with concrete evidence, dismissal and cooldowns. A date alone is not a trigger. Verify on first-week and long-running records; the product may show nothing when no reason exists.
+Verification:
+- Mobile: 120 Jest suites, 793 tests passed; TypeScript passed. The real SQLite screen test covers a first-week Return after capture, remount, dismissal and deferral while searching/drafting.
+- Desktop: 23 Vitest files, 185 tests passed; 14 Node tests passed; TypeScript and production frontend build passed.
+- Native desktop: 215 tests passed. Shared JSON cases run through both the mobile model and Rust SQLite: seven-day and 48-hour boundaries, future dates, held material, insufficient overlap and absence of evidence.
+- Browser story passed: multiline Cyrillic draft → visible Find → literal results → Escape → identical focused draft. Browser uses development fixture data; production selection/storage are covered by SQLite tests. No packaged app or device visual pass was run.
 
-Continue and Correct must communicate their different effects at the action: a new dated moment versus a revision retaining the original date.
+These thresholds are product choices under the approved phase, not evidence that every new record will have a useful Return on day seven. Silence remains valid. Face ID / Touch ID is next; no release has been deployed by this phase.
 
 ## Phase 4 Face ID and Touch ID
 
