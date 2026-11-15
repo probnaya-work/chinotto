@@ -6,7 +6,7 @@
  * only names the calls and their shapes.
  */
 
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { invokeRecord as tauriInvoke } from "./recordPrivacy";
 import { save } from "@tauri-apps/plugin-dialog";
 import * as dev from "./recordDevData";
 import { isFirebaseSyncConfigured } from "./firebaseConfig";

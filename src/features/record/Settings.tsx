@@ -24,6 +24,7 @@ export type MicrophoneState = "granted" | "ask" | "denied";
 
 export interface SettingsProps {
   version: string;
+  protection?: { enabled: boolean; busy: boolean; error: string | null; onToggle: () => void };
 
   /** One status sentence, and the verb that opens the sync surface. */
   syncLine: string;
@@ -131,6 +132,14 @@ export function Settings(props: SettingsProps) {
             </div>
           </Stack>
         </Row>
+
+        {props.protection ? <Row label="device protection"><Stack>
+          <div>Touch ID or Mac password · {props.protection.enabled ? 'on' : 'off'}</div>
+          <div>{props.protection.error ?? 'protect reading. capture stays open. this does not encrypt the database or exported copies.'}</div>
+          <Verb disabled={props.protection.busy} onClick={props.protection.onToggle}>
+            {props.protection.busy ? 'authenticating…' : props.protection.enabled ? 'turn off ›' : 'turn on ›'}
+          </Verb>
+        </Stack></Row> : null}
 
         <Row label="appearance">
           <Stack>

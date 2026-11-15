@@ -83,3 +83,13 @@ it('opens visible Find in the focused field and gives an unfinished capture back
   expect(field).toHaveValue('unfinished thought');
   expect(field).toHaveFocus();
 });
+
+it('treats a date or slash as new wording in protected capture', () => {
+  const leave = vi.fn(); const stand = vi.fn();
+  const view = render(<Capture {...base} value="march 2024" captureOnly onLeave={leave} onStand={stand} />);
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+  expect(leave).toHaveBeenCalledWith('march 2024'); expect(stand).not.toHaveBeenCalled();
+  view.rerender(<Capture {...base} value="/a new thought" captureOnly onLeave={leave} onStand={stand} />);
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+  expect(leave).toHaveBeenCalledWith('/a new thought');
+});

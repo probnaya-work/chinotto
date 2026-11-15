@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeRecord as invoke } from "../../lib/recordPrivacy";
 import type { Entry } from "../../types/entry";
 
 export async function createEntry(

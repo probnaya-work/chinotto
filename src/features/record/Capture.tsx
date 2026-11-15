@@ -21,6 +21,7 @@ import { Verb } from "./Verb";
 
 export interface CaptureProps {
   value: string;
+  captureOnly?: boolean;
   onChange: (v: string) => void;
   onFind?: () => void;
   onLeaveFind?: () => void;
@@ -63,6 +64,7 @@ export interface CaptureProps {
 
 export function Capture({
   value,
+  captureOnly = false,
   onChange,
   onFind,
   onLeaveFind,
@@ -104,9 +106,9 @@ export function Capture({
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
-  const isFind = value.startsWith("/");
+  const isFind = !captureOnly && value.startsWith("/");
   const hasText = value.length > 0;
-  const parsed = hasText && !isFind ? parseAnchor(value) : undefined;
+  const parsed = !captureOnly && hasText && !isFind ? parseAnchor(value) : undefined;
   const hint = anchorHint(parsed);
 
   /**
@@ -174,8 +176,8 @@ export function Capture({
       e.preventDefault();
       const body = value.trim();
       // Find is a way of looking, not a thing to leave: return does nothing in it.
-      if (!body || body.startsWith("/")) return;
-      const anchor = parseAnchor(body);
+      if (!body || (!captureOnly && body.startsWith("/"))) return;
+      const anchor = captureOnly ? undefined : parseAnchor(body);
       if (anchor !== undefined) {
         onChange("");
         onStand(anchor);

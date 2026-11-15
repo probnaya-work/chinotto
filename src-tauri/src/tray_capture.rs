@@ -174,6 +174,11 @@ pub fn refresh(app: &tauri::AppHandle) {
         return;
     };
 
+    if !crate::privacy::can_read(app) {
+        let _ = state.today.set_text("record locked");
+        draw_glyph(app, false);
+        return;
+    }
     let (from, to) = local_day_bounds();
     if let Ok(count) = db.count_between(&from, &to) {
         let _ = state.today.set_text(format!("today · {count}"));

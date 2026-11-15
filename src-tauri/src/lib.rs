@@ -1,5 +1,6 @@
 mod db;
 mod record_commands;
+mod privacy;
 mod embeddings;
 mod keywords;
 #[cfg(feature = "direct-distribution")]
@@ -1243,15 +1244,17 @@ fn delete_all_entries(db: tauri::State<Db>) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
+fn export_entries(db: tauri::State<Db>, app: tauri::AppHandle, path: String) -> Result<(), String> {
     let mut rows = db.list_entries().map_err(|e| e.to_string())?;
     rows.reverse();
     let dest = PathBuf::from(&path);
-    let file = File::create(&dest).map_err(|e| e.to_string())?;
+    let export = privacy::ProtectedExport::new(&app, dest)?;
+    let file = File::create(&export.temporary).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let opts =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     for row in rows {
+        export.check(&app)?;
         let dt = parse_created_at(&row.created_at)
             .ok_or_else(|| format!("invalid created_at: {}", row.created_at))?;
         let filename = format!("{}.md", dt.format("%Y-%m-%d-%H-%M-%S"));
@@ -1273,6 +1276,7 @@ fn export_entries(db: tauri::State<Db>, path: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     zip.finish().map_err(|e| e.to_string())?;
+    export.commit(&app)?;
     Ok(())
 }
 
@@ -1310,13 +1314,15 @@ fn export_record(
         .ok_or("export destination has no file name")?
         .to_string();
 
-    let file = File::create(&dest).map_err(|e| e.to_string())?;
+    let export = privacy::ProtectedExport::new(&app, dest)?;
+    let file = File::create(&export.temporary).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let opts =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     let mut text = String::new();
     for f in &fragments {
+        export.check(&app)?;
         text.push_str(&f.captured_at);
         text.push_str(" · ");
         text.push_str(&f.capture_method);
@@ -1336,6 +1342,7 @@ fn export_record(
     zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
 
     for v in &voices {
+        export.check(&app)?;
         // A recording whose file is gone is simply not in the export; the words for it are
         // already in record.txt, and writing an empty file would claim otherwise.
         let src = PathBuf::from(&v.audio_path);
@@ -1350,6 +1357,7 @@ fn export_record(
     }
 
     zip.finish().map_err(|e| e.to_string())?;
+    export.commit(&app)?;
     Ok(name)
 }
 
@@ -2111,6 +2119,7 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            privacy::setup(app.handle())?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -2158,7 +2167,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(|invoke: tauri::ipc::Invoke<tauri::Wry>| {
+            if !privacy::can_read(invoke.message.webview().app_handle()) && !privacy::allowed_while_locked(invoke.message.command()) {
+                invoke.resolver.reject("record_locked");
+                return true;
+            }
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            privacy::privacy_state,
+            privacy::privacy_authenticate,
+            privacy::privacy_rendered,
             // The Record
             record_commands::capture_fragment,
             record_commands::continue_fragment,
@@ -2286,7 +2303,9 @@ pub fn run() {
             create_backup,
             create_backup_if_needed,
             set_app_icon,
-        ])
+        ];
+            handler(invoke)
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

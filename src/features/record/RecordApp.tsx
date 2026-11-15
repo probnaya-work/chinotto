@@ -23,6 +23,8 @@ import * as api from "../../lib/recordApi";
 import type { Fragment, HeldFragment } from "../../lib/recordApi";
 import { Record } from "./Record";
 import { useFindInput } from "./useFindInput";
+import { useRecordPrivacy, recordCanRead, recordEpoch, authenticateRecord } from "../../lib/recordPrivacy";
+import { LockedRecord } from "./LockedRecord";
 import { Capture } from "./Capture";
 import { FragmentFocus } from "./FragmentFocus";
 import { ReturnBlock } from "./ReturnBlock";
@@ -162,6 +164,8 @@ interface Anchored extends ParsedAnchor {
 }
 
 export function RecordApp() {
+  const protection = useRecordPrivacy();
+  const locked = !protection.ready || protection.locked;
   const now = useNow();
   const updater = useAppUpdater();
 
@@ -183,7 +187,7 @@ export function RecordApp() {
 
   // ---- where you are ------------------------------------------------------------------
   /** What is in the field. `/` makes it find; a date phrase makes it a destination. */
-  const { input, setInput, startFind, leaveFind } = useFindInput();
+  const { input, setInput, startFind, leaveFind, captureInput, setCaptureInput } = useFindInput();
   /** Standing in a month, or at the edge. */
   const [anchor, setAnchor] = useState<Anchored | null>(null);
   /** Focused on a fragment or the line it belongs to. */
@@ -288,6 +292,8 @@ export function RecordApp() {
   const atEdge = focusId === null;
 
   const reload = useCallback(async () => {
+    if (!recordCanRead()) return;
+    const epoch = recordEpoch();
     try {
       const [all, holds] = await Promise.all([
         // The whole record: standing in a month re-measures distance from there, so the
@@ -295,6 +301,7 @@ export function RecordApp() {
         api.allFragments(),
         api.heldFragments(),
       ]);
+      if (!recordCanRead() || epoch !== recordEpoch()) return;
       setFragments(all);
       setHeld(holds);
       // One pass for everything, rather than a query per row.
@@ -307,6 +314,7 @@ export function RecordApp() {
       // window is open, so it is told whenever the Record has been re-read.
       void api.refreshTray(isFirebaseSyncConfigured()).catch(() => {});
     } catch (e) {
+      if (!recordCanRead() || epoch !== recordEpoch()) return;
       setLoaded(true);
       // Reading the Record can fail; capture cannot. Surfacing this quietly rather than
       // blocking the surface keeps that distinction true.
@@ -315,8 +323,8 @@ export function RecordApp() {
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!locked) void reload();
+  }, [reload, locked]);
 
   // Stable on purpose: a fresh arrow here gives `voice` a new identity on every render,
   // and the ⌥space effect below then tears down and re-registers two native listeners each
@@ -484,7 +492,7 @@ export function RecordApp() {
     return () => clearInterval(id);
   }, [refreshSyncFacts]);
 
-  const returnSurfaceAvailable = !input && !anchor && !focusId && !surface && !voice.recording;
+  const returnSurfaceAvailable = !locked && !input && !anchor && !focusId && !surface && !voice.recording;
   useEffect(() => {
     if (!loaded || !returnSurfaceAvailable || retLeavingRef.current) return;
     let active = true;
@@ -544,6 +552,7 @@ export function RecordApp() {
    */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (locked && !voice.recording) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
         if (!undo) return;
@@ -588,6 +597,7 @@ export function RecordApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    locked,
     editing,
     focusId,
     input,
@@ -641,7 +651,7 @@ export function RecordApp() {
   useEffect(() => {
     const unlisten = listen("chinotto-open-settings", () => {
       setSurface("settings");
-      setFocusId(null);
+      if (recordCanRead()) setFocusId(null);
     });
     return () => {
       void unlisten.then((f) => f());
@@ -725,7 +735,7 @@ export function RecordApp() {
       stopUpload();
       clearInterval(metadataTimer);
     };
-  }, [reload]);
+  }, [reload, locked]);
 
   // ---- leaving a fragment ---------------------------------------------------------------
 
@@ -998,7 +1008,10 @@ export function RecordApp() {
           animation: launch === "mark" ? "none" : "chinotto-rise 0.6s ease-out both",
         }}
       >
-        {surface === "sync" ? (
+        {locked ? <LockedRecord protection={protection} words={captureInput} onWords={setCaptureInput} capture={handleLeave}
+          voice={{ onStartSpeaking: () => void voice.start(), onReleaseSpeaking: voice.stop,
+            speaking: voice.recording, speakingLocked: voice.locked, speakingSeconds: voice.seconds,
+            onFinishSpeaking: voice.finish }} /> : surface === "sync" ? (
           <Sync
             state={syncState}
             offline={!online}
@@ -1047,6 +1060,7 @@ export function RecordApp() {
         ) : surface === "settings" ? (
           <Settings
             version={APP_VERSION}
+            protection={{ ...protection, onToggle: () => void authenticateRecord(protection.enabled ? 'disable' : 'enable') }}
             syncLine={settingsSyncLine(syncState, !online, devices, pendingToSync)}
             syncVerb={syncState === "off" ? "set up" : syncState === "error" ? "fix" : "manage"}
             onOpenSync={() => setSurface("sync")}
@@ -1077,8 +1091,10 @@ export function RecordApp() {
               void setDesktopIcon(v).catch(() => {});
             }}
             onExport={() => {
-              void api
-                .exportRecord()
+              void (async () => {
+                if (protection.enabled && !await authenticateRecord()) return null;
+                return api.exportRecord();
+              })()
                 .then((name) => {
                   if (!name) return;
                   setExportNote(
@@ -1350,8 +1366,12 @@ export function RecordApp() {
             ) : null}
           </>
         ) : (
+          null
+        )}
+        {focusId !== null ? (
           <FragmentFocus
-            id={focusId}
+            id={focusId!}
+            blocked={locked || surface !== null}
             corpus={fragments}
             materials={materials}
             startContinuing={focusContinuing}
@@ -1367,7 +1387,7 @@ export function RecordApp() {
             onRemove={handleRemove}
             heldIds={new Set(held.map((h) => h.fragment.id))}
           />
-        )}
+        ) : null}
       </div>
 
       {/*
@@ -1378,7 +1398,7 @@ export function RecordApp() {
         line stopped being fixed to the window and pinned itself to the bottom of the record
         instead, landing on top of the last rows. Nothing about its own styling said so.
       */}
-      {launch === "done" ? (
+      {!locked && launch === "done" ? (
       <QuietLine
         undo={
           undo
@@ -1414,13 +1434,13 @@ export function RecordApp() {
       />
       ) : null}
 
-      {error ? (
+      {!locked && error ? (
         <div style={{ position: "fixed", right: "48px", bottom: "36px", ...metaStyle() }}>
           {error}
         </div>
       ) : null}
 
-      <Launch phase={launch} visible={loaded} />
+      <Launch phase={launch} visible={loaded && !locked} />
     </div>
   );
 }

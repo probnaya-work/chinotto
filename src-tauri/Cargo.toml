@@ -58,6 +58,8 @@ objc = "0.2"
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-authentication-services = "0.3"
+# System Touch ID/password authentication; existing auth bindings only cover Apple sign-in.
+objc2-local-authentication = { version = "0.3", features = ["block2"] }
 objc2-speech = { version = "0.3", features = ["block2", "objc2-avf-audio"] }
 objc2-avf-audio = { version = "0.3", features = ["default", "block2"] }
 objc2-foundation = "0.3"

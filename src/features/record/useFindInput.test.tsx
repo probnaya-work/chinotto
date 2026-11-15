@@ -24,3 +24,19 @@ it('leaves a manually typed search without turning its query into a capture', ()
   act(() => result.current.leaveFind());
   expect(result.current.input).toBe('');
 });
+
+it('lets protected capture keep its own wording while Find is suspended', () => {
+  const { result } = renderHook(() => useFindInput());
+  act(() => { result.current.setInput('draft'); result.current.startFind(); result.current.setInput('/secret query'); });
+  expect(result.current.captureInput).toBe('draft');
+  act(() => result.current.setCaptureInput('draft later'));
+  expect(result.current.input).toBe('/secret query');
+  act(() => result.current.leaveFind());
+  expect(result.current.input).toBe('draft later');
+  act(() => result.current.setInput('/manual'));
+  expect(result.current.captureInput).toBe('');
+  act(() => { result.current.leaveFind(); result.current.setCaptureInput('/new wording'); });
+  expect(result.current.captureInput).toBe('/new wording');
+  act(() => result.current.setCaptureInput(''));
+  expect(result.current.input).toBe('');
+});

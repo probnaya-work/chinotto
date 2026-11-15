@@ -47,6 +47,7 @@ export interface FragmentFocusProps {
   onRelease: (f: Fragment) => void;
   heldIds: Set<string>;
   /** Open with the continuation field focused — arriving via `continue` rather than a click. */
+  blocked?: boolean;
   startContinuing?: boolean;
   /** Open with this moment already being corrected, for ⋯ → correct. */
   startCorrecting?: boolean;
@@ -56,6 +57,7 @@ export interface FragmentFocusProps {
 
 export function FragmentFocus({
   id,
+  blocked = false,
   corpus,
   materials,
   onLeave,
@@ -87,6 +89,7 @@ export function FragmentFocus({
   const continueRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
+    if (blocked) return;
     const moments = await api.lineFor(id);
     setLine(moments);
     // Only the moments that actually claim a correction are asked for their history.
@@ -102,10 +105,10 @@ export function FragmentFocus({
       }
     }
     setEarlier(out);
-  }, [id]);
+  }, [id, blocked]);
 
   useEffect(() => {
-    void load();
+    void load().catch(() => {});
   }, [load]);
 
   // Arriving via `continue`: the field is the reason you came, so it gets the caret. Not
@@ -145,7 +148,7 @@ export function FragmentFocus({
    */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape" || !correctingId) return;
+      if (blocked || e.key !== "Escape" || !correctingId) return;
       e.preventDefault();
       e.stopPropagation();
       setCorrectingId(null);
@@ -153,7 +156,7 @@ export function FragmentFocus({
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [correctingId]);
+  }, [correctingId, blocked]);
 
   async function saveCorrection() {
     if (!correctingId) return;
@@ -238,6 +241,8 @@ export function FragmentFocus({
   const foldedMoments = foldable ? line.slice(KEEP_HEAD, line.length - KEEP_TAIL) : [];
 
   const head = isLine ? headLine(line, now) : focused ? `a fragment · ${fullDateLabel(new Date(focused.capturedAt))}` : "";
+
+  if (blocked) return null;
 
   return (
     <div>

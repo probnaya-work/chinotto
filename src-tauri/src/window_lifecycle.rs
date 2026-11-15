@@ -168,6 +168,7 @@ pub fn reopen_main_window(app: &AppHandle) {
 }
 
 pub fn hide_main_window(app: &AppHandle) {
+    crate::privacy::lock_app(app);
     close(&mut TauriMainWindowRuntime { app });
 }
 

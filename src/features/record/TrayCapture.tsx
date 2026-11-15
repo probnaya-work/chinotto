@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "@/lib/recordApi";
+import { useRecordPrivacy, recordCanRead } from "@/lib/recordPrivacy";
 import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
 import { applyAppearance, readAppearance, readLiftContrast } from "@/lib/appearance";
 import { applyStoredUiZoom } from "@/lib/uiZoom";
@@ -50,6 +51,8 @@ const CLOSE_AFTER_SAVE_MS = 520;
 const FIELD_MAX_HEIGHT = 200;
 
 export function TrayCapture() {
+  const protection = useRecordPrivacy();
+  const locked = !protection.ready || protection.locked;
   const [text, setText] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -57,6 +60,8 @@ export function TrayCapture() {
   const [returned, setReturned] = useState<api.ReturnValue | null>(null);
   /** `continue` was pressed: what lands next is a moment on that Return's line. */
   const [continuing, setContinuing] = useState(false);
+
+  useEffect(() => { if (locked) { setReturned(null); setContinuing(false); } }, [locked]);
 
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -97,6 +102,7 @@ export function TrayCapture() {
    * modifier is deliberately *not* this call: it asks `return_waiting`, which only reports.
    */
   const readReturn = useCallback(() => {
+    if (!recordCanRead()) return;
     void api
       .selectReturn()
       .then((r) => {
@@ -126,6 +132,7 @@ export function TrayCapture() {
    * for one moment to follow another.
    */
   const linkIfContinuing = useCallback(async (id: string) => {
+    if (!recordCanRead()) return;
     const value = returnedRef.current;
     if (!continuingRef.current || !value) return;
     await api.linkContinuation(id, value.fragment.id);
@@ -290,7 +297,7 @@ export function TrayCapture() {
     const body = text.trim();
     if (!body) return;
     const value = returnedRef.current;
-    const onLine = continuingRef.current && value ? value : null;
+    const onLine = recordCanRead() && continuingRef.current && value ? value : null;
     // Cleared first, always. The panel must never look like it is asking permission.
     setText("");
     setFailure(null);
@@ -327,7 +334,7 @@ export function TrayCapture() {
       }}
     >
       <div className="tray-capture-panel" ref={panelRef}>
-        {returned && !voice.recording ? (
+        {!locked && returned && !voice.recording ? (
           <TrayReturn
             value={returned}
             continuing={continuing}
