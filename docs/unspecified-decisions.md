@@ -854,3 +854,14 @@ React Native's `fontWeight` takes hundreds only, and with the `wdth` axis alread
 ahead of time the weight has to be carried by the family too. `Archivo-540-{90,92,94}` are
 generated alongside the existing instances, and a verb asks for `weight: 540` rather than
 setting `fontWeight` — which would silently round to 500 and drop half of what marks a verb.
+
+## 17. Product review follow-up — 15 November 2026
+
+The owner requested phased product improvements and optional Face ID / Touch ID protection.
+The sequence and acceptance criteria are recorded in [Product improvement phases](product-improvements.md).
+
+The frontend word matcher now preserves Unicode letters and combining marks instead of
+discarding Cyrillic and splitting accented words. English suffix heuristics do not run over
+non-ASCII words; common Russian and Portuguese function words are excluded from evidence.
+This is lexical evidence for traces and continuation offers, separate from meaning search.
+Phrase highlighting can cross punctuation, but cannot skip intervening Cyrillic letters.
