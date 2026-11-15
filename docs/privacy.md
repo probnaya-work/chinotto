@@ -42,3 +42,18 @@ When enabled, Chinotto sends only simple event names and numbers — for example
 Analytics help understand how the app is used. You can turn them off at any time in Settings.
 Events include the app version, a per-run random session identifier, language, and screen size. They
 are not combined with sync account or device identifiers and are not used for advertising or tracking.
+
+
+## Optional device protection
+
+You can protect reading the Record with Face ID / Touch ID or your device code on iPhone,
+and Touch ID or your Mac password on Mac. Protection is off by default. Changing the setting
+requires system authentication; Chinotto does not collect biometric data or store a separate PIN.
+The Record locks on cold launch and after you leave the app. You can still capture a new thought.
+The setting is local to each device and does not change your sync account.
+
+Protected history, search and playback stay hidden until authentication. iPhone widgets show
+capture only while protection is enabled. Chinotto covers private content for background previews.
+On Mac, outgoing sync reads wait until the protected Record is reopened; new captures are kept
+locally. This access control does not encrypt the database, backups, exports or cloud storage.
+An export is a plain copy under your control and can be read outside Chinotto.

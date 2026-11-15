@@ -35,3 +35,14 @@ The UI calls Rust via Tauri `invoke()`. Core flows: capture and list fragments, 
 ## Updates
 
 Production builds check [GitHub Releases](https://github.com/probnaya-work/chinotto/releases/latest) for signed in-app updates.
+
+
+## Optional device protection
+
+Device protection is off by default and local to each installation. System authentication opens
+private reading and is required to enable or disable the setting; new capture remains available.
+A native lifecycle cover protects previews before JavaScript can react. Backgrounding invalidates
+the current read session, and successful answers from an older session cannot reopen it. Unsaved
+wording remains in memory across a lock. This is an application access boundary, not database,
+backup, export or cloud encryption. See [phase 4 verification](product-improvements.md#phase-4-local-result--15-november-2026)
+for the remaining physical-device checks.

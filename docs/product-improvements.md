@@ -9,7 +9,7 @@ Both repositories use `feat/product-phases-20261115`. Each phase produces its ow
 | 1 | Trustworthy search and word evidence | Implemented and checked locally | No unrelated fallback suggestions; Unicode word evidence; accurate labels and highlights; existing tests pass |
 | 2 | Record continuity between iPhone and Mac | Implemented and checked locally; cloud release checks pending | Continuation edges and wording history survive a two-device round trip, reconnect and concurrent edits; older clients remain compatible |
 | 3 | First-week value and discoverable Find | Implemented and checked locally | One visible entrance to existing Find; evidence-backed Returns can be experienced during the first week; consistent policy on both platforms |
-| 4 | Optional Face ID / Touch ID protection | Next, implementation requirements below | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
+| 4 | Optional Face ID / Touch ID protection | Implemented and checked locally; hardware acceptance pending | Private history, widgets and app-switcher previews remain hidden until successful system authentication; new capture remains available |
 | 5 | Restore and import | Queued | A portable Record archive restores dates, stable IDs, histories, links and audio with a preview, validation and duplicate handling |
 | 6 | Readability and public product explanation | Queued | Phone reading works in daylight and enlarged text; website, manifesto and store describe the current Record |
 
@@ -102,6 +102,22 @@ Mac integration: Apple LocalAuthentication through a native command; verify both
 Required cases: enrollment absent, success, repeated failure, user cancel, system cancel, lockout, device fallback, concurrent requests, stale successful responses after relock, cold start, background/foreground, widget cache and export/deep-link bypass attempts. Face ID needs a signed development/device build; unit mocks cannot verify hardware authentication.
 
 References: [Expo SDK 55 LocalAuthentication](https://docs.expo.dev/versions/v55.0.0/sdk/local-authentication/), [Apple LocalAuthentication](https://developer.apple.com/documentation/localauthentication).
+
+### Phase 4 local result — 15 November 2026
+
+Implemented on iPhone and Mac, off by default. OS authentication is explicit, uses the device-code/password fallback, and is required to change the setting. Backgrounding or closing the Mac window relocks the Record. Native session generations reject late authentication and private read results. Capture stays available and confirms saving without showing history; suspended Find, Correct and Continue wording is retained.
+
+On iPhone, the surface receives a guarded Record store. UIKit covers the window before snapshots and hides its private accessibility tree; native audio stops on background while the existing recorder safely finalizes. The app-group preference clears widget preview data, reloads timelines and rejects queued preview writes. The widget itself also checks the flag. Share-in does not look up earlier encounters while locked. Export authenticates before preparation and is cancelled on relock.
+
+On Mac, a default-deny native invoke boundary covers current and legacy commands in every window. New capture and write-only sync maintenance remain available. Commands returning existing Record text, including outgoing sync snapshots, wait until unlock; sync listeners restart on the access transition. AppKit covers windows before deactivation/minimization and hides the underlying accessibility tree until a matching safe render. The tray clears Return/count signals and keeps capture available. Exports remain temporary until their read session is rechecked, preserving any earlier export on cancellation.
+
+Verification:
+- iPhone: 121 Jest suites / 809 tests; TypeScript; unsigned Debug iOS Simulator build passed. The real Rust → mobile SQLite fixture is included. Targeted open-handle diagnostics also passed.
+- Mac frontend: 25 Vitest files / 192 tests plus 14 Node tests; TypeScript and production frontend build passed. Browser fixture checked saving while locked and truthful protection copy.
+- Mac native: 221 Rust tests in both direct and Mac App Store configurations passed. No packaged Mac app or release was produced.
+- Physical-device acceptance remains required: Face ID / Touch ID, device-code/password fallback, no enrollment and lockout, cancelling a system prompt, leaving the app during a prompt, actual app-switcher snapshots, WidgetKit refresh, and main-window/tray behavior. Simulator builds and mocks do not establish those results.
+
+Protection controls access through Chinotto. It does not encrypt SQLite, existing backups, exported copies or the cloud, and does not add or change a sync identity. The setting is local to each device.
 
 ## Phase 5
 

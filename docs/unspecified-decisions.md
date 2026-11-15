@@ -894,3 +894,20 @@ cause. Timing is shared: 20 hours globally, 30 days for the same moment, at most
 Held and removed moments are excluded; an open Return is withdrawn if its evidence disappears.
 Selection waits for an idle visible edge and does not run behind Find or an unfinished capture.
 The limits, retrieval differences and validation are recorded in `docs/product-improvements.md`.
+
+
+### Device protection — phase 4, 15 November 2026
+
+The owner's explicit request adds optional system authentication. The preference belongs to a
+device, stays off by default and is not synced. Authentication is required to change it in either
+direction. There is no Chinotto PIN. Protected history is withheld while new capture remains
+available; date phrases and slash-prefixed wording in locked capture are saved as new wording.
+Find's borrowed capture draft and unfinished correction/continuation fields survive the lock.
+
+Native lifecycle code covers snapshots and invalidates read sessions. iPhone uses SDK 55's
+Expo LocalAuthentication; Mac adds the matching objc2 LocalAuthentication bindings because
+Sign in with Apple is a separate capability. Mac's native command allowlist denies private reads
+from every window, including the legacy API. Incoming write-only sync maintenance remains
+available; outgoing reads retry after unlock. Widgets are capture-only for as long as iPhone
+protection is enabled, including while the app's own Record is open. Exports are plain copies
+and require an active read session. This does not add encryption to storage or sync.
