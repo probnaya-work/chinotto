@@ -92,6 +92,7 @@ pub fn can_read(app: &tauri::AppHandle) -> bool {
 /// An export remains temporary until its originating read session is still valid.
 pub struct ProtectedExport {
     pub temporary: PathBuf,
+    staging_directory: Option<PathBuf>,
     destination: PathBuf,
     epoch: u64,
 }
@@ -101,11 +102,46 @@ impl ProtectedExport {
         if state.locked {
             return Err("record_locked".into());
         }
-        let temporary = destination.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        Self::stage(destination, state.epoch)
+    }
+    fn stage(destination: PathBuf, epoch: u64) -> Result<Self, String> {
+        // A Save panel grants the chosen file, not a UUID-named sibling. Foundation
+        // supplies a writable replacement directory on the destination's volume, so
+        // the final rename stays atomic even for a sandboxed export to another disk.
+        #[cfg(target_os = "macos")]
+        let staging_directory = {
+            use objc2_foundation::{
+                NSFileManager, NSSearchPathDirectory, NSSearchPathDomainMask, NSString, NSURL,
+            };
+            let url = NSURL::fileURLWithPath(&NSString::from_str(
+                destination.to_str().ok_or("invalid export destination")?,
+            ));
+            let directory = NSFileManager::defaultManager()
+                .URLForDirectory_inDomain_appropriateForURL_create_error(
+                    NSSearchPathDirectory::ItemReplacementDirectory,
+                    NSSearchPathDomainMask::UserDomainMask,
+                    Some(&url),
+                    true,
+                )
+                .map_err(|e| e.to_string())?;
+            Some(PathBuf::from(
+                directory
+                    .path()
+                    .ok_or("invalid export staging directory")?
+                    .to_string(),
+            ))
+        };
+        #[cfg(not(target_os = "macos"))]
+        let staging_directory: Option<PathBuf> = None;
+        let temporary = staging_directory
+            .as_ref()
+            .map(|directory| directory.join("chinotto-export.zip"))
+            .unwrap_or_else(|| destination.with_extension(format!("{}.tmp", uuid::Uuid::new_v4())));
         Ok(Self {
             temporary,
+            staging_directory,
             destination,
-            epoch: state.epoch,
+            epoch,
         })
     }
     pub fn check(&self, app: &tauri::AppHandle) -> Result<(), String> {
@@ -118,6 +154,9 @@ impl ProtectedExport {
     }
     pub fn commit(&self, app: &tauri::AppHandle) -> Result<(), String> {
         let privacy = app.state::<Privacy>();
+        self.commit_for_session(&privacy)
+    }
+    fn commit_for_session(&self, privacy: &Privacy) -> Result<(), String> {
         let session = privacy
             .0
             .lock()
@@ -131,6 +170,9 @@ impl ProtectedExport {
 impl Drop for ProtectedExport {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.temporary);
+        if let Some(directory) = &self.staging_directory {
+            let _ = std::fs::remove_dir(directory);
+        }
     }
 }
 
@@ -482,20 +524,109 @@ mod tests {
     fn interrupted_export_removes_only_its_temporary_copy() {
         let destination =
             std::env::temp_dir().join(format!("chinotto-export-{}", uuid::Uuid::new_v4()));
-        let temporary = destination.with_extension("tmp");
         std::fs::write(&destination, "earlier export").unwrap();
+        let export = ProtectedExport::stage(destination.clone(), 0).unwrap();
+        let temporary = export.temporary.clone();
+        let directory = export.staging_directory.clone();
         std::fs::write(&temporary, "unfinished private export").unwrap();
-        drop(ProtectedExport {
-            destination: destination.clone(),
-            temporary: temporary.clone(),
-            epoch: 0,
-        });
+        drop(export);
         assert!(!temporary.exists());
+        assert!(directory.map_or(true, |path| !path.exists()));
         assert_eq!(
             std::fs::read_to_string(&destination).unwrap(),
             "earlier export"
         );
         std::fs::remove_file(destination).unwrap();
+    }
+    #[test]
+    fn relocking_before_export_commit_preserves_the_previous_file() {
+        let p = session(false);
+        let destination =
+            std::env::temp_dir().join(format!("chinotto-export-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&destination, "earlier export").unwrap();
+        let export =
+            ProtectedExport::stage(destination.clone(), p.snapshot().unwrap().epoch).unwrap();
+        std::fs::write(&export.temporary, "private replacement").unwrap();
+        let epoch = p.begin().unwrap();
+        p.finish("enable", epoch, true).unwrap();
+        assert!(export.commit_for_session(&p).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&destination).unwrap(),
+            "earlier export"
+        );
+        drop(export);
+        std::fs::remove_file(destination).unwrap();
+        std::fs::remove_file(p.0.lock().unwrap().path.clone()).unwrap();
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sandboxed_export_needs_only_the_selected_destination() {
+        let directory =
+            std::env::temp_dir().join(format!("chinotto-save-panel-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let directory = directory.canonicalize().unwrap();
+        let destination = directory.join("мысли — record.zip");
+        let quote = |path: &std::path::Path| {
+            path.to_str()
+                .unwrap()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+        };
+        let policy = format!(
+            "(version 1)(allow default)(deny file-write* (subpath \"{}\"))(allow file-write* (literal \"{}\"))",
+            quote(&directory), quote(&destination)
+        );
+        let result = std::process::Command::new("/usr/bin/sandbox-exec")
+            .args(["-p", &policy])
+            .arg(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "privacy::tests::sandboxed_export_child",
+                "--nocapture",
+            ])
+            .env("CHINOTTO_EXPORT_SANDBOX_DESTINATION", &destination)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination).unwrap(),
+            "replacement export"
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sandboxed_export_child() {
+        let Some(destination) = std::env::var_os("CHINOTTO_EXPORT_SANDBOX_DESTINATION") else {
+            return;
+        };
+        let destination = PathBuf::from(destination);
+        // Negative control: the original sibling-temp implementation must fail here.
+        assert!(std::fs::write(destination.with_extension("tmp"), "not granted").is_err());
+        let p = session(false);
+        for content in ["first export", "replacement export"] {
+            let export = ProtectedExport::stage(destination.clone(), 0).unwrap();
+            let directory = export.staging_directory.clone().unwrap();
+            std::fs::write(&export.temporary, content).unwrap();
+            export.commit_for_session(&p).unwrap();
+            drop(export);
+            assert!(!directory.exists());
+            assert_eq!(std::fs::read_to_string(&destination).unwrap(), content);
+        }
+        let export = ProtectedExport::stage(destination.clone(), 0).unwrap();
+        let directory = export.staging_directory.clone().unwrap();
+        std::fs::write(&export.temporary, "cancelled export").unwrap();
+        drop(export);
+        assert!(!directory.exists());
+        assert_eq!(
+            std::fs::read_to_string(destination).unwrap(),
+            "replacement export"
+        );
     }
     #[test]
     fn locked_command_boundary_excludes_all_private_entry_points() {
