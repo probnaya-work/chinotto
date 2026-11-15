@@ -190,10 +190,10 @@ Verification:
   checks at 375px and 1440px found no horizontal overflow; the Cyrillic specimen and original
   dates remain intact. The source website's existing uncommitted changes were left untouched.
 
-Screenshot impact: retain ordinary dark reading captures where their copy is still current.
-Replace light-theme screenshots and iPhone Settings shots that need to show the new controls;
-large-text shots deliberately show a different reading density. This is local implementation,
-not a release, store submission or website deployment.
+Screenshot impact: retain current screenshots wherever they still represent the app accurately.
+Replace only shots with retired feature claims or materially outdated UI. Showing the new light
+palette, appearance controls or Face ID is optional; a full reshoot is not a release requirement.
+This is local implementation, not a release, store submission or website deployment.
 
 ## Release candidates — 15 November 2026
 
@@ -233,9 +233,11 @@ Before distribution:
    verify duplicate handling, cancellation and recovery. SQLite round trips already pass.
 4. Finish iPhone enlarged text / Reduce Motion and protection cancellation/fallback/background
    cases; inspect widget privacy and incoming capture/deep links after scene migration.
-5. Replace affected light-theme and Settings store screenshots and review all store copy for
-   retired feature claims. Submit the signed candidates to TestFlight, complete beta acceptance,
-   then release the apps and matching website copy.
+5. Review existing store screenshots and copy for actual mismatches or retired feature claims;
+   replace only inaccurate shots. Refreshing screenshots to showcase new appearance or features
+   is optional and does not itself block release.
+6. Submit the signed candidates to TestFlight, complete beta acceptance, then release the apps
+   and matching website copy.
 
 Unsaved capture after force-quit remains a documented limitation, unchanged by this candidate.
 The proposed cloud index change, website copy and store metadata are local only. No release
