@@ -400,6 +400,18 @@ Verification:
   Existing App Store Connect binaries contain the pre-fix code and must be replaced before
   any future resubmission. The earlier untested release gates remain open.
 
+### Replacement Mac App Store build — 15 November 2026
+
+The owner authorized TestFlight delivery and App Review. Mac 3.1.0 (build 3.1.1)
+was signed from commit `8f393f4`, passed the sandbox bundle audit and Apple's
+archive validation, and is available to the internal Chinotto Beta group.
+The nine focused MAS privacy tests passed again, including the selected-destination
+export regression.
+
+App Store Connect confirms build `cedded75-b80a-46fb-9d83-51fb844a1612` is the
+replacement on the 3.1.0 version in **Waiting for Review**. The promotional text
+matches 3.0.2, the screenshots were retained, and release remains manual.
+
 ## Later candidates
 
 Manual joining of existing moments, recent-line re-entry, Shortcuts/Action Button capture and local OCR stay candidates after these phases. They are not prerequisites for the current improvement cycle.
