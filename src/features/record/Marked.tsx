@@ -28,8 +28,8 @@ export function Marked({
   let pattern: RegExp;
   try {
     pattern = new RegExp(
-      `(${phrases.map((p) => p.split(/\s+/).map(escapeRegExp).join("[\\s\\W]+")).join("|")})`,
-      "gi",
+      `(${phrases.map((p) => p.split(/\s+/).map(escapeRegExp).join("[\\s\\p{P}\\p{S}]+")).join("|")})`,
+      "giu",
     );
   } catch {
     // A query that cannot be compiled marks nothing rather than blanking the row.

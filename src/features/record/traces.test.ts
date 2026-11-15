@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Fragment } from "../../lib/recordApi";
 import { assembleTraces, tracesFor, tracesHeading } from "./traces";
+import { suggestContinuation } from "./continuation";
 
 const NOW = new Date("2026-09-19T17:10:00").getTime();
 
@@ -20,6 +21,15 @@ function frag(body: string, hoursAgo: number, id?: string): Fragment {
 }
 
 describe("traces", () => {
+  it("finds a Russian trace and offers a continuation with the same phrase", () => {
+    const line = [frag("Хочу сохранить спокойное внимание надолго", 1, "focus")];
+    const other = frag("Пытаюсь сохранить спокойное внимание сегодня", 24, "old");
+    expect(tracesFor(line, [...line, other], new Set())[0]).toMatchObject({
+      kind: "seen", phrase: "сохранить спокойное внимание", fragment: { id: "old" },
+    });
+    expect(suggestContinuation(line[0], [other], new Date(NOW))?.id).toBe("old");
+  });
+
   it("names a shared run as same words, not a guess", () => {
     const line = [frag("filing is a kind of premature judgment", 1, "focus")];
     const other = frag("still doing premature judgment on every note", 40 * 24, "old");

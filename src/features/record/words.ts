@@ -25,6 +25,14 @@ const STOP = new Set(
   ).split(" "),
 );
 
+for (const word of (
+  "и или но в на за от до по из к с у не нет да я мы ты вы он она они это " +
+  "как что где когда уже ещё был была было были есть для при без его её их " +
+  "o os as e ou mas de do da dos das em no na nos nas ao aos para por com " +
+  "que como quando onde se não sim eu tu ele ela nós vocês eles elas um uma " +
+  "uns umas é são foi ser estar mais muito minha meu sua seu"
+).split(" ")) STOP.add(word);
+
 export interface Token {
   /** The word as written. */
   w: string;
@@ -34,6 +42,8 @@ export interface Token {
 
 function stem(word: string): string {
   let s = word.replace(/’/g, "'").replace(/'s$/, "");
+  // The inherited suffix rules are English; preserve words in other scripts intact.
+  if (!/^[a-z']+$/.test(s)) return s;
   if (s.length > 5) s = s.replace(/ing$/, "");
   s = s.replace(/(edly|ed|es|ly)$/, "");
   if (s.length > 3) s = s.replace(/s$/, "");
@@ -47,8 +57,9 @@ function stem(word: string): string {
  */
 export function tokenize(text: string): Token[] {
   const words = String(text ?? "")
+    .normalize("NFC")
     .toLowerCase()
-    .match(/[a-z0-9’']+/g);
+    .match(/[\p{L}\p{N}][\p{L}\p{M}\p{N}’']*/gu);
   return (words ?? []).slice(0, 160).map((w) => ({ w, s: stem(w) }));
 }
 
@@ -119,10 +130,10 @@ export function snippetAround(text: string, phrase: string): string {
     .trim()
     .split(/\s+/)
     .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("[\\s\\W]+");
+    .join("[\\s\\p{P}\\p{S}]+");
   let match: RegExpMatchArray | null = null;
   try {
-    match = text.match(new RegExp(pattern, "i"));
+    match = text.match(new RegExp(pattern, "iu"));
   } catch {
     match = null;
   }
