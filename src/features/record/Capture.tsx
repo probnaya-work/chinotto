@@ -158,7 +158,7 @@ export function Capture({
           }}
         >
           {transcript}
-          <span style={{ color: "var(--faint)" }}> …</span>
+          <span style={{ color: "var(--ink-functional)" }}> …</span>
         </div>
       </div>
     );
@@ -317,7 +317,7 @@ export function Capture({
           gap: "26px",
           marginTop: "6px",
           ...metaStyle("var(--size-meta-lg)"),
-          color: "var(--faint)",
+          color: "var(--ink-functional)",
           opacity: hasText && !isFind ? 1 : 0,
           transition: "opacity var(--settle) var(--ease)",
         }}

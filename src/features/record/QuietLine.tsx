@@ -52,7 +52,7 @@ export function QuietLine({
         gap: "var(--quiet-gap)",
         alignItems: "baseline",
         ...metaStyle(),
-        color: "var(--faint)",
+        color: "var(--ink-functional)",
         zIndex: 10,
         pointerEvents: "none",
       }}

@@ -429,9 +429,14 @@ export function RecordApp() {
     setTextScale((current) => writeTextScale(clampTextScale(current + delta)));
   }, []);
 
-  // The window's own appearance, applied before anything is read from it.
-  useEffect(() => {
+  // Apply the selected field before the browser paints the Record.
+  useLayoutEffect(() => {
     applyAppearance(appearance, liftContrast);
+    if (appearance !== "system") return;
+    const media = window.matchMedia?.("(prefers-color-scheme: light)");
+    const changed = () => applyAppearance(appearance, liftContrast);
+    media?.addEventListener("change", changed);
+    return () => media?.removeEventListener("change", changed);
   }, [appearance, liftContrast]);
 
   useEffect(() => {

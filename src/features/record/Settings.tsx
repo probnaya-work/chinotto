@@ -168,7 +168,7 @@ export function Settings(props: SettingsProps) {
               {props.appearance === "system"
                 ? "follows the mac. dark is the record’s home; light is a full second appearance, not a washed-out dark one."
                 : props.appearance === "light"
-                  ? "paper field, ink words. the same distances, read the other way round."
+                  ? "a warm field, graphite words. the same distances, with softer lines."
                   : "the ink field, always."}
             </Secondary>
             <div style={{ color: "var(--ink-far)" }}>

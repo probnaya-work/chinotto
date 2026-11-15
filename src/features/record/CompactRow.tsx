@@ -55,6 +55,7 @@ export function CompactRow({
       role="listitem"
       onClick={() => onOpen?.(fragment)}
       className="chinotto-compact-row"
+      data-tier={tier}
       style={style}
     >
       {voice ? (

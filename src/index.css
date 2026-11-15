@@ -13,14 +13,14 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: #141416;
+  background: var(--surface, #141416);
 }
 
 body {
   font-family: "Archivo Variable", system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  color: #d4d3ce;
+  color: var(--ink, #d4d3ce);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -30,11 +30,10 @@ body {
 }
 
 /*
-  Literal rather than `var(--selection)`: this file is what has to be true before tokens.css
-  loads. It is the same value.
+  Use the selected appearance once tokens load; the fallback covers the first frame.
 */
 ::selection {
-  background: rgba(230, 230, 227, 0.26);
+  background: var(--selection, rgba(230, 230, 227, 0.26));
 }
 
 /*
@@ -59,5 +58,5 @@ html.tray-capture-page #root {
 html.tray-capture-page.tray-capture-opaque,
 html.tray-capture-page.tray-capture-opaque body,
 html.tray-capture-page.tray-capture-opaque #root {
-  background: #141416 !important;
+  background: var(--surface, #141416) !important;
 }

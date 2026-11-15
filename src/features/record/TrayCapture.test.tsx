@@ -70,6 +70,7 @@ vi.mock("../../lib/recordApi", async () => await import("@/lib/recordApi"));
 
 import * as api from "@/lib/recordApi";
 import { TrayCapture } from "./TrayCapture";
+import { applyAppearance } from "@/lib/appearance";
 
 const FRAGMENT: Fragment = {
   id: "older-1",
@@ -119,6 +120,14 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("resting", () => {
+  it("refreshes the appearance when the existing capture panel reopens", async () => {
+    render(<TrayCapture />);
+    await act(async () => {});
+    vi.mocked(applyAppearance).mockClear();
+    act(() => listeners.get("chinotto-tray-opened")?.({ payload: null }));
+    expect(applyAppearance).toHaveBeenCalledWith("system", false);
+  });
+
   it("marks the public opaque App Store host so it is painted as one dark panel", async () => {
     render(<TrayCapture />);
     await act(async () => {});

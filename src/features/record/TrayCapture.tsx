@@ -190,6 +190,7 @@ export function TrayCapture() {
     // The webview is never torn down between one open and the next, so "opening" has to be
     // told rather than inferred from mounting.
     const opened = listen("chinotto-tray-opened", () => {
+      applyAppearance(readAppearance(), readLiftContrast());
       setFailure(null);
       setNote(null);
       readReturn();

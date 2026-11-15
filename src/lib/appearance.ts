@@ -10,6 +10,8 @@
  * are in, because a sunlit screen is a problem with the room, not a preference.
  */
 
+import { syncNativeAppearance } from "./nativeAppearance";
+
 const THEME_KEY = "chinotto.appearance";
 const SUN_KEY = "chinotto.liftContrast";
 const ZOOM_KEY = "chinotto.textScale";
@@ -63,12 +65,14 @@ export function applyAppearance(appearance: Appearance, liftContrast: boolean): 
   else root.setAttribute("data-theme", appearance);
   if (liftContrast) root.setAttribute("data-lift-contrast", "");
   else root.removeAttribute("data-lift-contrast");
+  void syncNativeAppearance(appearance).catch((error) => console.warn("[appearance] native window could not follow the selected theme", error));
 }
 
 export function applyTextScale(percent: number): void {
   // On the root font-size, so every `rem`-free px value still scales through `zoom`'s
   // simpler behaviour without a transform that would blur text.
   document.documentElement.style.setProperty("--text-scale", String(percent / 100));
+  document.documentElement.toggleAttribute("data-large-text", percent >= 130);
 }
 
 export function writeAppearance(appearance: Appearance): void {

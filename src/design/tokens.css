@@ -1,11 +1,9 @@
 /*
   Chinotto — design tokens.
 
-  Every value here is lifted verbatim from the working prototypes ("Chinotto Desktop.dc.html"
-  and "Chinotto Mobile.dc.html") and from the handoff's own "Colour and affordance" table,
-  which together are the UI and visual source of truth. Nothing is interpolated, averaged or
-  extrapolated. If a value is needed that the design does not draw, it is marked UNSPECIFIED
-  rather than invented.
+  The dark appearance and geometry originate in the working prototypes. Phase 6 adds a
+  warm mineral light appearance and lifts functional hints out of decorative faint ink.
+  See docs/unspecified-decisions.md for the readability decisions.
 
   ------------------------------------------------------------------------------------------
   THE COLOUR SYSTEM
@@ -57,6 +55,7 @@
 
 :root {
   /* ---- surface ---------------------------------------------------------- */
+  color-scheme: dark;
   --surface: #141416;
   /* Outside the window. The mobile frame's backdrop; the desktop app never paints it. */
   --surface-deep: #0e0e10;
@@ -79,19 +78,9 @@
     also where the quiet line's own ambient hover lands.
   */
   --ink-quoted: #c9c9c6; /*                                                   11.09:1    */
-  /*
-    Texture, rather than text you are meant to read at a glance: the capture hints, the quiet
-    line at rest, the year-density bars, `wording corrected`, an inert button's label.
-
-    2.83:1. The previous pass split this token and lifted the functional half to #878682
-    (5.05:1), because Distance v2 stated a floor of "nothing below 12px or 5:1". The finalized
-    colour system states no floor, draws #5f5e5a at every one of these sites, and resolves the
-    legibility problem differently and better: the one hint that teaches an interface you
-    could not otherwise discover — `◌ hold space to speak` — is now a quiet verb at 14.87:1
-    rather than a dim label. So the split is gone and the design's own value stands.
-    See docs/unspecified-decisions.md §9.
-  */
+  /* Texture only. Functional hints and status use --ink-functional. */
   --faint: #5f5e5a;
+  --ink-functional: var(--meta);
   /* The capture field's placeholder, and nothing else. 44px at the edge, 21px in the tray. */
   --placeholder: #4a4a50;
 
@@ -170,85 +159,71 @@
   --chip-border-inert: #3f3e3a;
 }
 
-/*
-  "The same edge when the system is light."
-
-  UNSPECIFIED, still. The finalized colour system gives the light appearance its field and its
-  ink (`#f2f1ec` / `#1b1b1d`, drawn only on the settings icon tiles) and nothing else, so
-  everything below is derived rather than sampled: each token is placed at the contrast ratio
-  its dark counterpart carries against `#141416`, which keeps the ladder's shape and the two
-  agency ranks' spacing without inventing a second design. The material ladder below D0 is
-  unchanged from the previous pass — the design's light endpoints did not move.
-
-  It is a full second appearance, not a dimmed dark one. See docs/unspecified-decisions.md §9.
-*/
+/* Warm mineral field and graphite ink; values shared with iPhone in lightPalette.json. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --surface: #f2f1ec;
-    --surface-deep: #e6e5e0;
-    --ink: #1b1b1d;
-    --ink-near: #2c2c2f;
-    --ink-far: #3f3f42;
-    --ink-dim: #52514e;
-    /*
-      #6b6a66 is the colour the mockup samples, but it gives 4.79:1 on this surface — just
-      under the design's own stated floor, and this token inks the floor tier. Darkened by
-      three points to 5.01:1, honouring the rule over the sampled value.
-    */
-    --meta: #686763;
-    --ink-quoted: #333335;
-    --faint: #8f8f8f;
-    --placeholder: #a8a7a2;
-    /* Past the given ink, toward black, at the dark side's spacing. */
-    --agency: #050507;
-    --agency-hover: #000000;
-    --agency-quiet: #0f0f11;
-    --evidence-ground: rgba(27, 27, 29, 0.15);
-    --evidence-ground-trace: rgba(27, 27, 29, 0.13);
-    --evidence-ink: #0a0a0c;
-    --evidence-rail: #949494;
-    --evidence-rail-inferred: rgba(27, 27, 29, 0.08);
-    /* The hue held, darkened until it carries the same 8.5:1 it has on the dark field. */
-    --live: #3d473d;
-    --row-hover: rgba(27, 27, 29, 0.045);
-    --row-selected: rgba(27, 27, 29, 0.06);
-    --selection: rgba(27, 27, 29, 0.22);
-    --rule: rgba(27, 27, 29, 0.12);
-    --rule-dim: rgba(27, 27, 29, 0.08);
-    --chip-border: #a5a5a5;
-    --chip-border-inert: #b9b9b9;
+    color-scheme: light;
+    --surface: #eeeae1;
+    --surface-deep: #e4ded3;
+    --ink: #34332d;
+    --ink-near: #48453d;
+    --ink-far: #5b564b;
+    --ink-dim: #686153;
+    --meta: #706858;
+    --ink-quoted: #444138;
+    --faint: #a69d8c;
+    --placeholder: #706858;
+    --agency: #292c25;
+    --agency-hover: #1d211b;
+    --agency-quiet: #45463c;
+    --evidence-ground: rgba(114, 100, 73, 0.12);
+    --evidence-ground-trace: rgba(114, 100, 73, 0.08);
+    --evidence-ink: #282c23;
+    --evidence-rail: #a99d87;
+    --evidence-rail-inferred: #d3cbbc;
+    --live: #4f644e;
+    --row-hover: rgba(114, 100, 73, 0.045);
+    --row-selected: rgba(114, 100, 73, 0.075);
+    --selection: rgba(102, 115, 87, 0.22);
+    --rule: #b7ae9b;
+    --rule-dim: #d0c8b8;
+    --chip-border: #998e79;
+    --chip-border-inert: #c0b7a5;
+    --rule-present: #a99d87;
   }
 }
 
 :root[data-theme="light"] {
-  --surface: #f2f1ec;
-  --surface-deep: #e6e5e0;
-  --ink: #1b1b1d;
-  --ink-near: #2c2c2f;
-  --ink-far: #3f3f42;
-  --ink-dim: #52514e;
-  /* See the note above: 5.01:1 rather than the mockup's 4.79:1. */
-  --meta: #686763;
-  --ink-quoted: #333335;
-  --faint: #8f8f8f;
-  --placeholder: #a8a7a2;
-  --agency: #050507;
-  --agency-hover: #000000;
-  --agency-quiet: #0f0f11;
-  --evidence-ground: rgba(27, 27, 29, 0.15);
-  --evidence-ground-trace: rgba(27, 27, 29, 0.13);
-  --evidence-ink: #0a0a0c;
-  --evidence-rail: #949494;
-  --evidence-rail-inferred: rgba(27, 27, 29, 0.08);
-  --live: #3d473d;
-  --row-hover: rgba(27, 27, 29, 0.045);
-  --row-selected: rgba(27, 27, 29, 0.06);
-  --selection: rgba(27, 27, 29, 0.22);
-  --rule: rgba(27, 27, 29, 0.12);
-  --rule-dim: rgba(27, 27, 29, 0.08);
-  --chip-border: #a5a5a5;
-  --chip-border-inert: #b9b9b9;
+  color-scheme: light;
+  --surface: #eeeae1;
+  --surface-deep: #e4ded3;
+  --ink: #34332d;
+  --ink-near: #48453d;
+  --ink-far: #5b564b;
+  --ink-dim: #686153;
+  --meta: #706858;
+  --ink-quoted: #444138;
+  --faint: #a69d8c;
+  --placeholder: #706858;
+  --agency: #292c25;
+  --agency-hover: #1d211b;
+  --agency-quiet: #45463c;
+  --evidence-ground: rgba(114, 100, 73, 0.12);
+  --evidence-ground-trace: rgba(114, 100, 73, 0.08);
+  --evidence-ink: #282c23;
+  --evidence-rail: #a99d87;
+  --evidence-rail-inferred: #d3cbbc;
+  --live: #4f644e;
+  --row-hover: rgba(114, 100, 73, 0.045);
+  --row-selected: rgba(114, 100, 73, 0.075);
+  --selection: rgba(102, 115, 87, 0.22);
+  --rule: #b7ae9b;
+  --rule-dim: #d0c8b8;
+  --chip-border: #998e79;
+  --chip-border-inert: #c0b7a5;
+  --rule-present: #a99d87;
 }
+
 
 :root {
   /* ---- geometry --------------------------------------------------------- */
@@ -642,12 +617,19 @@ input[aria-label="Find"]:focus-visible {
   --faint: #8b8a85;
 }
 
-:root[data-lift-contrast][data-theme="light"],
-:root[data-lift-contrast]:not([data-theme="dark"]) {
-  --ink-far: #333336;
-  --ink-dim: #45443f;
-  --meta: #56554f;
-  --faint: #56554f;
+:root[data-lift-contrast][data-theme="light"] {
+  --ink-far: #454439;
+  --ink-dim: #524e41;
+  --meta: #5e574a;
+  --faint: #5e574a;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-lift-contrast]:not([data-theme="dark"]) {
+  --ink-far: #454439;
+  --ink-dim: #524e41;
+  --meta: #5e574a;
+  --faint: #5e574a;
+  }
 }
 
 /*
@@ -751,4 +733,14 @@ input[aria-label="Find"]:focus-visible {
 */
 .chinotto-verb:disabled {
   cursor: default;
+}
+
+/* Enlarging text is a request to read it, so distance must not squeeze it back down. */
+:root[data-large-text] .chinotto-compact-row {
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  overflow-wrap: anywhere;
+}
+:root[data-large-text] .chinotto-compact-row:is([data-tier="d2"], [data-tier="d3"], [data-tier="d4"]) {
+  font-variation-settings: 'wdth' 88 !important;
 }

@@ -929,3 +929,20 @@ Expo's filesystem provides byte streams but no ZIP decoder. Native uses the exis
 These concrete missing capabilities justify the two mobile dependencies. Broader text imports,
 complete app-state restoration and completed-import undo remain follow-ups. The full contract,
 resource bounds and release acceptance are in [portable archives](record-archive.md).
+
+
+### Phase 6 — appearance and enlarged reading
+
+The owner requested a deliberate light appearance rather than a default white desktop. Use
+`#eeeae1` mineral with graphite ink, warm neutral evidence/rules and sage only for live state.
+Keep the ordinary dark palette and geometry. Desktop CSS and iPhone's palette share the values
+in `lightPalette.json`; normal functional light text has a 4.5:1 contrast floor. Decorative
+faint ink is not a status, hint or history action. A light Return uses a quiet stone rail.
+
+Mobile starts dark, persists dark/light plus lifted contrast on this device, and applies the
+choice without waiting before capture. Native keyboard/status appearance follows. At font
+scale >=1.3, old text loses its clamp and uses a minimum width axis of 88; button targets grow
+and wrap. macOS relaxes old-text compression at 130–140%. Nothing caps system text scaling.
+Native theme changes are serialized; only the main Mac window owns app-wide appearance, so
+transparent capture does not acquire an opaque host. These are local changes pending real
+phone daylight/large-text and signed Mac main-window/capture acceptance.
