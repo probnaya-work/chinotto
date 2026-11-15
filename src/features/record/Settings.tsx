@@ -116,8 +116,11 @@ export function Settings(props: SettingsProps) {
         <Row label="from anywhere">
           <Stack>
             <div>
-              menu bar · <Key>⌘⇧K</Key> opens a small field over whatever you’re doing.{" "}
+              menu bar · click the chinotto mark for a small field over whatever you’re doing.{" "}
               <Verb onClick={props.onTryMenuBar}>try it</Verb>
+            </div>
+            <div>
+              capture · <Key>⌘⇧K</Key> opens the main window, ready to type.
             </div>
             <div>
               voice · hold <Key>space</Key> at the edge, or <Key>⌥space</Key> anywhere on the
