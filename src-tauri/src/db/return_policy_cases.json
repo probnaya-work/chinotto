@@ -1,0 +1,53 @@
+[
+  {
+    "name": "before seven days",
+    "oldAgeMs": 604799999,
+    "causeAgeMs": 0,
+    "expected": false
+  },
+  {
+    "name": "seven days",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 0,
+    "expected": true
+  },
+  {
+    "name": "48 hour cause",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 172800000,
+    "expected": true
+  },
+  {
+    "name": "stale cause",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 172800001,
+    "expected": false
+  },
+  {
+    "name": "future cause",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": -1,
+    "expected": false
+  },
+  {
+    "name": "held",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 0,
+    "held": true,
+    "expected": false
+  },
+  {
+    "name": "no reason",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 0,
+    "body": "milk",
+    "expected": false
+  },
+  {
+    "name": "two words",
+    "oldAgeMs": 604800000,
+    "causeAgeMs": 0,
+    "body": "premature judgment",
+    "expected": false
+  }
+]

@@ -27,7 +27,10 @@ const RETURN_COOLDOWN_HOURS: i64 = 20;
 /// Days before the same fragment may return again.
 const SAME_FRAGMENT_COOLDOWN_DAYS: i64 = 30;
 /// Nothing younger than this is old enough to "return" — it is simply recent.
-const MIN_RETURN_AGE_DAYS: i64 = 30;
+const MIN_RETURN_AGE_DAYS: i64 = 7;
+const CAUSE_WINDOW_HOURS: i64 = 48;
+// Bound background work under the shared SQLite lock.
+const MAX_RECENT_CAUSES: i64 = 32;
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,21 +57,52 @@ pub struct Return {
 
 /// Words too common to make a recurrence meaningful as an FTS probe.
 const STOPWORDS: &[&str] = &[
-    "about", "after", "again", "always", "another", "because", "before", "being", "between",
-    "could", "every", "first", "going", "might", "never", "other", "really", "should", "since",
-    "still", "their", "there", "these", "thing", "think", "those", "through", "under", "where",
-    "which", "while", "would", "thought", "something", "anything",
+    "about",
+    "after",
+    "again",
+    "always",
+    "another",
+    "because",
+    "before",
+    "being",
+    "between",
+    "could",
+    "every",
+    "first",
+    "going",
+    "might",
+    "never",
+    "other",
+    "really",
+    "should",
+    "since",
+    "still",
+    "their",
+    "there",
+    "these",
+    "thing",
+    "think",
+    "those",
+    "through",
+    "under",
+    "where",
+    "which",
+    "while",
+    "would",
+    "thought",
+    "something",
+    "anything",
 ];
 
 /// The prototype's stoplist — used by the shared-run matcher, not by FTS.
 const RUN_STOP: &[&str] = &[
-    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "for", "with", "is",
-    "are", "was", "were", "be", "been", "it", "its", "this", "that", "these", "those", "i",
-    "me", "my", "we", "you", "your", "he", "she", "they", "them", "his", "her", "our", "their",
-    "as", "by", "from", "not", "no", "so", "if", "then", "than", "too", "very", "just", "about",
-    "into", "over", "under", "again", "there", "here", "what", "which", "who", "whom", "when",
-    "where", "why", "how", "do", "does", "did", "done", "have", "has", "had", "having", "um",
-    "uh", "ok", "okay", "i'm", "i've", "it's", "that's", "don't",
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "for", "with", "is", "are",
+    "was", "were", "be", "been", "it", "its", "this", "that", "these", "those", "i", "me", "my",
+    "we", "you", "your", "he", "she", "they", "them", "his", "her", "our", "their", "as", "by",
+    "from", "not", "no", "so", "if", "then", "than", "too", "very", "just", "about", "into",
+    "over", "under", "again", "there", "here", "what", "which", "who", "whom", "when", "where",
+    "why", "how", "do", "does", "did", "done", "have", "has", "had", "having", "um", "uh", "ok",
+    "okay", "i'm", "i've", "it's", "that's", "don't",
 ];
 
 struct Token {
@@ -84,6 +118,7 @@ struct SharedRun {
 
 fn stem(word: &str) -> String {
     let mut s = word.replace('’', "'");
+    if !s.chars().all(|c| c.is_ascii_lowercase() || c == '\'') { return s; }
     if let Some(stripped) = s.strip_suffix("'s") {
         s = stripped.to_string();
     }
@@ -133,7 +168,7 @@ fn shared_run(ta: &[Token], tb: &[Token]) -> Option<SharedRun> {
         for j in 1..=m {
             if ta[i - 1].s == tb[j - 1].s && ta[i - 1].s.chars().count() > 1 {
                 cur[j] = prev[j - 1] + 1;
-                if cur[j] >= 2 && best.as_ref().map(|b| b.length).unwrap_or(0) < cur[j] {
+                if cur[j] >= 3 && best.as_ref().map(|b| b.length).unwrap_or(0) < cur[j] {
                     let a = &ta[i - cur[j]..i];
                     let carrying = a
                         .iter()
@@ -162,32 +197,41 @@ fn shared_run(ta: &[Token], tb: &[Token]) -> Option<SharedRun> {
 fn distinctive_terms(body: &str) -> Vec<String> {
     let mut terms: Vec<String> = body
         .split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .take(160)
         .map(|t| t.trim_matches('\'').to_lowercase())
         .filter(|t| t.chars().count() >= 5 && !STOPWORDS.contains(&t.as_str()))
         .collect();
     terms.sort();
     terms.dedup();
+    terms.truncate(12);
     terms
 }
 
-fn days_between(a: &str, b: &str) -> i64 {
-    match (
-        chrono::DateTime::parse_from_rfc3339(a),
-        chrono::DateTime::parse_from_rfc3339(b),
-    ) {
-        (Ok(x), Ok(y)) => (y - x).num_days().abs(),
-        _ => 0,
-    }
+fn elapsed_ms(at: &str, now: &str) -> Option<i64> {
+    let at = chrono::DateTime::parse_from_rfc3339(at).ok()?;
+    let now = chrono::DateTime::parse_from_rfc3339(now).ok()?;
+    Some((now - at).num_milliseconds())
 }
-
-fn hours_between(a: &str, b: &str) -> i64 {
-    match (
-        chrono::DateTime::parse_from_rfc3339(a),
-        chrono::DateTime::parse_from_rfc3339(b),
-    ) {
-        (Ok(x), Ok(y)) => (y - x).num_hours().abs(),
-        _ => i64::MAX,
+fn recent(at: &str, now: &str) -> bool {
+    elapsed_ms(at, now).is_some_and(|ms| (0..=CAUSE_WINDOW_HOURS * 3_600_000).contains(&ms))
+}
+fn eligible(conn: &Connection, id: &str, at: &str, now: &str) -> Result<bool, rusqlite::Error> {
+    if !elapsed_ms(at, now).is_some_and(|ms| ms >= MIN_RETURN_AGE_DAYS * 86_400_000) {
+        return Ok(false);
     }
+    let available: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM fragments f WHERE f.id = ?1 AND f.removed_at IS NULL AND TRIM(f.body) <> ''
+         AND NOT EXISTS(SELECT 1 FROM holds h WHERE h.fragment_id = f.id AND h.released_at IS NULL))",
+        [id], |r| r.get(0))?;
+    if !available {
+        return Ok(false);
+    }
+    let last: Option<String> = conn.query_row(
+        "SELECT surfaced_at FROM returns WHERE fragment_id = ?1 ORDER BY surfaced_at DESC LIMIT 1",
+        [id], |r| r.get(0)).optional()?;
+    Ok(last.is_none_or(|at| {
+        elapsed_ms(&at, now).is_some_and(|ms| ms >= SAME_FRAGMENT_COOLDOWN_DAYS * 86_400_000)
+    }))
 }
 
 fn read_fragment(conn: &Connection, id: &str) -> Result<super::record::Fragment, rusqlite::Error> {
@@ -270,7 +314,14 @@ impl Db {
             )
             .optional()?
         {
-            return Ok(Some(load_return(&conn, open_id)?));
+            let value = load_return(&conn, open_id)?;
+            if valid_open_return(&conn, &value)? {
+                return Ok(Some(value));
+            }
+            conn.execute(
+                "UPDATE returns SET outcome = 'expired', outcome_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, open_id],
+            )?;
         }
 
         // Sparse: a gap after the last one, including ones already let go.
@@ -282,7 +333,7 @@ impl Db {
             )
             .optional()?
         {
-            if hours_between(&last, now) < RETURN_COOLDOWN_HOURS {
+            if elapsed_ms(&last, now).is_none_or(|ms| ms < RETURN_COOLDOWN_HOURS * 3_600_000) {
                 return Ok(None);
             }
         }
@@ -296,20 +347,6 @@ impl Db {
         let Some((fragment_id, reason, evidence)) = candidate else {
             return Ok(None);
         };
-
-        // The same material does not come back twice in a month.
-        let recent_same: Option<String> = conn
-            .query_row(
-                "SELECT surfaced_at FROM returns WHERE fragment_id = ?1 ORDER BY surfaced_at DESC LIMIT 1",
-                [&fragment_id],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if let Some(prev) = recent_same {
-            if days_between(&prev, now) < SAME_FRAGMENT_COOLDOWN_DAYS {
-                return Ok(None);
-            }
-        }
 
         conn.execute(
             "INSERT INTO returns (fragment_id, surfaced_at, reason) VALUES (?1, ?2, ?3)",
@@ -366,78 +403,81 @@ type Candidate = Option<(String, String, Vec<ReturnEvidence>)>;
 /// the person just wrote, not by the passage of time. The evidence is a shared *run*,
 /// not a single distinctive term, so the because-sentence can quote real words.
 fn repeated_language(conn: &Connection, now: &str) -> Result<Candidate, rusqlite::Error> {
-    let newest: Option<(String, String, String)> = conn
-        .query_row(
-            "SELECT id, body, captured_at FROM fragments WHERE removed_at IS NULL \
-             ORDER BY captured_at DESC LIMIT 1",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
-        .optional()?;
-    let Some((newest_id, body, newest_at)) = newest else {
-        return Ok(None);
-    };
-    if hours_between(&newest_at, now) > 24 {
-        return Ok(None);
-    }
-
-    let newest_tokens = tokenize(&body);
-    let mut best: Option<(String, SharedRun)> = None;
-
-    for term in distinctive_terms(&body) {
-        let quoted = format!("\"{}\"", term.replace('"', "\"\""));
-        let hits: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM fragments_fts WHERE fragments_fts MATCH ?1",
-            [&quoted],
-            |r| r.get(0),
+    let newest: Vec<(String, String, String)> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, body, captured_at FROM fragments WHERE removed_at IS NULL
+             AND julianday(captured_at) BETWEEN julianday(?1, '-2 days') AND julianday(?1)
+             ORDER BY captured_at DESC LIMIT ?2",
         )?;
-        if !(2..=6).contains(&hits) {
+        let rows = stmt
+            .query_map(rusqlite::params![now, MAX_RECENT_CAUSES], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        rows
+    };
+    for (newest_id, body, newest_at) in newest {
+        if !recent(&newest_at, now) {
             continue;
         }
-
-        let mut stmt = conn.prepare(
-            "SELECT f.id, f.body, f.captured_at FROM fragments_fts t \
-             JOIN fragments f ON f.id = t.fragment_id \
-             WHERE fragments_fts MATCH ?1 AND f.id <> ?2 AND f.removed_at IS NULL \
-             ORDER BY f.captured_at ASC LIMIT 12",
-        )?;
-        let rows = stmt.query_map(rusqlite::params![&quoted, &newest_id], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
-        })?;
-        for row in rows {
-            let (old_id, old_body, old_at) = row?;
-            if days_between(&old_at, now) < MIN_RETURN_AGE_DAYS {
+        let newest_tokens = tokenize(&body);
+        let mut best: Option<(String, SharedRun)> = None;
+        for term in distinctive_terms(&body) {
+            let quoted = format!("\"{}\"", term.replace('"', "\"\""));
+            let hits: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM fragments_fts WHERE fragments_fts MATCH ?1",
+                [&quoted],
+                |r| r.get(0),
+            )?;
+            if !(2..=6).contains(&hits) {
                 continue;
             }
-            if let Some(run) = shared_run(&tokenize(&old_body), &newest_tokens) {
-                if best.as_ref().map(|(_, r)| r.length).unwrap_or(0) < run.length {
-                    best = Some((old_id, run));
+            let mut stmt = conn.prepare(
+                "SELECT f.id, f.body, f.captured_at FROM fragments_fts t
+                 JOIN fragments f ON f.id = t.fragment_id WHERE fragments_fts MATCH ?1
+                 AND f.id <> ?2 AND f.removed_at IS NULL ORDER BY f.captured_at ASC LIMIT 12",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![&quoted, &newest_id], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (old_id, old_body, old_at) = row?;
+                if !eligible(conn, &old_id, &old_at, now)? {
+                    continue;
+                }
+                if let Some(run) = shared_run(&tokenize(&old_body), &newest_tokens) {
+                    if best.as_ref().map(|(_, r)| r.length).unwrap_or(0) < run.length {
+                        best = Some((old_id, run));
+                    }
                 }
             }
         }
+        if let Some((old_id, run)) = best {
+            return Ok(Some((
+                old_id,
+                "repeated_language".into(),
+                vec![
+                    ReturnEvidence {
+                        kind: "shared_phrase".into(),
+                        detail: run.a,
+                        occurred_at: None,
+                        related_id: None,
+                    },
+                    ReturnEvidence {
+                        kind: "shared_phrase".into(),
+                        detail: run.b,
+                        occurred_at: Some(newest_at),
+                        related_id: Some(newest_id),
+                    },
+                ],
+            )));
+        }
     }
-
-    let Some((old_id, run)) = best else {
-        return Ok(None);
-    };
-    Ok(Some((
-        old_id,
-        "repeated_language".to_string(),
-        vec![
-            ReturnEvidence {
-                kind: "shared_phrase".into(),
-                detail: run.a,
-                occurred_at: None,
-                related_id: None,
-            },
-            ReturnEvidence {
-                kind: "shared_phrase".into(),
-                detail: run.b,
-                occurred_at: Some(newest_at),
-                related_id: Some(newest_id),
-            },
-        ],
-    )))
+    Ok(None)
 }
 
 /// "You encountered this URL again", with both dates.
@@ -445,105 +485,141 @@ fn repeated_language(conn: &Connection, now: &str) -> Result<Candidate, rusqlite
 /// Reads `encounters.url_key`, which was written at capture. Nothing is matched by
 /// similarity here — two encounters either share a stored key or they do not.
 fn same_source(conn: &Connection, now: &str) -> Result<Candidate, rusqlite::Error> {
-    let newest: Option<(String, String, String, String)> = conn
-        .query_row(
-            "SELECT f.id, f.captured_at, e.url_key, e.url_raw FROM fragments f \
-             JOIN encounters e ON e.fragment_id = f.id \
-             WHERE f.removed_at IS NULL ORDER BY f.captured_at DESC LIMIT 1",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-        )
-        .optional()?;
-
-    let Some((newest_id, newest_at, key, url_raw)) = newest else {
-        return Ok(None);
-    };
-    if hours_between(&newest_at, now) > 24 {
-        return Ok(None);
+    let mut stmt = conn.prepare(
+        "SELECT f.id, f.captured_at, e.url_key, e.url_raw FROM fragments f
+         JOIN encounters e ON e.fragment_id = f.id WHERE f.removed_at IS NULL
+         AND julianday(f.captured_at) BETWEEN julianday(?1, '-2 days') AND julianday(?1)
+         ORDER BY f.captured_at DESC LIMIT ?2",
+    )?;
+    let newest = stmt.query_map(rusqlite::params![now, MAX_RECENT_CAUSES], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+        ))
+    })?;
+    for row in newest {
+        let (newest_id, newest_at, key, raw) = row?;
+        if !recent(&newest_at, now) {
+            continue;
+        }
+        let Some(domain) = domain_of(&raw) else {
+            continue;
+        };
+        let mut earlier = conn.prepare(
+            "SELECT f.id, f.captured_at FROM encounters e JOIN fragments f ON f.id = e.fragment_id
+             WHERE e.url_key = ?1 AND f.id <> ?2 AND f.removed_at IS NULL ORDER BY f.captured_at ASC LIMIT 64")?;
+        let candidates = earlier.query_map(rusqlite::params![key, newest_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        for candidate in candidates {
+            let (id, at) = candidate?;
+            if !eligible(conn, &id, &at, now)? {
+                continue;
+            }
+            return Ok(Some((
+                id,
+                "same_source".into(),
+                vec![ReturnEvidence {
+                    kind: "url".into(),
+                    detail: domain,
+                    occurred_at: Some(newest_at),
+                    related_id: Some(newest_id),
+                }],
+            )));
+        }
     }
-    let Some(domain) = domain_of(&url_raw) else {
-        return Ok(None);
-    };
-
-    let earlier: Option<(String, String)> = conn
-        .query_row(
-            "SELECT e.fragment_id, e.shared_at FROM encounters e \
-             JOIN fragments f ON f.id = e.fragment_id \
-             WHERE e.url_key = ?1 AND e.fragment_id <> ?2 AND f.removed_at IS NULL \
-             ORDER BY e.shared_at ASC LIMIT 1",
-            rusqlite::params![key, newest_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .optional()?;
-
-    let Some((old_id, old_at)) = earlier else {
-        return Ok(None);
-    };
-    if days_between(&old_at, now) < MIN_RETURN_AGE_DAYS {
-        return Ok(None);
-    }
-
-    Ok(Some((
-        old_id,
-        "same_source".to_string(),
-        vec![ReturnEvidence {
-            kind: "url".into(),
-            detail: domain,
-            occurred_at: Some(newest_at),
-            related_id: Some(newest_id),
-        }],
-    )))
+    Ok(None)
 }
 
-/// A line that was added to, then went quiet. The last addition is the causing act,
-/// so the because-sentence can quote it rather than citing the calendar.
+/// A recent addition is the cause; a quiet old Line alone never asks for attention.
 fn line_continued(conn: &Connection, now: &str) -> Result<Candidate, rusqlite::Error> {
-    let row: Option<(String, String)> = conn
-        .query_row(
-            "SELECT li.root_id, MAX(f.captured_at) \
-             FROM line_index li JOIN fragments f ON f.id = li.fragment_id \
-             WHERE f.removed_at IS NULL \
-             GROUP BY li.root_id HAVING li.line_length >= 3 \
-             ORDER BY MAX(f.captured_at) ASC LIMIT 1",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .optional()?;
-
-    let Some((root_id, last_at)) = row else {
-        return Ok(None);
-    };
-    if days_between(&last_at, now) < 60 {
-        return Ok(None);
+    let mut stmt = conn.prepare(
+        "SELECT root.id, root.captured_at, child.id, child.body, child.captured_at
+         FROM line_index li JOIN fragments child ON child.id = li.fragment_id
+         JOIN fragments root ON root.id = li.root_id WHERE li.fragment_id <> li.root_id
+         AND root.removed_at IS NULL AND child.removed_at IS NULL
+         AND julianday(child.captured_at) BETWEEN julianday(?1, '-2 days') AND julianday(?1)
+         ORDER BY child.captured_at DESC LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![now, MAX_RECENT_CAUSES], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, String>(4)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, at, cause_id, body, cause_at) = row?;
+        if !recent(&cause_at, now) || !eligible(conn, &id, &at, now)? {
+            continue;
+        }
+        let snippet = body
+            .split_whitespace()
+            .take(12)
+            .collect::<Vec<_>>()
+            .join(" ");
+        if snippet.is_empty() {
+            continue;
+        }
+        return Ok(Some((
+            id,
+            "line_continued".into(),
+            vec![ReturnEvidence {
+                kind: "continuation".into(),
+                detail: snippet,
+                occurred_at: Some(cause_at),
+                related_id: Some(cause_id),
+            }],
+        )));
     }
+    Ok(None)
+}
 
-    let last: Option<(String, String)> = conn
-        .query_row(
-            "SELECT f.id, f.body FROM line_index li JOIN fragments f ON f.id = li.fragment_id \
-             WHERE li.root_id = ?1 AND f.removed_at IS NULL \
-             ORDER BY li.position DESC LIMIT 1",
-            [&root_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .optional()?;
-    let Some((last_id, last_body)) = last else {
-        return Ok(None);
+fn valid_open_return(conn: &Connection, value: &Return) -> Result<bool, rusqlite::Error> {
+    let Some(cause) = &value.because else {
+        return Ok(false);
     };
-    let snippet = last_body.split_whitespace().take(12).collect::<Vec<_>>().join(" ");
-    if snippet.trim().is_empty() {
-        return Ok(None);
+    let live: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM fragments WHERE id = ?1 AND removed_at IS NULL)
+         AND EXISTS(SELECT 1 FROM fragments WHERE id = ?2 AND removed_at IS NULL)
+         AND NOT EXISTS(SELECT 1 FROM holds WHERE fragment_id = ?1 AND released_at IS NULL)",
+        rusqlite::params![value.fragment.id, cause.id],
+        |r| r.get(0),
+    )?;
+    if !live {
+        return Ok(false);
     }
-
-    Ok(Some((
-        root_id,
-        "line_continued".to_string(),
-        vec![ReturnEvidence {
-            kind: "continuation".into(),
-            detail: snippet,
-            occurred_at: Some(last_at),
-            related_id: Some(last_id),
-        }],
-    )))
+    Ok(match value.reason.as_str() {
+        "repeated_language" => shared_run(&tokenize(&value.fragment.body), &tokenize(&cause.body))
+            .is_some_and(|run| {
+                value
+                    .evidence
+                    .iter()
+                    .any(|e| e.related_id.is_none() && e.detail == run.a)
+                    && value.evidence.iter().any(|e| {
+                        e.related_id.as_deref() == Some(cause.id.as_str()) && e.detail == run.b
+                    })
+            }),
+        "same_source" => conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM encounters a JOIN encounters b ON a.url_key = b.url_key
+             WHERE a.fragment_id = ?1 AND b.fragment_id = ?2)",
+            rusqlite::params![value.fragment.id, cause.id],
+            |r| r.get(0),
+        )?,
+        "line_continued" => {
+            let snippet = cause.body.split_whitespace().take(12).collect::<Vec<_>>().join(" ");
+            let same_line: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM line_index a JOIN line_index b ON a.root_id = b.root_id
+                 WHERE a.fragment_id = ?1 AND b.fragment_id = ?2)",
+                rusqlite::params![value.fragment.id, cause.id], |r| r.get(0))?;
+            same_line && value.evidence.iter().any(|e| e.kind == "continuation" && e.detail == snippet)
+        },
+        _ => false,
+    })
 }
 
 #[cfg(test)]
@@ -586,8 +662,8 @@ mod tests {
     #[test]
     fn asking_whether_a_return_waits_never_creates_one() {
         let db = db();
-        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
-        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+        put(&db, "a", "quiet premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "quiet premature judgment", "2025-01-04T10:00:00+00:00");
 
         // A Return is genuinely available here — the same fixture the selecting test uses.
         assert!(!db.return_waiting().unwrap());
@@ -602,8 +678,8 @@ mod tests {
     #[test]
     fn a_return_waits_until_it_is_answered() {
         let db = db();
-        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
-        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+        put(&db, "a", "quiet premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "quiet premature judgment", "2025-01-04T10:00:00+00:00");
 
         let surfaced = db.select_return(NOW).unwrap().expect("a return");
         assert!(db.return_waiting().unwrap());
@@ -619,8 +695,8 @@ mod tests {
     #[test]
     fn both_surfaces_are_given_the_same_return() {
         let db = db();
-        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
-        put(&db, "b", "premature judgment", "2025-01-04T10:00:00+00:00");
+        put(&db, "a", "quiet premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "quiet premature judgment", "2025-01-04T10:00:00+00:00");
 
         let window = db.select_return(NOW).unwrap().expect("a return");
         let panel = db.select_return(NOW).unwrap().expect("the same return");
@@ -651,16 +727,16 @@ mod tests {
     #[test]
     fn recent_material_alone_is_not_a_return() {
         let db = db();
-        put(&db, "a", "premature judgment again", "2026-09-19T16:00:00+00:00");
-        put(&db, "b", "premature judgment", "2026-09-15T10:00:00+00:00");
+        put(&db, "a", "quiet premature judgment again", "2026-09-19T16:00:00+00:00");
+        put(&db, "b", "quiet premature judgment", "2026-09-15T10:00:00+00:00");
         assert!(db.select_return(NOW).unwrap().is_none());
     }
 
     #[test]
     fn a_phrase_used_again_today_brings_back_the_older_moment_with_its_words() {
         let db = db();
-        put(&db, "old", "filing is a kind of premature judgment", "2023-03-14T23:41:00+00:00");
-        put(&db, "new", "still doing premature judgment on every note", "2026-09-19T16:30:00+00:00");
+        put(&db, "old", "filing is a kind of quiet premature judgment", "2023-03-14T23:41:00+00:00");
+        put(&db, "new", "still doing quiet premature judgment on every note", "2026-09-19T16:30:00+00:00");
 
         let r = db.select_return(NOW).unwrap().expect("a recurrence should return");
         assert_eq!(r.fragment.id, "old", "the OLDER moment is what comes back");
@@ -668,9 +744,9 @@ mod tests {
         assert_eq!(r.because.as_ref().map(|f| f.id.as_str()), Some("new"));
 
         let old_phrase = r.evidence.iter().find(|e| e.kind == "shared_phrase" && e.related_id.is_none()).unwrap();
-        assert_eq!(old_phrase.detail, "premature judgment", "the evidence is the shared run, not a single term");
+        assert_eq!(old_phrase.detail, "quiet premature judgment", "the evidence is the shared run, not a single term");
         let new_phrase = r.evidence.iter().find(|e| e.related_id.as_deref() == Some("new")).unwrap();
-        assert_eq!(new_phrase.detail, "premature judgment");
+        assert_eq!(new_phrase.detail, "quiet premature judgment");
     }
 
     #[test]
@@ -704,8 +780,8 @@ mod tests {
     #[test]
     fn an_unanswered_return_is_what_select_returns_until_it_is_let_go() {
         let db = db();
-        put(&db, "old", "premature judgment about folders", "2023-03-14T23:41:00+00:00");
-        put(&db, "new", "premature judgment again today", "2026-09-19T16:30:00+00:00");
+        put(&db, "old", "quiet premature judgment about folders", "2023-03-14T23:41:00+00:00");
+        put(&db, "new", "quiet premature judgment again today", "2026-09-19T16:30:00+00:00");
 
         let first = db.select_return(NOW).unwrap().unwrap();
         let again = db.select_return("2026-09-19T18:00:00+00:00").unwrap().unwrap();
@@ -721,8 +797,8 @@ mod tests {
     #[test]
     fn the_same_fragment_does_not_come_back_within_a_month() {
         let db = db();
-        put(&db, "old", "premature judgment about folders", "2023-03-14T23:41:00+00:00");
-        put(&db, "new", "premature judgment again today", "2026-09-19T16:30:00+00:00");
+        put(&db, "old", "quiet premature judgment about folders", "2023-03-14T23:41:00+00:00");
+        put(&db, "new", "quiet premature judgment again today", "2026-09-19T16:30:00+00:00");
 
         let first = db.select_return(NOW).unwrap().unwrap();
         assert_eq!(first.fragment.id, "old");
@@ -827,7 +903,7 @@ mod tests {
     }
 
     #[test]
-    fn a_quiet_line_returns_with_the_last_addition_as_the_reason() {
+    fn a_recent_addition_returns_an_older_line_with_its_words() {
         let db = db();
         let first = db.capture_fragment("a notebook that doesn't ask", "typed", None).unwrap();
         set_captured(&db, &first.id, "2024-03-01T10:00:00+00:00");
@@ -838,7 +914,7 @@ mod tests {
         let third = db
             .continue_fragment(&second.id, "deciding what it is before I'm done", "typed", None, false)
             .unwrap();
-        set_captured(&db, &third.id, "2025-03-14T23:41:00+00:00");
+        set_captured(&db, &third.id, "2026-09-19T16:00:00+00:00");
 
         let r = db.select_return(NOW).unwrap().expect("a quiet line is a ground");
         assert_eq!(r.reason, "line_continued");
@@ -846,13 +922,15 @@ mod tests {
         assert_eq!(r.because.as_ref().map(|f| f.id.as_str()), Some(third.id.as_str()));
         let c = r.evidence.iter().find(|e| e.kind == "continuation").unwrap();
         assert!(c.detail.contains("deciding what it is before"), "the last addition is the quote");
+        db.correct_fragment(&third.id, "new wording").unwrap();
+        assert!(db.select_return(NOW).unwrap().is_none(), "a corrected-away quote must not remain");
     }
 
     #[test]
     fn outcomes_are_recorded_and_letting_go_is_not_a_delete() {
         let db = db();
-        put(&db, "old", "premature judgment about folders", "2023-03-14T23:41:00+00:00");
-        put(&db, "new", "premature judgment again today", "2026-09-19T16:30:00+00:00");
+        put(&db, "old", "quiet premature judgment about folders", "2023-03-14T23:41:00+00:00");
+        put(&db, "new", "quiet premature judgment again today", "2026-09-19T16:30:00+00:00");
 
         let r = db.select_return(NOW).unwrap().unwrap();
         db.record_return_outcome(r.id, "let_go").unwrap();
@@ -869,14 +947,14 @@ mod tests {
         let body: String = conn
             .query_row("SELECT body FROM fragments WHERE id = 'old'", [], |x| x.get(0))
             .unwrap();
-        assert_eq!(body, "premature judgment about folders");
+        assert_eq!(body, "quiet premature judgment about folders");
     }
 
     #[test]
     fn a_return_is_never_caused_by_material_the_person_has_not_touched_recently() {
         let db = db();
-        put(&db, "old", "premature judgment about folders", "2023-03-14T23:41:00+00:00");
-        put(&db, "new", "premature judgment again", "2026-09-16T10:00:00+00:00");
+        put(&db, "old", "quiet premature judgment about folders", "2023-03-14T23:41:00+00:00");
+        put(&db, "new", "quiet premature judgment again", "2026-09-16T10:00:00+00:00");
 
         let r = db.select_return(NOW).unwrap();
         assert!(
@@ -884,4 +962,135 @@ mod tests {
             "repeated language must be triggered by something written now"
         );
     }
+    #[test]
+    fn a_return_starts_at_seven_full_days_with_a_recent_cause() {
+        for (old_at, cause_at, expected) in [
+            ("2026-09-12T17:00:00.001Z", "2026-09-19T17:00:00Z", false),
+            ("2026-09-12T17:00:00Z", "2026-09-19T17:00:00Z", true),
+            ("2026-09-12T17:00:00Z", "2026-09-17T17:00:00Z", true),
+            ("2026-09-12T17:00:00Z", "2026-09-17T16:59:59.999Z", false),
+            ("2026-09-12T17:00:00Z", "2026-09-19T17:00:00.001Z", false),
+        ] {
+            let db = db();
+            put(&db, "old", "quiet premature judgment", old_at);
+            put(&db, "cause", "quiet premature judgment again", cause_at);
+            assert_eq!(
+                db.select_return(NOW).unwrap().is_some(),
+                expected,
+                "{old_at}, {cause_at}"
+            );
+        }
+    }
+    #[test]
+    fn an_unrelated_latest_capture_does_not_hide_recent_evidence() {
+        let db = db();
+        put(
+            &db,
+            "old",
+            "quiet premature judgment",
+            "2026-09-12T17:00:00Z",
+        );
+        put(
+            &db,
+            "cause",
+            "quiet premature judgment again",
+            "2026-09-19T16:00:00Z",
+        );
+        put(&db, "latest", "milk", "2026-09-19T16:30:00Z");
+        assert_eq!(
+            db.select_return(NOW).unwrap().unwrap().because.unwrap().id,
+            "cause"
+        );
+    }
+    #[test]
+    fn held_or_recently_returned_candidates_do_not_starve_another_eligible_moment() {
+        let db = db();
+        put(
+            &db,
+            "older",
+            "quiet premature judgment",
+            "2025-01-01T10:00:00Z",
+        );
+        put(
+            &db,
+            "other",
+            "quiet premature judgment",
+            "2025-02-01T10:00:00Z",
+        );
+        put(
+            &db,
+            "cause",
+            "quiet premature judgment again",
+            "2026-09-19T16:00:00Z",
+        );
+        db.hold_fragment("older").unwrap();
+        let value = db.select_return(NOW).unwrap().unwrap();
+        assert_eq!(value.fragment.id, "other");
+        db.record_return_outcome(value.id, "let_go").unwrap();
+        db.release_fragment("older").unwrap();
+        db.0.lock()
+            .unwrap()
+            .execute(
+                "UPDATE returns SET surfaced_at = '2026-09-17T16:00:00Z'",
+                [],
+            )
+            .unwrap();
+        let value = db.select_return(NOW).unwrap().unwrap();
+        assert_eq!(value.fragment.id, "older");
+    }
+    #[test]
+    fn an_open_return_expires_when_its_quoted_evidence_is_corrected_away() {
+        let db = db();
+        put(
+            &db,
+            "old",
+            "quiet premature judgment",
+            "2025-01-01T10:00:00Z",
+        );
+        put(
+            &db,
+            "cause",
+            "quiet premature judgment again",
+            "2026-09-19T16:00:00Z",
+        );
+        let value = db.select_return(NOW).unwrap().unwrap();
+        db.correct_fragment("cause", "something unrelated").unwrap();
+        assert!(db.select_return(NOW).unwrap().is_none());
+        let outcome: String =
+            db.0.lock()
+                .unwrap()
+                .query_row(
+                    "SELECT outcome FROM returns WHERE id = ?1",
+                    [value.id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+        assert_eq!(outcome, "expired");
+    }
+    #[test]
+    fn an_old_quiet_line_has_no_recent_cause() {
+        let db = db();
+        let root = db.capture_fragment("an older idea", "typed", None).unwrap();
+        set_captured(&db, &root.id, "2025-01-01T10:00:00Z");
+        let next = db
+            .continue_fragment(&root.id, "another point", "typed", None, false)
+            .unwrap();
+        set_captured(&db, &next.id, "2025-02-01T10:00:00Z");
+        assert!(db.select_return(NOW).unwrap().is_none());
+    }
+    #[test]
+    fn shared_mobile_policy_cases() {
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("return_policy_cases.json")).unwrap();
+        let now = chrono::DateTime::parse_from_rfc3339(NOW).unwrap();
+        for case in cases {
+            let db = db();
+            let old = now - chrono::Duration::milliseconds(case["oldAgeMs"].as_i64().unwrap());
+            let cause = now - chrono::Duration::milliseconds(case["causeAgeMs"].as_i64().unwrap());
+            put(&db, "old", "quiet premature judgment", &old.to_rfc3339());
+            put(&db, "cause", case["body"].as_str().unwrap_or("quiet premature judgment again"), &cause.to_rfc3339());
+            if case["held"].as_bool().unwrap_or(false) { db.hold_fragment("old").unwrap(); }
+            assert_eq!(db.select_return(NOW).unwrap().is_some(), case["expected"].as_bool().unwrap(), "{}", case["name"]);
+        }
+    }
+
 }

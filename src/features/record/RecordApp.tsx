@@ -289,14 +289,12 @@ export function RecordApp() {
 
   const reload = useCallback(async () => {
     try {
-      const [all, holds, ret] = await Promise.all([
+      const [all, holds] = await Promise.all([
         // The whole record: standing in a month re-measures distance from there, so the
         // surface cannot work from a recent page.
         api.allFragments(),
         api.heldFragments(),
-        api.selectReturn(),
       ]);
-      setReturned((current) => (retLeavingRef.current ? current : ret));
       setFragments(all);
       setHeld(holds);
       // One pass for everything, rather than a query per row.
@@ -485,6 +483,18 @@ export function RecordApp() {
     const id = setInterval(() => void refreshSyncFacts(), 30_000);
     return () => clearInterval(id);
   }, [refreshSyncFacts]);
+
+  const returnSurfaceAvailable = !input && !anchor && !focusId && !surface && !voice.recording;
+  useEffect(() => {
+    if (!loaded || !returnSurfaceAvailable || retLeavingRef.current) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      void api.selectReturn().then((value) => {
+        if (active && !retLeavingRef.current) setReturned(value);
+      }).catch(() => { /* The next idle material change retries; capture stays available. */ });
+    }, 1600);
+    return () => { active = false; clearTimeout(timer); };
+  }, [loaded, returnSurfaceAvailable, fragments, held]);
 
   const bringBack = useCallback(async () => {
     const u = undo;
