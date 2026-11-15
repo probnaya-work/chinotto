@@ -16,7 +16,7 @@ use rusqlite::{Connection, Transaction};
 use std::path::Path;
 
 /// Schema version this binary expects. Bump when adding a migration below.
-pub const TARGET_VERSION: i32 = 7;
+pub const TARGET_VERSION: i32 = 8;
 
 pub fn current_version(conn: &Connection) -> Result<i32, rusqlite::Error> {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -79,6 +79,24 @@ pub fn run(conn: &mut Connection, archive_dir: Option<&Path>) -> Result<(), rusq
         tx.commit()?;
     }
 
+    if from < 8 {
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS archived_material (
+                id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL,
+                archived_at TEXT NOT NULL, body TEXT NOT NULL, file_path TEXT
+            );",
+        )?;
+        let present: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('voice_captures') WHERE name='audio_incomplete')",
+            [], |row| row.get(0),
+        )?;
+        if !present {
+            tx.execute_batch("ALTER TABLE voice_captures ADD COLUMN audio_incomplete INTEGER NOT NULL DEFAULT 0;")?;
+        }
+        set_version(&tx, 8)?;
+        tx.commit()?;
+    }
     Ok(())
 }
 

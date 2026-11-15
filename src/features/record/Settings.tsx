@@ -49,6 +49,7 @@ export interface SettingsProps {
   onIconVariant: (v: "dark" | "light") => void;
 
   onExport: () => void;
+  restoreContent?: ReactNode;
   exportNote: string;
   backupLine: string;
   onBackUpNow: () => void;
@@ -300,9 +301,10 @@ export function Settings(props: SettingsProps) {
                 export it ›
               </Verb>{" "}
               <span style={{ color: "var(--meta)" }}>
-                plain text and audio, zipped. {props.exportNote}
+                text, history and original audio, zipped. {props.exportNote}
               </span>
             </div>
+            {props.restoreContent}
             <div>
               a backup is made each time chinotto opens · last {props.backupLine} ·{" "}
               <Verb onClick={props.onBackUpNow}>

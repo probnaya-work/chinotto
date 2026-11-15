@@ -551,11 +551,10 @@ export function recordSpan(): Promise<[string, string] | null> {
 // ---- this mac ---------------------------------------------------------------------------
 
 /**
- * The whole Record as plain text and audio. Direct builds preserve the existing Downloads
+ * The whole Record as readable text plus restorable metadata and original audio. Direct builds preserve the existing Downloads
  * destination; sandboxed App Store builds ask for a destination so macOS grants access.
  *
- * Plain text on purpose: an export exists so the record can outlive this program, and a
- * format only this program reads is not an escape hatch.
+ * record.txt remains readable without Chinotto; record.jsonl preserves the durable model.
  */
 export async function exportRecord(): Promise<string | null> {
   if (!IS_MAC_APP_STORE) {

@@ -1,0 +1,19 @@
+{
+  "fragment": {
+    "id": ["id"], "body": ["text"], "captured_at": ["date"],
+    "capture_method": ["choice:typed,voice,url,shared,imported"], "capture_origin": ["?short"],
+    "corrected_at": ["?date"], "correction_count": ["uint", 0],
+    "legacy_entry_id": ["?id"], "legacy_edit_count": ["uint", 0],
+    "legacy_continuation_offset": ["?uint"], "legacy_continuation_at": ["?date"]
+  },
+  "revisions": { "body": ["text"], "superseded_at": ["date"], "revision_index": ["uint"] },
+  "continuations": { "continues_id": ["id"], "linked_at": ["date"], "origin": ["choice:explicit,accepted_suggestion"] },
+  "holds": { "held_at": ["date"], "released_at": ["?date"] },
+  "encounters": { "url_raw": ["text"], "url_key": ["text"], "source_app": ["?short"], "shared_at": ["date"], "selected_text": ["?text"] },
+  "voice_capture": { "duration_ms": ["uint", 0], "recorded_at": ["date"], "audio_missing": ["flag", 0], "audio_incomplete": ["flag", 0] },
+  "transcript": { "machine_transcript": ["?text"], "state": ["choice:pending,ok,failed"], "model": ["?short"], "transcribed_at": ["?date"], "failure": ["?text"] },
+  "enrichment": { "url_canonical": ["?text"], "domain": ["?short"], "title": ["?text"], "site_name": ["?short"], "extraction": ["?text"], "state": ["choice:pending,ok,failed"], "attempted_at": ["?date"], "fetched_at": ["?date"], "failure": ["?text"] },
+  "trace_judgements": { "related_id": ["id"], "kind": ["short"], "judgement": ["choice:confirmed,rejected"], "judged_at": ["date"] },
+  "wording_conflict": { "remote_text": ["text"], "local_text": ["text"], "noticed_at": ["date"], "shows": ["choice:local,remote"], "resolved_at": ["?date"] },
+  "archived": { "id": ["id"], "kind": ["short"], "archived_at": ["date"], "body": ["text"] }
+}

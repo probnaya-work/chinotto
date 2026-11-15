@@ -1,6 +1,7 @@
 mod db;
 mod record_commands;
 mod privacy;
+mod record_archive;
 mod embeddings;
 mod keywords;
 #[cfg(feature = "direct-distribution")]
@@ -1292,12 +1293,6 @@ fn export_record(
     app: tauri::AppHandle,
     path: Option<String>,
 ) -> Result<String, String> {
-    let mut fragments = db.recent_fragments(1_000_000).map_err(|e| e.to_string())?;
-    // Oldest first: an export is read forwards.
-    fragments.reverse();
-    let ids: Vec<String> = fragments.iter().map(|f| f.id.clone()).collect();
-    let (_encounters, voices) = db.materials_for(&ids).map_err(|e| e.to_string())?;
-
     let dest = if let Some(path) = path {
         PathBuf::from(path)
     } else {
@@ -1315,48 +1310,7 @@ fn export_record(
         .to_string();
 
     let export = privacy::ProtectedExport::new(&app, dest)?;
-    let file = File::create(&export.temporary).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-    let mut text = String::new();
-    for f in &fragments {
-        export.check(&app)?;
-        text.push_str(&f.captured_at);
-        text.push_str(" · ");
-        text.push_str(&f.capture_method);
-        if let Some(origin) = &f.capture_origin {
-            text.push_str(" · ");
-            text.push_str(origin);
-        }
-        if f.correction_count > 0 {
-            text.push_str(" · wording corrected");
-        }
-        text.push('\n');
-        text.push_str(&f.body);
-        text.push_str("\n\n");
-    }
-    zip.start_file("chinotto-record/record.txt", opts)
-        .map_err(|e| e.to_string())?;
-    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-
-    for v in &voices {
-        export.check(&app)?;
-        // A recording whose file is gone is simply not in the export; the words for it are
-        // already in record.txt, and writing an empty file would claim otherwise.
-        let src = PathBuf::from(&v.audio_path);
-        let Ok(bytes) = fs::read(&src) else { continue };
-        let ext = src
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("m4a");
-        zip.start_file(format!("chinotto-record/audio/{}.{}", v.fragment_id, ext), opts)
-            .map_err(|e| e.to_string())?;
-        zip.write_all(&bytes).map_err(|e| e.to_string())?;
-    }
-
-    zip.finish().map_err(|e| e.to_string())?;
+    db.write_record_archive(&export.temporary, &audio_dir(&app)?, &|| export.check(&app))?;
     export.commit(&app)?;
     Ok(name)
 }
@@ -2135,6 +2089,8 @@ pub fn run() {
             fs::create_dir_all(&path).map_err(|e| e.to_string())?;
             let db_path = path.join("chinotto.db");
             let db = Db::open(db_path).map_err(|e| e.to_string())?;
+            db.recover_restore_audio(&path.join("recovery"), &audio_dir(app.handle())?)?;
+            record_archive::setup(app.handle())?;
             app.manage(db);
             // Before anything can ask for a guess. fastembed would otherwise cache the
             // weights beside the working directory, which for an app opened from Finder is
@@ -2290,6 +2246,9 @@ pub fn run() {
             delete_all_entries,
             export_entries,
             export_record,
+            record_archive::prepare_record_restore,
+            record_archive::restore_record_archive,
+            record_archive::discard_record_restore,
             last_backup_at,
             open_microphone_settings,
             open_tray_capture,

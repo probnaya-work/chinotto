@@ -23,6 +23,7 @@ import * as api from "../../lib/recordApi";
 import type { Fragment, HeldFragment } from "../../lib/recordApi";
 import { Record } from "./Record";
 import { useFindInput } from "./useFindInput";
+import { RestoreArchive } from "./RestoreArchive";
 import { useRecordPrivacy, recordCanRead, recordEpoch, authenticateRecord } from "../../lib/recordPrivacy";
 import { LockedRecord } from "./LockedRecord";
 import { Capture } from "./Capture";
@@ -1108,6 +1109,7 @@ export function RecordApp() {
                 });
             }}
             exportNote={exportNote}
+            restoreContent={<RestoreArchive protectedRecord={protection.enabled} onRestored={() => { void reload(); void refreshSyncFacts(); }} />}
             backupLine={backupLine(backupAt, now)}
             onBackUpNow={() => {
               void api

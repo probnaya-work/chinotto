@@ -1,3 +1,6 @@
+pub mod archive;
+#[cfg(test)]
+mod archive_tests;
 pub mod bridge;
 pub mod erasure;
 pub mod material;

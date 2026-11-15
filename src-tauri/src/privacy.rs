@@ -139,6 +139,7 @@ pub fn allowed_while_locked(command: &str) -> bool {
     matches!(
         command,
         "privacy_state"
+            | "discard_record_restore"
             | "privacy_authenticate"
             | "privacy_rendered"
             | "capture_fragment"
@@ -509,6 +510,8 @@ mod tests {
             "search_entries",
             "export_record",
             "export_entries",
+            "prepare_record_restore",
+            "restore_record_archive",
             "record_sync_snapshot",
             "open_wording_conflicts",
             "create_backup",
