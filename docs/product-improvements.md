@@ -200,8 +200,8 @@ This is local implementation, not a release, store submission or website deploym
 Prepared locally: iPhone **2.2.0 (44)** and Mac **3.1.0 (build 3.1.0)**. The iPhone package,
 Expo configuration, committed native plist and all Xcode target versions agree. EAS's remote
 build counter was read as 43; no remote version was changed. Mac npm/lockfile, Tauri,
-Cargo/lockfile and native plist agree. Open App Store Connect version trains and final
-upload-number availability still need checking at upload time.
+Cargo/lockfile and native plist agree. The authenticated App Store Connect check below
+confirmed the candidate numbers are unused; re-read them before uploading a binary.
 
 Current release notes and store-description drafts describe the Record. README feature lists,
 privacy/account wording and archive guidance were updated. The website labels earlier hosted
@@ -233,15 +233,43 @@ Before distribution:
    verify duplicate handling, cancellation and recovery. SQLite round trips already pass.
 4. Finish iPhone enlarged text / Reduce Motion and protection cancellation/fallback/background
    cases; inspect widget privacy and incoming capture/deep links after scene migration.
-5. Review existing store screenshots and copy for actual mismatches or retired feature claims;
-   replace only inaccurate shots. Refreshing screenshots to showcase new appearance or features
-   is optional and does not itself block release.
+5. Store copy and existing screenshots were reviewed and saved to the new Connect drafts on
+   15 November (details below). Recheck them against the final accepted binaries; refreshing
+   screenshots to showcase new appearance or features remains optional.
 6. Submit the signed candidates to TestFlight, complete beta acceptance, then release the apps
    and matching website copy.
 
 Unsaved capture after force-quit remains a documented limitation, unchanged by this candidate.
-The proposed cloud index change, website copy and store metadata are local only. No release
-tag, production deployment, TestFlight upload or App Review submission has been made.
+The proposed cloud index change and website copy remain local. Store metadata is saved in
+editable Connect drafts. No release tag, production deployment, TestFlight upload or App Review
+submission has been made.
+
+### App Store Connect preparation — 15 November 2026
+
+Checked both app records through the authenticated Apple API. The published versions are
+iPhone 2.1.0 (43) and Mac 3.0.3 (3.0.9); all listed review submissions are complete. No candidate
+binary has been uploaded or selected.
+
+- Created [iPhone 2.2.0](https://appstoreconnect.apple.com/apps/6761345307/distribution/ios/version/inflight)
+  and [Mac 3.1.0](https://appstoreconnect.apple.com/apps/6763830030/distribution/macos/version/inflight)
+  as `PREPARE_FOR_SUBMISSION`, both with `MANUAL` release. Re-read each saved draft to verify
+  its version, status and release setting.
+- Saved current en-US descriptions, What's New and App Review notes. The iPhone subtitle is
+  now “A private record of thoughts”. Existing review contacts, keywords, support/marketing URLs
+  and the iPhone standard-EULA link were retained. Review notes explain protection, archive
+  preview/restore, free local use, optional sync and account deletion.
+- Visually reviewed all six iPhone and five Mac screenshots. They show current Record capture,
+  voice, Returns, Lines, history, sync and menu-bar behavior; no retired-feature claim was found.
+  The new drafts inherited all eleven assets, with checksums matching the previous versions.
+  No screenshots were uploaded or replaced.
+- The website, support and privacy URLs returned HTTP 200. Apple Distribution and Mac Installer
+  identities are available locally. The existing Mac App Store profile matches `app.chinotto`,
+  permits Sign in with Apple and expires on 24 March 2027; no credentials were changed.
+
+Both existing TestFlight groups are internal and have access to all builds; no testers or group
+settings were changed. App privacy answers were not audited through this API pass. Existing age
+ratings were retained: iPhone 4+, Mac 17+ (the Mac declaration has `unrestrictedWebAccess=true`).
+These inherited declarations are separate from the new description and screenshot review.
 
 ## Later candidates
 
