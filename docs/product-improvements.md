@@ -236,13 +236,13 @@ Before manual public release:
 5. Store copy and existing screenshots were reviewed and saved to the new Connect drafts on
    15 November (details below). Recheck them against the final accepted binaries; refreshing
    screenshots to showcase new appearance or features remains optional.
-6. Both signed builds are uploaded and Waiting for Review. Complete beta/device acceptance,
-   then manually release the approved apps and matching website copy.
+6. Both signed builds remain uploaded, but the review submissions were withdrawn. Complete
+   native acceptance and resolve the verification blocker below before a new release decision.
 
 Unsaved capture after force-quit remains a documented limitation, unchanged by this candidate.
-Firestore rules and the index exemption are deployed. App Store metadata and binaries are
-submitted for review; the matching website copy remains local. No direct-download release tag,
-website deployment or public app release has been made.
+Firestore rules and the index exemption are deployed. App Store metadata and binaries remain
+in Connect; their review submissions were withdrawn. The matching website copy remains local.
+No direct-download release tag, website deployment or public app release has been made.
 
 ### App Store Connect preparation — 15 November 2026
 
@@ -292,8 +292,78 @@ both apps. Copied the last non-empty text verbatim from iPhone 2.0.2 (132 charac
   `WAITING_FOR_REVIEW` at 18:21:40. Re-read both submissions and version resources to confirm
   the queue states and `MANUAL` release. Existing screenshots were retained.
 
-Submission does not mark the remaining native acceptance cases above as tested. Approval will
-not publish either app automatically; both still require manual public release.
+Submission did not mark the remaining native acceptance cases above as tested. Both submissions
+were subsequently withdrawn; see the verification hold below.
+
+### Verification hold — 15 November 2026
+
+Both review submissions were cancelled after the owner questioned submission before complete
+native acceptance. The cancellation request had completed before the subsequent instruction
+to wait. A read-only Connect check confirmed both versions as `DEVELOPER_REJECTED`, with
+manual release retained. The owner's current instruction is verification first, then a release
+decision. Do not resubmit, publish, push, tag or deploy under this verification task.
+
+Native verification results:
+
+- Mac TestFlight 3.1.0 (build 3.1.0), installed through TestFlight with a receipt: migration
+  from installed 3.0.3 / database schema 6 to schema 8 preserved all original columns of all
+  193 entries and 225 fragments exactly; SQLite integrity is OK. A consistent database and
+  original audio backup was made before launching the new build.
+- **Release blocker: sandboxed Mac export fails for user-selected external destinations.**
+  Saving through the native panel to Downloads and a separate local QA folder both produced
+  `the export could not be written`, with no output file. Export to the app's own container
+  succeeded. The ZIP validates and contains 192 active moments and two original CAF recordings
+  (6,987,776 audio bytes). `ProtectedExport::new` stages a UUID-named sibling of the selected
+  destination; a Save panel grant for the selected file does not permit that sibling write.
+  The kernel sandbox log confirms `deny(1) file-write-create` for both UUID-named `.tmp`
+  siblings at 19:00:56 and 19:02:50 Lisbon time. No application fix or replacement binary
+  has been made.
+- Mac native archive selection, preview, picker cancellation and leaving Settings with an
+  unconfirmed preview worked. Restoring its own archive reported zero additions; all 193
+  entries, 225 fragments and five local audio files remained exactly unchanged. This tests
+  duplicate handling, not a restore with new material or cross-device audio playback.
+- Warm-light Mac Settings, including the native window appearance, were inspected at baseline
+  and 120% text with lifted contrast; no clipping or unreadable controls were observed there.
+  Text size and contrast were returned to baseline; light appearance remains selected.
+- iPhone local development-signed Release 2.2.0 (44), installed after a complete app/app-group
+  backup: SQLite integrity is OK and all original columns of all 199 entries and 200 fragments
+  remain exactly unchanged. This is not an installed TestFlight iPhone binary.
+- Owner-confirmed Mac Touch ID successfully enabled protection. Closing the main window
+  relocked it; the accessibility tree contained only locked/capture controls. Cancelling the
+  next system prompt kept the Record hidden and retained the exact synthetic unsaved draft.
+  The explicit password fallback opens the native password dialog. The owner reported that
+  macOS rejected the attempted password or Touch ID; Chinotto stayed locked with the draft
+  intact. This verifies handling of a system rejection, not successful password fallback.
+  Device protection remains enabled; it has not been silently disabled after QA.
+- USB screen viewing now works in QuickTime after the owner reconnected the phone. No screen
+  recording was started and no physical camera source was selected.
+- iPhone light Settings shows protection on. An ordinary Home-screen background/return
+  retained the exact unsaved `Проверка возврата` draft, light appearance and light keyboard,
+  while keeping history locked. Cancelling Face ID likewise retained the draft and read lock.
+  The native app-switcher snapshot showed only the warm branded cover, with no Record text.
+- **iPhone appearance defect:** after cancelling Face ID in light appearance, the status-bar
+  clock and icons became white against the warm field. This persisted across two captured
+  frames. The correct pre-authentication state has dark status-bar content. Evidence is in
+  the local sibling artifacts: `iphone-220-light-locked-draft.png` and
+  `iphone-220-faceid-cancel-light-statusbar.png`. After the owner completed Face ID again and
+  opened Settings, dark clock/icons returned. No fix has been made.
+- **Mac instruction mismatch:** Settings says `⌘⇧K` opens a small menu-bar field, but the
+  shortcut opens/focuses the main capture window. The physical key sequence produced the
+  main locked capture surface, and the native handler explicitly calls
+  `ensure_main_window_focus`. The owner separately confirmed that clicking the system
+  menu-bar icon opens the small panel. The automation surface remained bound to the main
+  window, so no visual acceptance of the panel itself is claimed.
+- A fresh physical-iPhone app-group copy has `chinotto_record_protection_v1=true` and no
+  `chinotto_widget_recent_thoughts_v1` key. This confirms cache clearing on the device;
+  an actual installed widget timeline has not been visually checked.
+- Synthetic Mac drafts were cleared without saving. The owner cleared the iPhone QA draft;
+  no Record moments were created or deleted by this verification sequence.
+
+Mac password success, complete native menu-bar panel acceptance, iPhone largest text/Reduce
+Motion/widget-timeline and incoming-route cases, cross-device archive/audio and real cloud
+round trips remain open.
+Mac sync is off, so no signed two-device cloud acceptance is claimed. Public store versions
+and the website remain unchanged.
 
 ## Later candidates
 
