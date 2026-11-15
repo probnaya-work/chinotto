@@ -58,4 +58,11 @@ Before shipping both clients:
 3. Run a signed iPhone ↔ Mac cloud round trip: capture, Continue, Correct, offline parallel edit, reconnect/restart, older-client read and remove during delayed upload. Local fixtures and mocked transactions do not replace this check.
 4. Review sync/privacy copy in store materials before release. Do not claim audio transfer or end-to-end encryption.
 
+Read-only preflight on 15 November 2026 found no composite indexes or field overrides in the
+deployed `chinotto` project, including no exemption for `entries.record`. The desktop repository
+now prepares that single exemption in `firestore.indexes.json`, referenced by `firebase.json`.
+It has not been deployed. Before the two-device acceptance run, review the live configuration
+again, apply the index-only change with `firebase deploy --only firestore:indexes --project chinotto`,
+and confirm the resulting field override. This does not deploy or change security rules.
+
 Firebase references: [transactions](https://firebase.google.com/docs/firestore/manage-data/transactions), [order and limit queries](https://firebase.google.com/docs/firestore/query-data/order-limit-data), [quotas](https://firebase.google.com/docs/firestore/quotas), [indexing best practices](https://firebase.google.com/docs/firestore/best-practices).
