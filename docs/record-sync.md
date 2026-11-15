@@ -53,7 +53,7 @@ Automated checks exercise two real mobile SQLite databases, close/reopen recover
 
 Before shipping both clients:
 
-1. Verify deployed Firestore rules accept the additive `record` field and transaction read/write under the existing UID, entitlement and device-revocation checks. No rules or production cloud configuration were changed in this implementation.
+1. Verify deployed Firestore rules accept the additive `record` field and transaction read/write for the authenticated owner UID. Entitlement and device-revocation checks are in the clients; the deployed rules do not enforce those client states.
 2. Verify `record` has a single-field indexing exemption: its large text/map fields are never queried. Confirm the `updatedAt` listener and legacy documents in the deployed project.
 3. Run a signed iPhone ↔ Mac cloud round trip: capture, Continue, Correct, offline parallel edit, reconnect/restart, older-client read and remove during delayed upload. Local fixtures and mocked transactions do not replace this check.
 4. Review sync/privacy copy in store materials before release. Do not claim audio transfer or end-to-end encryption.
@@ -61,8 +61,17 @@ Before shipping both clients:
 Read-only preflight on 15 November 2026 found no composite indexes or field overrides in the
 deployed `chinotto` project, including no exemption for `entries.record`. The desktop repository
 now prepares that single exemption in `firestore.indexes.json`, referenced by `firebase.json`.
-It has not been deployed. Before the two-device acceptance run, review the live configuration
-again, apply the index-only change with `firebase deploy --only firestore:indexes --project chinotto`,
-and confirm the resulting field override. This does not deploy or change security rules.
+The exemption was deployed on 15 November during the explicitly requested App Review submission
+work, then re-read: it is the only field override, with no composite indexes or TTL policy.
+
+That release check also found deployed rules denying `users/{uid}/devices` and
+`users/{uid}/user_themes`. Device registration/listing could fail, and cloud account deletion
+could stop at the legacy-theme cleanup. The tracked `firestore.rules` now adds owner-UID access
+to exactly those two collections, retaining the existing profile, entry and sign-in-session rules.
+It does not grant access to other accounts, signed-out users or arbitrary subcollections.
+`node scripts/check-firestore-rules.cjs` runs 105 synthetic requests through Firebase's rules
+evaluator without reading or writing documents. All pass with the new rules; the previous live
+rules fail ten owner-access cases. The rules were deployed with the exemption, and the exact
+live source was re-read and matched. Signed two-device behavior remains a separate check.
 
 Firebase references: [transactions](https://firebase.google.com/docs/firestore/manage-data/transactions), [order and limit queries](https://firebase.google.com/docs/firestore/query-data/order-limit-data), [quotas](https://firebase.google.com/docs/firestore/quotas), [indexing best practices](https://firebase.google.com/docs/firestore/best-practices).
