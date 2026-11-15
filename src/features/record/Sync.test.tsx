@@ -60,3 +60,8 @@ describe("Sync", () => {
     expect(screen.queryByText(/sign-in expired/i)).not.toBeInTheDocument();
   });
 });
+
+it('keeps an unsuccessful metadata send visible while capture remains local', () => {
+  render(<Sync {...props({ state: 'on', pending: 1, failed: 1 })} />);
+  expect(screen.getByText(/some history or links could not be sent/)).toBeInTheDocument();
+});

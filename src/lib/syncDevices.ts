@@ -38,6 +38,13 @@ export interface SyncDevice {
   isThisDevice: boolean;
 }
 
+let knownRevocation: { uid: string; revoked: boolean } | null = null;
+
+/** The last device check applies only to the account that was checked. */
+export function isThisDeviceKnownRevoked(): boolean {
+  return knownRevocation?.uid === uid() && knownRevocation.revoked;
+}
+
 /** How often a device says it is still here. */
 export const HEARTBEAT_MS = 60_000;
 
@@ -83,10 +90,12 @@ export async function isThisDeviceRevoked(): Promise<boolean> {
   try {
     const [id] = await thisDevice();
     const snap = await getDoc(doc(getOrInitFirestore(), "users", user, "devices", id));
-    return Boolean(snap.data()?.revokedAt);
+    const revoked = Boolean(snap.data()?.revokedAt);
+    knownRevocation = { uid: user, revoked };
+    return revoked;
   } catch {
     // Not being able to ask is not the same as having been removed.
-    return false;
+    return isThisDeviceKnownRevoked();
   }
 }
 

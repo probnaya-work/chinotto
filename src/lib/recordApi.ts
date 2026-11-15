@@ -12,6 +12,7 @@ import * as dev from "./recordDevData";
 import { isFirebaseSyncConfigured } from "./firebaseConfig";
 import { pushEntryUpsertToFirestore } from "./desktopFirestoreSync";
 import { IS_MAC_APP_STORE } from "./distribution";
+import { flushDesktopRecordMetadata } from "./recordMetadataSync";
 
 /**
  * Outside the Tauri shell there is no database, so in a dev browser the calls are served
@@ -67,6 +68,7 @@ function carryToSync(f: Fragment): void {
     text: f.body,
     created_at: f.capturedAt,
   }).catch(() => {});
+  void flushDesktopRecordMetadata();
 }
 
 export type CaptureMethod = "typed" | "voice" | "url" | "shared" | "imported";
@@ -618,6 +620,11 @@ export function fragmentsAwaitingMirror(limit = 500): Promise<number> {
   return invoke<number>("fragments_awaiting_mirror", { limit });
 }
 
+export function pendingRecordMetadataCount(): Promise<number> {
+  if (devOnly()) return Promise.resolve(0);
+  return invoke<number>('pending_record_sync_count');
+}
+
 /** This install's own `[id, name]`, created once and stable thereafter. */
 export function thisDevice(): Promise<[string, string]> {
   return invoke<[string, string]>("this_device");
@@ -779,4 +786,9 @@ export function eraseRemovedVoice(): Promise<{ erased: number; deletedFiles: num
 /** The audio was looked for and is not there. The words, if any, remain. */
 export function markAudioMissing(fragmentId: string): Promise<void> {
   return invoke<void>("mark_audio_missing", { fragmentId });
+}
+
+/** A failed send keeps its durable generation pending; capture remains local. */
+export async function failedRecordMetadataCount(): Promise<number> {
+  return devOnly() ? 0 : invoke<number>('failed_record_sync_count');
 }

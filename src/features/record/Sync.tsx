@@ -25,6 +25,7 @@ export interface SyncProps {
   offline: boolean;
   /** How many local moments have not reached the other devices yet. */
   pending: number;
+  failed?: number;
   /** Null while there is nothing truthful to list. */
   devices: SyncDevice[] | null;
   conflicts: WordingConflict[];
@@ -171,6 +172,9 @@ export function Sync(props: SyncProps) {
                 : "new moments go across in the background. nothing here waits on it."}
             </Secondary>
 
+            {(props.failed ?? 0) > 0 ? (
+              <Secondary>some history or links could not be sent · kept here; sync will retry.</Secondary>
+            ) : null}
             {props.offline && props.pending > 0 ? (
               <div
                 style={{

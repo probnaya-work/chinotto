@@ -43,6 +43,7 @@ import {
   startLocalEntriesFirestoreUploadOnAuth,
 } from "@/lib/desktopFirestoreSync";
 import { isFirebaseSyncConfigured } from "@/lib/firebaseConfig";
+import { flushDesktopRecordMetadata } from "@/lib/recordMetadataSync";
 import { deleteCloudAccount, isSignedInForSync } from "@/lib/desktopFirestoreSync";
 import {
   HEARTBEAT_MS,
@@ -222,6 +223,7 @@ export function RecordApp() {
   const [devices, setDevices] = useState<SyncDevice[] | null>(null);
   const [conflicts, setConflicts] = useState<api.WordingConflict[]>([]);
   const [pendingToSync, setPendingToSync] = useState(0);
+  const [failedToSync, setFailedToSync] = useState(0);
   /** Set by "already done on the phone?", which is the manual way past step one. */
   const [phoneReady, setPhoneReady] = useState(false);
   /** This mac was removed from the record by another device. */
@@ -470,7 +472,8 @@ export function RecordApp() {
       setConflicts([]);
     }
     try {
-      setPendingToSync(await api.fragmentsAwaitingMirror());
+      setPendingToSync(Math.max(await api.fragmentsAwaitingMirror(), await api.pendingRecordMetadataCount()));
+      setFailedToSync(await api.failedRecordMetadataCount());
     } catch {
       setPendingToSync(0);
     }
@@ -686,6 +689,9 @@ export function RecordApp() {
       })();
     });
     const stopUpload = startLocalEntriesFirestoreUploadOnAuth();
+    const sendMetadata = () => void flushDesktopRecordMetadata();
+    const metadataTimer = setInterval(sendMetadata, 15_000);
+    sendMetadata();
 
     // Catch up on anything captured while this was not running, e.g. across the upgrade.
     void (async () => {
@@ -703,6 +709,7 @@ export function RecordApp() {
       stopped = true;
       stopIngest();
       stopUpload();
+      clearInterval(metadataTimer);
     };
   }, [reload]);
 
@@ -982,6 +989,7 @@ export function RecordApp() {
             state={syncState}
             offline={!online}
             pending={pendingToSync}
+            failed={failedToSync}
             devices={devices}
             conflicts={conflicts}
             now={now}

@@ -11,7 +11,6 @@ import {
 import {
   collection,
   deleteDoc,
-  deleteField,
   doc,
   getDocFromServer,
   getDocs,
@@ -62,6 +61,21 @@ import {
 import { backfillLocalThemesToRemote } from "./themeSyncBackfill";
 import { flushSyncUserThemeOutbox } from "./userThemeFlush";
 import { isThemesEnabled } from "./themeSettings";
+import { ingestDesktopRecordMetadata } from "./recordMetadataSync";
+
+async function applyRecordMetadataRows(rows: SyncIngestRow[]): Promise<boolean> {
+  let changed = false;
+  for (const row of rows) {
+    if (row.record === undefined) continue;
+    try {
+      if (await ingestDesktopRecordMetadata(row.id, row.text, row.createdAt, row.record)) changed = true;
+    } catch (error) {
+      console.warn('[Chinotto sync] Record metadata not applied', row.id,
+        error instanceof Error ? error.message : 'invalid metadata');
+    }
+  }
+  return changed;
+}
 
 /** Shape of `OAuthCredential.toJSON()` from the OAuth bridge webview (Apple redirect). */
 export type BridgedOAuthCredentialJson = {
@@ -75,8 +89,6 @@ export type BridgedOAuthCredentialJson = {
 };
 
 const INGEST_PAGE_SIZE = 500;
-/** Matches mobile backfill cap (~20k docs). */
-const INGEST_BACKFILL_MAX_PAGES = 40;
 /** One-shot upload of pre-sync local rows to Firestore (per Firebase uid). */
 const LOCAL_FIRESTORE_UPLOAD_UID_KEY = "chinotto_local_entries_firestore_upload_v1_uid";
 const LOCAL_UPLOAD_BATCH_SIZE = 25;
@@ -155,6 +167,7 @@ export type SyncIngestRow = {
   text: string;
   createdAt: string;
   theme?: EntryTheme | null;
+  record?: unknown;
 };
 
 /** Exported for tests. Converts Firestore `createdAt` wire shapes to RFC3339 for Rust `ingest_firestore_entries`. */
@@ -205,6 +218,7 @@ function partitionFirestoreSnapshotDocs(
       continue;
     }
     const row: SyncIngestRow = { id: d.id, text, createdAt };
+    if (data.record !== undefined) row.record = data.record;
     const theme = parseEntryThemeField(data);
     if (theme !== undefined) {
       row.theme = theme;
@@ -331,10 +345,7 @@ async function runFirestoreIngestBackfill(
   let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
   let insertedTotal = 0;
 
-  for (let page = 0; page < INGEST_BACKFILL_MAX_PAGES; page++) {
-    if (shouldAbort()) {
-      return;
-    }
+  while (!shouldAbort()) {
     const q: Query<DocumentData> = lastDoc
       ? query(
           coll,
@@ -373,6 +384,7 @@ async function runFirestoreIngestBackfill(
       try {
         let batchChanged = false;
         const inserted = await ingestFirestoreEntries(activeRowsSafe);
+        if (await applyRecordMetadataRows(activeRowsSafe)) batchChanged = true;
         if (inserted > 0) {
           batchChanged = true;
         }
@@ -445,7 +457,7 @@ export type FirestoreEntryPush = {
 
 /**
  * Upsert `users/{uid}/entries/{id}` so mobile (and other clients) receive new or restored thoughts.
- * Uses merge; an undo inside the local window can clear `deletedAt` if it was set already.
+ * Uses merge without clearing remote tombstones. Undo is local during the publication window.
  */
 export async function pushEntryUpsertToFirestore(
   entry: FirestoreEntryPush,
@@ -473,7 +485,6 @@ export async function pushEntryUpsertToFirestore(
     text: trimmed,
     createdAt: Timestamp.fromMillis(ms),
     updatedAt: serverTimestamp(),
-    deletedAt: deleteField(),
   };
   if (isThemesEnabled() && theme !== undefined) {
     payload.theme = theme == null ? null : toFirestoreEntryThemeWire(theme);
@@ -802,7 +813,7 @@ export function startDesktopFirestoreIngest(onIngested: () => void): () => void 
           onSessionAccessLost: handleIngestSessionAccessLost,
         });
       }, 12_000);
-      const qIngest = query(coll, orderBy("createdAt", "desc"), limit(INGEST_PAGE_SIZE));
+      const qIngest = query(coll, orderBy("updatedAt", "desc"), limit(INGEST_PAGE_SIZE));
       unsubIngest = onSnapshot(
         qIngest,
         async (snap) => {
@@ -826,6 +837,7 @@ export function startDesktopFirestoreIngest(onIngested: () => void): () => void 
           if (activeRowsSafe.length > 0) {
             try {
               const inserted = await ingestFirestoreEntries(activeRowsSafe);
+              if (await applyRecordMetadataRows(activeRowsSafe)) changed = true;
               if (inserted > 0) {
                 changed = true;
               }
