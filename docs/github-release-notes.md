@@ -4,6 +4,18 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
+## v3.1.0
+
+Release candidate; native acceptance and cloud release checks are tracked in `docs/product-improvements.md`.
+
+- **Find:** add a visible capture-field entrance with exact draft restoration; preserve Unicode word evidence and remove unrelated lexical fallback results
+- **Record continuity:** sync additive continuation links and authored wording ancestry between current Mac and iPhone clients, with durable pending generations, concurrent-wording merges and deletion suppression; original audio remains local
+- **Returns:** use the shared seven-day source age, 48-hour recent cause and evidence-based timing policy
+- **Device protection:** add optional Touch ID / Mac-password reading access, native window covers and a default-deny invoke boundary while keeping new capture available
+- **Archives:** preview, validate and merge Chinotto ZIP archives with dates, histories, links and original audio, preserving current IDs and retaining a recovery copy
+- **Appearance:** add a warm light palette, readable functional labels and expanded older text at larger sizes; synchronize the native main-window theme while retaining transparent direct capture
+- **Mac App Store:** permit the archive open panel and native theme/background commands in the store capability set, with a regression check against the direct variant
+
 ## v3.0.3
 
 Mac App Store build 3.0.9.

@@ -195,6 +195,52 @@ Replace light-theme screenshots and iPhone Settings shots that need to show the 
 large-text shots deliberately show a different reading density. This is local implementation,
 not a release, store submission or website deployment.
 
+## Release candidates — 15 November 2026
+
+Prepared locally: iPhone **2.2.0 (44)** and Mac **3.1.0 (build 3.1.0)**. The iPhone package,
+Expo configuration, committed native plist and all Xcode target versions agree. EAS's remote
+build counter was read as 43; no remote version was changed. Mac npm/lockfile, Tauri,
+Cargo/lockfile and native plist agree. Open App Store Connect version trains and final
+upload-number availability still need checking at upload time.
+
+Current release notes and store-description drafts describe the Record. README feature lists,
+privacy/account wording and archive guidance were updated. The website labels earlier hosted
+snapshots as compatibility, rather than a current product feature. Historical release notes
+remain under their original version headings. No new public-link feature is included.
+
+A store-specific preflight caught three missing Tauri grants: archive open panel, native theme
+and native background colour. They are now present in the Mac App Store capability set, with
+regression coverage against both distribution variants.
+
+Verification at this candidate:
+- iPhone: 127 Jest suites, 843 passed / one existing skipped; TypeScript; signed Release
+  device build passed. Earlier physical iPhone checks confirmed migration, warm-light reading,
+  keyboard, basic Face ID and the updated opening transition on the same feature code.
+- Mac: 29 Vitest files / 216 tests plus the Node test suite; frontend build/TypeScript;
+  229 Rust tests in each of direct and Mac App Store configurations passed offline. No
+  installable Mac package was produced during this preparation.
+- Website: build, site/API TypeScript and four legacy-route API tests passed. Original
+  worktrees and the website owner's pre-existing edits were left untouched.
+
+Before distribution:
+1. Apply and re-read the prepared `entries.record` indexing exemption, verify deployed rules
+   allow the additive metadata, then exercise signed iPhone ↔ Mac sync: Continue, Correct,
+   parallel offline edits, reconnect/restart and delayed removal. The read-only cloud check
+   found the exemption absent; local fixtures do not establish production acceptance.
+2. Run the native Mac main-window/menu-bar and Touch ID/password smoke test. Check the store
+   archive picker, native light appearance, close/reopen and capture while reading is locked.
+3. Exercise the native archive picker and an iPhone → Mac → iPhone export/restore with audio;
+   verify duplicate handling, cancellation and recovery. SQLite round trips already pass.
+4. Finish iPhone enlarged text / Reduce Motion and protection cancellation/fallback/background
+   cases; inspect widget privacy and incoming capture/deep links after scene migration.
+5. Replace affected light-theme and Settings store screenshots and review all store copy for
+   retired feature claims. Submit the signed candidates to TestFlight, complete beta acceptance,
+   then release the apps and matching website copy.
+
+Unsaved capture after force-quit remains a documented limitation, unchanged by this candidate.
+The proposed cloud index change, website copy and store metadata are local only. No release
+tag, production deployment, TestFlight upload or App Review submission has been made.
+
 ## Later candidates
 
 Manual joining of existing moments, recent-line re-entry, Shortcuts/Action Button capture and local OCR stay candidates after these phases. They are not prerequisites for the current improvement cycle.
