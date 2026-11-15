@@ -365,6 +365,41 @@ round trips remain open.
 Mac sync is off, so no signed two-device cloud acceptance is claimed. Public store versions
 and the website remain unchanged.
 
+### Fixes after native verification — 15 November 2026
+
+The owner authorised fixing the three findings. Implementation commits remain local; no
+replacement store binary, review submission, release tag, push or deployment has been made.
+
+- Mac export now stages through Foundation's `NSItemReplacementDirectory`, selected for the
+  destination volume, then atomically renames the completed file while the original read
+  session is still valid. Cancellation cleans up its staging directory without touching an
+  earlier export. No broader filesystem entitlement or parent-folder grant was added.
+  [Apple's replacement-directory API](https://developer.apple.com/documentation/foundation/filemanager/url(for:in:appropriatefor:create:))
+  supplies the temporary location; the archive format and restore path are unchanged.
+- iPhone keeps the shared appearance provider as the single declarative status-bar owner.
+  The Record reapplies the chosen native style after authentication finishes, including
+  cancellation while still locked, and on ordinary foreground return. It does not remount
+  capture, unlock history or add a timed loading gate.
+- Mac Settings now distinguishes clicking the menu-bar mark for the small panel from
+  `⌘⇧K`, which opens the main capture window.
+
+Verification:
+- Mac: 232 Rust tests passed for each of direct and Mac App Store configurations, using
+  existing bundled model weights offline. The new real-OS sandbox subprocess denies writes
+  to every sibling of the selected destination, proves the old temp-file write is denied,
+  and verifies first save, replacement, cancellation and staging cleanup. A separate session
+  test rejects a stale commit while preserving the earlier file. This is native filesystem
+  verification, not acceptance of a newly installed store package or an external disk.
+- Mac frontend: 29 Vitest files / 216 tests and 14 Node tests passed; TypeScript and production
+  frontend build passed. The copy-only correction does not have a mirrored string test.
+- iPhone: 127 Jest suites / 846 passed and one existing skipped; TypeScript and the signed
+  Release device build passed. New tests cover native style reapplication after cancellation
+  in light/dark, foreground return, unchanged draft/input identity, no private reads and
+  subscription cleanup. React hooks/dependencies and cleanup were reviewed.
+- Physical iPhone recheck of the corrected build is pending device unlock and installation.
+  Existing App Store Connect binaries contain the pre-fix code and must be replaced before
+  any future resubmission. The earlier untested release gates remain open.
+
 ## Later candidates
 
 Manual joining of existing moments, recent-line re-entry, Shortcuts/Action Button capture and local OCR stay candidates after these phases. They are not prerequisites for the current improvement cycle.
