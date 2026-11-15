@@ -22,6 +22,8 @@ import { Verb } from "./Verb";
 export interface CaptureProps {
   value: string;
   onChange: (v: string) => void;
+  onFind?: () => void;
+  onLeaveFind?: () => void;
 
   /** Leave it. Rejecting is not possible: capture is local and cannot fail. */
   onLeave: (body: string) => void;
@@ -62,6 +64,8 @@ export interface CaptureProps {
 export function Capture({
   value,
   onChange,
+  onFind,
+  onLeaveFind,
   onLeave,
   onStand,
   onStartSpeaking,
@@ -197,6 +201,21 @@ export function Capture({
 
   return (
     <div>
+      {onFind ? (
+        <div style={{ display: "flex", justifyContent: "flex-end", ...metaStyle("var(--size-meta-lg)") }}>
+          <Verb
+            quiet
+            aria-label={isFind ? "back to capture" : "Find in the Record"}
+            onClick={() => {
+              if (isFind) onLeaveFind?.(); else onFind();
+              ref.current?.focus({ preventScroll: true });
+            }}
+            style={{ minHeight: 44, minWidth: 88, textAlign: "right" }}
+          >
+            {isFind ? "‹ capture · esc" : "find /"}
+          </Verb>
+        </div>
+      ) : null}
       <div
         style={{
           display: "flex",

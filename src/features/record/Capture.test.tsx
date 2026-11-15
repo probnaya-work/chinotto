@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useFindInput } from "./useFindInput";
 import { Capture } from "./Capture";
 
 const base = {
@@ -63,4 +64,22 @@ describe("desktop voice gestures", () => {
     fireEvent.mouseDown(instruction.parentElement!);
     expect(finish).toHaveBeenCalledTimes(1);
   });
+});
+
+function FindCapture() {
+  const field = useFindInput();
+  return <Capture value={field.input} onChange={field.setInput} onFind={field.startFind}
+    onLeaveFind={field.leaveFind} onLeave={base.onLeave} onStand={base.onStand} />;
+}
+it('opens visible Find in the focused field and gives an unfinished capture back', () => {
+  render(<FindCapture />);
+  const field = screen.getByLabelText('Leave a fragment');
+  fireEvent.change(field, { target: { value: 'unfinished thought' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Find in the Record' }));
+  expect(field).toHaveValue('/');
+  expect(field).toHaveFocus();
+  fireEvent.change(field, { target: { value: '/query' } });
+  fireEvent.click(screen.getByRole('button', { name: 'back to capture' }));
+  expect(field).toHaveValue('unfinished thought');
+  expect(field).toHaveFocus();
 });

@@ -22,6 +22,7 @@ import { listen } from "@tauri-apps/api/event";
 import * as api from "../../lib/recordApi";
 import type { Fragment, HeldFragment } from "../../lib/recordApi";
 import { Record } from "./Record";
+import { useFindInput } from "./useFindInput";
 import { Capture } from "./Capture";
 import { FragmentFocus } from "./FragmentFocus";
 import { ReturnBlock } from "./ReturnBlock";
@@ -182,7 +183,7 @@ export function RecordApp() {
 
   // ---- where you are ------------------------------------------------------------------
   /** What is in the field. `/` makes it find; a date phrase makes it a destination. */
-  const [input, setInput] = useState("");
+  const { input, setInput, startFind, leaveFind } = useFindInput();
   /** Standing in a month, or at the edge. */
   const [anchor, setAnchor] = useState<Anchored | null>(null);
   /** Focused on a fragment or the line it belongs to. */
@@ -569,6 +570,7 @@ export function RecordApp() {
         setFocusContinuing(false);
         return setFocusId(null);
       }
+      if (input.startsWith("/")) return leaveFind();
       if (input) return setInput("");
       if (anchor) return setAnchor(null);
       if (keyboardInRecord) return setKeyboardInRecord(false);
@@ -579,6 +581,8 @@ export function RecordApp() {
     editing,
     focusId,
     input,
+    leaveFind,
+    setInput,
     anchor,
     keyboardInRecord,
     undo,
@@ -1153,6 +1157,8 @@ export function RecordApp() {
                 <Capture
                   value={input}
                   onChange={setInput}
+                  onFind={startFind}
+                  onLeaveFind={leaveFind}
                   onLeave={handleLeave}
                   onStand={stand}
                   onEnterRecord={() => setKeyboardInRecord(true)}
@@ -1294,7 +1300,7 @@ export function RecordApp() {
                     }}
                   >
                     <div style={{ overflow: "hidden", minHeight: 0 }}>
-                      {returned && !anchor && !query ? (
+                      {returned && !anchor && !isFind ? (
                         <ReturnBlock
                           value={returned}
                           domain={(() => {
