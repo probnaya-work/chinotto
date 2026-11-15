@@ -4,6 +4,7 @@ pub mod material;
 pub mod meaning;
 pub mod migrate;
 pub mod record;
+pub mod record_sync;
 pub mod returns;
 mod schema;
 

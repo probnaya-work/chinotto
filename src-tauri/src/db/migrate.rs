@@ -16,7 +16,7 @@ use rusqlite::{Connection, Transaction};
 use std::path::Path;
 
 /// Schema version this binary expects. Bump when adding a migration below.
-pub const TARGET_VERSION: i32 = 6;
+pub const TARGET_VERSION: i32 = 7;
 
 pub fn current_version(conn: &Connection) -> Result<i32, rusqlite::Error> {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -69,6 +69,13 @@ pub fn run(conn: &mut Connection, archive_dir: Option<&Path>) -> Result<(), rusq
         let tx = conn.transaction()?;
         migrate_to_v6(&tx)?;
         set_version(&tx, 6)?;
+        tx.commit()?;
+    }
+
+    if from < 7 {
+        let tx = conn.transaction()?;
+        tx.execute_batch(include_str!("schema_record_sync.sql"))?;
+        set_version(&tx, 7)?;
         tx.commit()?;
     }
 

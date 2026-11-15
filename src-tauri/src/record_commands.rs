@@ -445,3 +445,75 @@ pub fn resolve_wording_conflict(
     db.resolve_wording_conflict(&fragment_id, &shows)
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command(async)]
+pub fn record_sync_snapshot(
+    db: tauri::State<Db>,
+    id: String,
+) -> Result<Option<crate::db::record_sync::SyncSnapshot>, String> {
+    db.record_sync_snapshot(&id).map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn commit_record_sync(
+    db: tauri::State<Db>,
+    commit: crate::db::record_sync::SyncCommit,
+) -> Result<bool, String> {
+    db.commit_record_sync(&commit).map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn pending_record_sync_ids(
+    db: tauri::State<Db>,
+    limit: Option<i64>,
+) -> Result<Vec<String>, String> {
+    db.pending_record_sync_ids(limit.unwrap_or(25))
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn acknowledge_record_sync(
+    db: tauri::State<Db>,
+    id: String,
+    generation: i64,
+) -> Result<(), String> {
+    db.acknowledge_record_sync(&id, generation)
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn ensure_record_sync_fragment(
+    db: tauri::State<Db>,
+    id: String,
+    body: String,
+    captured_at: String,
+) -> Result<bool, String> {
+    db.ensure_record_sync_fragment(&id, &body, &captured_at)
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn apply_pending_record_sync_links(db: tauri::State<Db>) -> Result<usize, String> {
+    db.apply_pending_record_sync_links()
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn hash_record_sync_value(value: String) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(value.as_bytes()))
+}
+
+#[tauri::command(async)]
+pub fn activate_record_sync_user(db: tauri::State<Db>, uid: String) -> Result<(), String> {
+    db.activate_record_sync_user(&uid)
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn pending_record_sync_count(db: tauri::State<Db>) -> Result<i64, String> {
+    db.pending_record_sync_count().map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
+pub fn record_sync_error(db: tauri::State<Db>, id: String, message: String) -> Result<(), String> {
+    db.record_sync_error(&id, &message)
+        .map_err(|e| e.to_string())
+}
+#[tauri::command(async)]
+pub fn failed_record_sync_count(db: tauri::State<Db>) -> Result<i64, String> {
+    db.failed_record_sync_count().map_err(|e| e.to_string())
+}

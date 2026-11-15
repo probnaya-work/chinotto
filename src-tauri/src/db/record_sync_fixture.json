@@ -1,0 +1,121 @@
+{
+  "initial": {
+    "snapshot": {
+      "id": "fixture-moment",
+      "body": "original wording",
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "history": [],
+      "continuation": null,
+      "state": null,
+      "generation": 1,
+      "dirty": true,
+      "resolvedAt": null
+    },
+    "state": "{\"wire\":{\"version\":1,\"capturedAt\":\"2026-11-01T10:00:00.000Z\",\"wordings\":{\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\":{\"body\":\"original wording\",\"at\":\"2026-11-01T10:00:00.000Z\",\"kind\":\"capture\",\"parents\":[]}},\"continuation\":null},\"selected\":\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\",\"revisionCount\":0,\"revisions\":[],\"resolvedAt\":null}",
+    "wire": {
+      "version": 1,
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "wordings": {
+        "fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd": {
+          "body": "original wording",
+          "at": "2026-11-01T10:00:00.000Z",
+          "kind": "capture",
+          "parents": []
+        }
+      },
+      "continuation": null
+    },
+    "body": "original wording",
+    "correctedAt": null,
+    "revisions": [],
+    "conflict": null
+  },
+  "corrected": {
+    "snapshot": {
+      "id": "fixture-moment",
+      "body": "phone correction",
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "history": [
+        {
+          "body": "original wording",
+          "supersededAt": "2026-11-02T10:00:00.000Z"
+        }
+      ],
+      "continuation": null,
+      "state": "{\"wire\":{\"version\":1,\"capturedAt\":\"2026-11-01T10:00:00.000Z\",\"wordings\":{\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\":{\"body\":\"original wording\",\"at\":\"2026-11-01T10:00:00.000Z\",\"kind\":\"capture\",\"parents\":[]}},\"continuation\":null},\"selected\":\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\",\"revisionCount\":0,\"revisions\":[],\"resolvedAt\":null}",
+      "generation": 2,
+      "dirty": true,
+      "resolvedAt": null
+    },
+    "state": "{\"wire\":{\"version\":1,\"capturedAt\":\"2026-11-01T10:00:00.000Z\",\"wordings\":{\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\":{\"body\":\"original wording\",\"at\":\"2026-11-01T10:00:00.000Z\",\"kind\":\"capture\",\"parents\":[]},\"baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a\":{\"body\":\"phone correction\",\"at\":\"2026-11-02T10:00:00.000Z\",\"kind\":\"correction\",\"parents\":[\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\"]}},\"continuation\":null},\"selected\":\"baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a\",\"revisionCount\":1,\"revisions\":[\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\"],\"resolvedAt\":null}",
+    "wire": {
+      "version": 1,
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "wordings": {
+        "fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd": {
+          "body": "original wording",
+          "at": "2026-11-01T10:00:00.000Z",
+          "kind": "capture",
+          "parents": []
+        },
+        "baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a": {
+          "body": "phone correction",
+          "at": "2026-11-02T10:00:00.000Z",
+          "kind": "correction",
+          "parents": [
+            "fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd"
+          ]
+        }
+      },
+      "continuation": null
+    },
+    "body": "phone correction",
+    "correctedAt": "2026-11-02T10:00:00.000Z",
+    "revisions": [],
+    "conflict": null
+  },
+  "receive": {
+    "snapshot": {
+      "id": "fixture-moment",
+      "body": "original wording",
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "history": [],
+      "continuation": null,
+      "state": "{\"wire\":{\"version\":1,\"capturedAt\":\"2026-11-01T10:00:00.000Z\",\"wordings\":{\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\":{\"body\":\"original wording\",\"at\":\"2026-11-01T10:00:00.000Z\",\"kind\":\"capture\",\"parents\":[]}},\"continuation\":null},\"selected\":\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\",\"revisionCount\":0,\"revisions\":[],\"resolvedAt\":null}",
+      "generation": 1,
+      "dirty": true,
+      "resolvedAt": null
+    },
+    "state": "{\"wire\":{\"version\":1,\"capturedAt\":\"2026-11-01T10:00:00.000Z\",\"wordings\":{\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\":{\"body\":\"original wording\",\"at\":\"2026-11-01T10:00:00.000Z\",\"kind\":\"capture\",\"parents\":[]},\"baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a\":{\"body\":\"phone correction\",\"at\":\"2026-11-02T10:00:00.000Z\",\"kind\":\"correction\",\"parents\":[\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\"]}},\"continuation\":null},\"selected\":\"baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a\",\"revisionCount\":1,\"revisions\":[\"fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd\"],\"resolvedAt\":null}",
+    "wire": {
+      "version": 1,
+      "capturedAt": "2026-11-01T10:00:00.000Z",
+      "wordings": {
+        "fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd": {
+          "body": "original wording",
+          "at": "2026-11-01T10:00:00.000Z",
+          "kind": "capture",
+          "parents": []
+        },
+        "baf692f62e6d32e202e626f8aac1dced00d5a923eb6c558831b32a16e45ca13a": {
+          "body": "phone correction",
+          "at": "2026-11-02T10:00:00.000Z",
+          "kind": "correction",
+          "parents": [
+            "fc69ab5c412a21f1d3ce64613b512b597f0644bbe37fcd545bcb1b687e7bb3fd"
+          ]
+        }
+      },
+      "continuation": null
+    },
+    "body": "phone correction",
+    "correctedAt": "2026-11-02T10:00:00.000Z",
+    "revisions": [
+      {
+        "body": "original wording",
+        "supersededAt": "2026-11-02T10:00:00.000Z"
+      }
+    ],
+    "conflict": null
+  }
+}
