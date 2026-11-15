@@ -199,7 +199,7 @@ This is local implementation, not a release, store submission or website deploym
 
 Prepared locally: iPhone **2.2.0 (44)** and Mac **3.1.0 (build 3.1.0)**. The iPhone package,
 Expo configuration, committed native plist and all Xcode target versions agree. EAS's remote
-build counter was read as 43; no remote version was changed. Mac npm/lockfile, Tauri,
+build counter was initially read as 43; EAS later allocated 44 for the submitted build. Mac npm/lockfile, Tauri,
 Cargo/lockfile and native plist agree. The authenticated App Store Connect check below
 confirmed the candidate numbers are unused; re-read them before uploading a binary.
 
@@ -217,16 +217,16 @@ Verification at this candidate:
   device build passed. Earlier physical iPhone checks confirmed migration, warm-light reading,
   keyboard, basic Face ID and the updated opening transition on the same feature code.
 - Mac: 29 Vitest files / 216 tests plus the Node test suite; frontend build/TypeScript;
-  229 Rust tests in each of direct and Mac App Store configurations passed offline. No
-  installable Mac package was produced during this preparation.
+  229 Rust tests in each of direct and Mac App Store configurations passed offline. The signed
+  3.1.0 App Store package later passed the bundle audit and Apple's archive validation.
 - Website: build, site/API TypeScript and four legacy-route API tests passed. Original
   worktrees and the website owner's pre-existing edits were left untouched.
 
-Before distribution:
-1. Apply and re-read the prepared `entries.record` indexing exemption, verify deployed rules
-   allow the additive metadata, then exercise signed iPhone ↔ Mac sync: Continue, Correct,
-   parallel offline edits, reconnect/restart and delayed removal. The read-only cloud check
-   found the exemption absent; local fixtures do not establish production acceptance.
+Before manual public release:
+1. The `entries.record` indexing exemption and owner-only device/legacy-theme rules were
+   deployed and re-read on 15 November, with 105 rules checks passing. Exercise signed
+   iPhone ↔ Mac sync: Continue, Correct, parallel offline edits, reconnect/restart and delayed
+   removal. Local fixtures and rules evaluation do not establish two-device acceptance.
 2. Run the native Mac main-window/menu-bar and Touch ID/password smoke test. Check the store
    archive picker, native light appearance, close/reopen and capture while reading is locked.
 3. Exercise the native archive picker and an iPhone → Mac → iPhone export/restore with audio;
@@ -236,19 +236,19 @@ Before distribution:
 5. Store copy and existing screenshots were reviewed and saved to the new Connect drafts on
    15 November (details below). Recheck them against the final accepted binaries; refreshing
    screenshots to showcase new appearance or features remains optional.
-6. Submit the signed candidates to TestFlight, complete beta acceptance, then release the apps
-   and matching website copy.
+6. Both signed builds are uploaded and Waiting for Review. Complete beta/device acceptance,
+   then manually release the approved apps and matching website copy.
 
 Unsaved capture after force-quit remains a documented limitation, unchanged by this candidate.
-The proposed cloud index change and website copy remain local. Store metadata is saved in
-editable Connect drafts. No release tag, production deployment, TestFlight upload or App Review
-submission has been made.
+Firestore rules and the index exemption are deployed. App Store metadata and binaries are
+submitted for review; the matching website copy remains local. No direct-download release tag,
+website deployment or public app release has been made.
 
 ### App Store Connect preparation — 15 November 2026
 
 Checked both app records through the authenticated Apple API. The published versions are
-iPhone 2.1.0 (43) and Mac 3.0.3 (3.0.9); all listed review submissions are complete. No candidate
-binary has been uploaded or selected.
+iPhone 2.1.0 (43) and Mac 3.0.3 (3.0.9); all earlier review submissions were complete. At this
+initial metadata-preparation step, no candidate binary had been uploaded or selected.
 
 - Created [iPhone 2.2.0](https://appstoreconnect.apple.com/apps/6761345307/distribution/ios/version/inflight)
   and [Mac 3.1.0](https://appstoreconnect.apple.com/apps/6763830030/distribution/macos/version/inflight)
@@ -270,6 +270,30 @@ Both existing TestFlight groups are internal and have access to all builds; no t
 settings were changed. App privacy answers were not audited through this API pass. Existing age
 ratings were retained: iPhone 4+, Mac 17+ (the Mac declaration has `unrestrictedWebAccess=true`).
 These inherited declarations are separate from the new description and screenshot review.
+
+### App Review submission — 15 November 2026
+
+The owner explicitly requested restoring Promotional Text from earlier versions and submitting
+both apps. Copied the last non-empty text verbatim from iPhone 2.0.2 (132 characters) and Mac
+3.0.2 (155 characters); the immediately preceding releases had empty Promotional Text.
+
+- iPhone: EAS build `ce17ad73-071e-4bd4-b993-7d405b7f953a`, 2.2.0 (44), finished with store
+  signing and was uploaded through EAS Submit. Apple processed build
+  `4cc1a4c0-7c73-4faf-937e-1e4a4764d307` as valid; it is selected for version 2.2.0.
+- Mac: 3.1.0 (build 3.1.0) was packaged with the existing distribution identities and profile.
+  The bundle/installer audits and Apple archive validation passed. Apple processed delivery
+  `4dadfc33-b68d-404f-be4b-136a6dfe9587` as a valid, App Store eligible build; it is selected
+  for version 3.1.0. No direct-download DMG release was created.
+- Apple's submission validation required the previously empty iPhone `socialMedia` answer.
+  Set `socialMedia=false` and `socialMediaAgeRestricted=false`: Chinotto has no social network
+  or public posting. The other age-rating answers were retained.
+- iPhone submission `d2d3d541-a24c-44c2-957f-03adb6625d3d` entered `WAITING_FOR_REVIEW`
+  at 18:21:28 Lisbon time; Mac submission `29e0cf2f-3e3d-4b3d-ab0d-ceb0035f04e8` entered
+  `WAITING_FOR_REVIEW` at 18:21:40. Re-read both submissions and version resources to confirm
+  the queue states and `MANUAL` release. Existing screenshots were retained.
+
+Submission does not mark the remaining native acceptance cases above as tested. Approval will
+not publish either app automatically; both still require manual public release.
 
 ## Later candidates
 

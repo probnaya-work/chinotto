@@ -1,5 +1,8 @@
-Release candidate — Mac 3.1.0, 15 November 2026. Draft metadata saved in App Store Connect; no build upload or App Review submission.
+App Review submission — Mac 3.1.0 (build 3.1.0), 15 November 2026. Uploaded and selected; Waiting for Review, manual release.
 Publish with the matching app release after device acceptance; plans and prices come from the app.
+
+Promotional Text (copied from Mac 3.0.2):
+A private record of thoughts, encounters, and what continues between them. Capture instantly, no folders or projects. Local-first, optional sync to iPhone.
 
 Chinotto — Mac description
 
