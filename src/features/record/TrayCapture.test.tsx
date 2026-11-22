@@ -143,7 +143,7 @@ describe("resting", () => {
     expect(screen.getByText("⏎ leave it")).toBeInTheDocument();
     expect(screen.getByText("⏎ leave it").closest("div")?.style.color).toBe("var(--ink-functional)");
     expect(screen.getByText("esc close")).toBeInTheDocument();
-    expect(screen.getByText("hold ⌥ / mouse · tap locks")).toBeInTheDocument();
+    expect(screen.getByText("hold ⌥ to speak")).toBeEnabled();
   });
 
   it("holds the field's own caret back while the drawn one is standing there", async () => {
@@ -325,6 +325,7 @@ describe("speaking", () => {
     await act(async () => {});
 
     fireEvent.change(field(), { target: { value: "already typing" } });
+    expect(screen.getByText("hold ⌥ to speak")).toBeDisabled();
     await act(async () => {
       fireEvent.keyDown(field(), { key: "Alt" });
     });

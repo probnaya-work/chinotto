@@ -19,6 +19,7 @@ dependencies = [
  "objc2-avf-audio",
  "objc2-foundation",
  "objc2-local-authentication",
+ "objc2-quartz-core",
  "objc2-speech",
  "once_cell",
  "rand 0.8.5",

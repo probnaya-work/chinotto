@@ -646,26 +646,17 @@ input[aria-label="Find"]:focus-visible {
 
 
 /*
-  The menu-bar panel.
-
-  A panel, not a window and not a system sheet: one hairline, a deep shadow so it reads as
-  sitting above whatever you were doing, and the record's own field inside it. It settles in
-  rather than appearing, because it arrived from somewhere.
-
-  The tray has its own scale and it is not the window's. The identity file draws the panel
-  at a narrower measure than it ships at — the padding, the caret, the field and the hint
-  row are literal there, and the width is the one number its caption gives (440pt) — so the
-  rung below is the drawn panel, not the edge's 44px capture scaled down.
+  The menu-bar panel shares the Record's ink and surface at a smaller scale.
 */
 :root {
-  --tray-width: 440px;       /* the caption's 440pt                                  */
-  --tray-pad: 18px 20px 14px;
-  --tray-caret-height: 26px; /* the edge's caret, at the panel's scale               */
-  --tray-field: 21px;        /* between D1 and D0: the tray's own capture size       */
-  --tray-row-gap: 12px;      /* caret to field                                       */
-  --tray-row-min: 34px;      /* the field row, so one line and two start alike       */
-  --tray-hint-gap: 18px;     /* between the hint words                               */
-  --tray-hint-top: 12px;     /* field row to hint row                                */
+  --tray-width: 392px;
+  --tray-pad: 12px 18px 11px;
+  --tray-caret-height: 24px;
+  --tray-field: 20px;
+  --tray-row-gap: 8px;
+  --tray-row-min: 25px;
+  --tray-hint-gap: 14px;
+  --tray-hint-top: 8px;
 }
 
 .tray-capture-root {
@@ -673,22 +664,23 @@ input[aria-label="Find"]:focus-visible {
   width: 100%;
   background: transparent;
   overflow: hidden;
-  padding: 4px 20px 20px;
+  padding: 0 12px 14px;
   box-sizing: border-box;
 }
 
 .tray-capture-panel {
   width: var(--tray-width);
-  max-width: 100%;
   background: var(--surface);
   border: 1px solid var(--rule-dim);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
   padding: var(--tray-pad);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.28);
   box-sizing: border-box;
   animation: chinotto-settle 0.2s ease-out;
 }
 
-/* In the MAS build the window itself is the panel; no transparent shadow gutter exists. */
+/* In the MAS build AppKit supplies the window shape and shadow. */
 .tray-capture-opaque .tray-capture-root {
   background: var(--surface);
   padding: 0;

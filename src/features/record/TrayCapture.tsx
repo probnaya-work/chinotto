@@ -1,11 +1,8 @@
 /**
  * Capture from the menu bar.
  *
- * The identity file draws this surface directly: a 440pt panel under the glyph, one
- * hairline and a deep shadow, the edge's own caret and field at the panel's scale, a hint
- * row of three, the waveform while you speak, and a Return above the caret when one is
- * waiting. It is the app's edge moved to where the cursor already is — never a list, never
- * a search field, never a settings tree. Anything that wants more room opens the window.
+ * The panel brings the edge's caret and field to the menu bar, with a waveform while you
+ * speak and a Return above the caret when one is waiting.
  *
  * The same promise as the edge: the save is local and instant, the field clears before
  * anything else happens, and nothing about sync, network or permission can be in the way.
@@ -67,12 +64,6 @@ export function TrayCapture() {
   const panelRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * The webview's own zoom. The panel measures itself in CSS pixels, which browser zoom
-   * does not touch, so the window's logical size is that measurement times this.
-   */
-  const zoom = useRef(1);
-
   const returnedRef = useRef(returned);
   returnedRef.current = returned;
   const continuingRef = useRef(continuing);
@@ -154,9 +145,6 @@ export function TrayCapture() {
     // has to be applied here too — otherwise the menu bar opens a dark panel over a light
     // window, or the other way round.
     applyAppearance(readAppearance(), readLiftContrast());
-    void applyStoredUiZoom().then((z) => {
-      zoom.current = z;
-    });
     document.documentElement.classList.add("tray-capture-page");
     document.documentElement.classList.toggle("tray-capture-opaque", IS_MAC_APP_STORE);
     // Deliberately not `readReturn()`: this webview mounts when the app launches, and
@@ -270,7 +258,10 @@ export function TrayCapture() {
     if (!panel) return;
     const root = panel.parentElement;
     if (!root) return;
+    let zoom = 1;
+    let mounted = true;
     const fit = () => {
+      if (!mounted) return;
       const box = panel.getBoundingClientRect();
       if (!box.height) return;
       // The root's padding is the shadow's room; it is drawn, so it is measured too.
@@ -281,15 +272,23 @@ export function TrayCapture() {
       // are in the field either way — and there is nothing the person could do about it,
       // so it is not carried into the panel.
       void api
-        .fitCapturePopover((box.width + x) * zoom.current, (box.height + y) * zoom.current)
+        .fitCapturePopover(Math.ceil((box.width + x) * zoom), Math.ceil((box.height + y) * zoom))
         .catch(() => {});
     };
     const observer = new ResizeObserver(fit);
     observer.observe(panel);
+    // Page zoom changes the native size even when the CSS box stays the same.
+    void applyStoredUiZoom().then((scale) => {
+      zoom = scale;
+      fit();
+    }).catch(() => {});
     // The panel is measured again once the family has arrived: Archivo settles the hint
     // row's line box, and a window sized before that is a window sized to a fallback.
     void document.fonts?.ready.then(fit).catch(() => {});
-    return () => observer.disconnect();
+    return () => {
+      mounted = false;
+      observer.disconnect();
+    };
   }, []);
 
   // ---- leaving ---------------------------------------------------------------------------
@@ -390,10 +389,10 @@ export function TrayCapture() {
                 aria-hidden="true"
                 style={{
                   display: "inline-block",
-                  width: "var(--caret-width)",
+                  width: "2px",
                   height: "var(--tray-caret-height)",
                   background: "var(--ink)",
-                  marginTop: "2px",
+                  marginTop: "1px",
                   flex: "none",
                 }}
               />
@@ -515,7 +514,7 @@ export function TrayCapture() {
                 }}
                 disabled={!empty || Boolean(failure) || Boolean(note)}
               >
-                {failure ?? note ?? (empty ? "hold ⌥ / mouse · tap locks" : "")}
+                {failure ?? note ?? "hold ⌥ to speak"}
               </button>
             </>
           )}

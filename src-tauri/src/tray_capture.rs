@@ -20,9 +20,9 @@ use tauri::{
 
 use crate::db::Db;
 
-/// Below this the panel cannot have drawn itself, so a bad measurement is ignored rather
-/// than collapsing the window onto the caret.
-const POPOVER_MIN: f64 = 96.0;
+/// Ignore measurements too small to contain the capture field and hints.
+const POPOVER_MIN_WIDTH: f64 = 96.0;
+const POPOVER_MIN_HEIGHT: f64 = 56.0;
 
 const MENU_OPEN: &str = "chinotto-tray-open";
 const MENU_TODAY: &str = "chinotto-tray-today";
@@ -104,7 +104,7 @@ fn max_popover_height(window: &WebviewWindow) -> f64 {
         .map(|p| p.y as f64 / scale)
         .unwrap_or(0.0);
     // A hair of room so the shadow is never flush against the screen's edge.
-    (monitor_bottom - top - 8.0).max(POPOVER_MIN)
+    (monitor_bottom - top - 8.0).max(POPOVER_MIN_HEIGHT)
 }
 
 /// The panel measures itself and says how big it has become; the window becomes that.
@@ -123,7 +123,11 @@ pub fn fit_capture_popover(app: tauri::AppHandle, width: f64, height: f64) -> Re
     let Some(window) = app.get_webview_window("capture-popover") else {
         return Ok(());
     };
-    if !width.is_finite() || !height.is_finite() || width < POPOVER_MIN || height < POPOVER_MIN {
+    if !width.is_finite()
+        || !height.is_finite()
+        || width < POPOVER_MIN_WIDTH
+        || height < POPOVER_MIN_HEIGHT
+    {
         return Ok(());
     }
     let height = height.min(max_popover_height(&window));
@@ -315,6 +319,45 @@ fn on_menu(app: &tauri::AppHandle, event: MenuEvent) {
     }
 }
 
+/// The store build's WebKit view stays opaque. AppKit clips the window content instead,
+/// so the bottom corners can follow the panel without Tauri's private WebKit API.
+#[cfg(all(target_os = "macos", feature = "mas"))]
+fn style_store_popover(app: &App) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSColor, NSWindow};
+    use objc2_quartz_core::CACornerMask;
+
+    let Some(_main_thread) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(window) = app.get_webview_window("capture-popover") else {
+        return;
+    };
+    let Ok(raw) = window.ns_window() else {
+        return;
+    };
+    // SAFETY: Tauri owns this live NSWindow and setup runs on the AppKit thread.
+    let native = unsafe { &*raw.cast::<NSWindow>() };
+    let Some(content) = native.contentView() else {
+        return;
+    };
+    content.setWantsLayer(true);
+    let Some(layer) = content.layer() else {
+        return;
+    };
+    let bottom_corners = if layer.isGeometryFlipped() {
+        CACornerMask::LayerMinXMaxYCorner | CACornerMask::LayerMaxXMaxYCorner
+    } else {
+        CACornerMask::LayerMinXMinYCorner | CACornerMask::LayerMaxXMinYCorner
+    };
+    layer.setCornerRadius(9.0);
+    layer.setMaskedCorners(bottom_corners);
+    layer.setMasksToBounds(true);
+    native.setOpaque(false);
+    native.setBackgroundColor(Some(&NSColor::clearColor()));
+    native.setHasShadow(true);
+}
+
 /// Registers the tray icon, its menu, and wires left-click to the capture popover window.
 ///
 /// On macOS, Tauri’s tray uses `NSStatusBar` / `NSStatusItem`; [`TrayIconBuilder::icon_as_template`]
@@ -326,6 +369,9 @@ fn on_menu(app: &tauri::AppHandle, event: MenuEvent) {
 /// key equivalent would take it away from its owner while the app is frontmost. The keys
 /// keep working; the menu does not claim them.
 pub fn setup(app: &App) -> tauri::Result<()> {
+    #[cfg(all(target_os = "macos", feature = "mas"))]
+    style_store_popover(app);
+
     let (open_label, quit_label) =
         crate::window_lifecycle::tray_labels(crate::window_lifecycle::distribution());
     let open = MenuItem::with_id(app, MENU_OPEN, open_label, true, None::<&str>)?;
