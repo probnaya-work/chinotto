@@ -1,16 +1,19 @@
-Chinotto 3.1.0 — Mac App Review notes
+Chinotto 3.1.1 — Mac App Review notes
 
 Chinotto is a private, local-first thinking tool. Text and voice capture, reading, Find, Lines, correction history, local audio playback, archive export and restore work offline without an account. No demo account is required. Mac has no purchase flow; optional sync is also free on Mac. Chinotto Pro is an iPhone-only purchase for enabling sync on iPhone.
 
 Settings: press Command-comma or use Settings from the menu-bar menu. Optional sync is under sync → set up → continue with apple. This presents a native AuthenticationServices system panel without a browser redirect. Current clients sync words, dates, continuation links and correction history; original audio remains on the device that recorded it.
 
 New in this version:
+- Click the Chinotto menu-bar icon to open a compact 392 pt capture panel. It grows downward while typing, keeps the keyboard and voice hints on one row, and uses public AppKit/Core Animation APIs for its lower rounded corners and shadow. The WebKit view remains opaque and private macOS APIs remain disabled.
+
+Record capabilities:
 - Settings → device protection → turn on enables optional Touch ID or Mac-password authentication for reading. Blank capture stays available while reading is locked. This is an access lock; it does not add encryption to the database or exported archives.
 - Settings → appearance offers dark/light/system, text size and lift contrast.
 - Settings → the record → export it creates a portable ZIP. Under restore from archive, choose archive opens the macOS file picker. The app validates the ZIP and shows a preview before a separate restore action. It merges into the existing Record, skips existing moments and keeps a recovery copy. Use an archive exported by a current Chinotto iPhone or Mac client; older Mac text-only exports are unsupported.
 - Find is available from capture. Continue adds a moment dated now; Correct keeps the original date and earlier wording.
 
-Close/reopen: closing the main window keeps the menu-bar app running. Reopen from the menu-bar icon, Dock icon, or Window → Open Chinotto. Quit Chinotto is in the menu-bar menu. Command-Shift-K opens quick capture; Option-Space starts voice capture. Microphone and speech permissions are requested only when voice is used, and the recording surface shows its state. Speech recognition is on device only; original recordings remain local.
+Close/reopen: closing the main window keeps the menu-bar app running. Click the menu-bar icon for the capture panel. Reopen the main window from the menu-bar menu, Dock icon, Window → Open Chinotto, or Command-Shift-K. Quit Chinotto is in the menu-bar menu. Option-Space starts voice capture. Microphone and speech permissions are requested only when voice is used, and the recording surface shows its state. Speech recognition is on device only; original recordings remain local.
 
 Account deletion: after enabling sync, Settings → account → delete the cloud account → delete for good. This removes the cloud copy and disconnects devices; local Records remain available offline.
 

@@ -1,8 +1,5 @@
-Your Record is easier to read, protect and carry between devices.
+Quick capture from the menu bar is more compact.
 
-• Protect reading with optional Touch ID or your Mac password while keeping new capture available.
-• Choose a warm light appearance, follow the system appearance, adjust text size and lift contrast.
-• Preview and restore a Chinotto archive with dates, correction history, links and original audio, without duplicating existing moments.
-• Keep continuation links and earlier wording across current Mac and iPhone clients when sync is enabled. Original recordings stay on the device that captured them.
-• Open Find directly from capture, with improved matching for Cyrillic and accented words.
-• Revisit older moments when recent writing gives them a reason to return, starting in the first week.
+• A narrower panel with rounded lower corners and a softer shadow.
+• The field grows downward as you type, with all three hints kept on one line.
+• Hold Option or use the mouse to speak from an empty field, with the same hold and hands-free recording controls.

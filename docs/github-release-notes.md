@@ -4,6 +4,14 @@ These sections feed the **GitHub Release** description in CI (see `.github/workf
 
 Add **`## vX.Y.Z`** before you push tag **`vX.Y.Z`**.
 
+## v3.1.1
+
+Planned Mac App Store build 3.1.2; confirm the build number is unused before upload.
+
+- **Menu-bar capture:** use a compact 392 pt panel, 20 px text and a single hint row; grow downward as text is added and allow the native window to shrink below the previous 96 pt minimum
+- **Mac App Store:** round only the lower corners at 9 pt using public AppKit/Core Animation APIs, with a native shadow and an opaque WebKit view; keep private macOS APIs disabled
+- **Sizing:** align initial direct/store window sizes with the panel and remeasure after stored page zoom and fonts load
+
 ## v3.1.0
 
 Release candidate; native acceptance and cloud release checks are tracked in `docs/product-improvements.md`.
